@@ -14,6 +14,8 @@ import io.element.android.libraries.androidutils.filesize.FakeFileSizeFormatter
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.core.mimetype.MimeTypes
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
+import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
+import io.element.android.libraries.htmlrenderer.test.FakeHtmlMessageParser
 import io.element.android.libraries.matrix.api.media.ImageInfo
 import io.element.android.libraries.matrix.api.media.MediaSource
 import io.element.android.libraries.matrix.api.media.ThumbnailInfo
@@ -29,6 +31,7 @@ import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.matrix.test.AN_EXCEPTION
 import io.element.android.libraries.matrix.test.A_UNIQUE_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
+import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.timeline.FakeTimeline
 import io.element.android.libraries.matrix.test.timeline.aMessageContent
@@ -316,5 +319,8 @@ fun TestScope.createTimelineMediaItemsFactory() = TimelineMediaItemsFactory(
         fileExtensionExtractor = FileExtensionExtractorWithoutValidation(),
         dateFormatter = FakeDateFormatter(),
         contentValidationCache = NoopEventContentValidationCache(noopValidationState),
+        permalinkParser = FakePermalinkParser(),
+        htmlMessageParser = FakeHtmlMessageParser(),
+        featureFlagService = FakeFeatureFlagService(),
     )
 )

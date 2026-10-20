@@ -13,7 +13,12 @@ import io.element.android.libraries.androidutils.filesize.FileSizeFormatter
 import io.element.android.libraries.dateformatter.api.DateFormatter
 import io.element.android.libraries.dateformatter.api.DateFormatterMode
 import io.element.android.libraries.dateformatter.api.toHumanReadableDuration
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.htmlrenderer.api.DocumentNode
+import io.element.android.libraries.htmlrenderer.api.HtmlMessageParser
 import io.element.android.libraries.matrix.api.core.UniqueId
+import io.element.android.libraries.matrix.api.permalink.PermalinkParser
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.item.event.AudioMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.CallNotifyContent
@@ -21,6 +26,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EmoteMessageT
 import io.element.android.libraries.matrix.api.timeline.item.event.FailedToParseMessageLikeContent
 import io.element.android.libraries.matrix.api.timeline.item.event.FailedToParseStateContent
 import io.element.android.libraries.matrix.api.timeline.item.event.FileMessageType
+import io.element.android.libraries.matrix.api.timeline.item.event.FormattedBody
 import io.element.android.libraries.matrix.api.timeline.item.event.GalleryItemType
 import io.element.android.libraries.matrix.api.timeline.item.event.GalleryMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.ImageMessageType
@@ -46,6 +52,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.getAvatarUrl
 import io.element.android.libraries.matrix.api.timeline.item.event.getDisambiguatedDisplayName
 import io.element.android.libraries.matrix.ui.media.contentvalidation.EventContentValidationCache
 import io.element.android.libraries.matrix.ui.media.contentvalidation.NoopContentValidationState
+import io.element.android.libraries.matrix.ui.messages.toHtmlDocument
 import io.element.android.libraries.mediaviewer.api.MediaInfo
 import io.element.android.libraries.mediaviewer.api.util.FileExtensionExtractor
 import io.element.android.libraries.mediaviewer.impl.model.MediaItem
@@ -57,8 +64,11 @@ class EventItemFactory(
     private val fileExtensionExtractor: FileExtensionExtractor,
     private val dateFormatter: DateFormatter,
     private val contentValidationCache: EventContentValidationCache,
+    private val permalinkParser: PermalinkParser,
+    private val htmlMessageParser: HtmlMessageParser,
+    private val featureFlagService: FeatureFlagService,
 ) {
-    fun create(
+    suspend fun create(
         currentTimelineItem: MatrixTimelineItem.Event,
     ): List<MediaItem.Event> {
         val event = currentTimelineItem.event
@@ -210,6 +220,7 @@ class EventItemFactory(
                         ),
                         mediaSource = type.source,
                         validationState = validationState,
+                        captionTree = parseCaptionTree(type.formattedCaption),
                     ))
                     is FileMessageType -> listOf(MediaItem.File(
                         id = currentTimelineItem.uniqueId,
@@ -232,6 +243,7 @@ class EventItemFactory(
                         ),
                         mediaSource = type.source,
                         validationState = validationState,
+                        captionTree = parseCaptionTree(type.formattedCaption),
                         // TODO We may want to add a thumbnailSource and set it to type.info?.thumbnailSource
                     ))
                     is ImageMessageType -> listOf(MediaItem.Image(
@@ -257,6 +269,7 @@ class EventItemFactory(
                         thumbnailSource = type.info?.thumbnailSource,
                         blurHash = type.info?.blurhash,
                         validationState = validationState,
+                        captionTree = parseCaptionTree(type.formattedCaption),
                     ))
                     is StickerMessageType -> listOf(MediaItem.Image(
                         id = currentTimelineItem.uniqueId,
@@ -281,6 +294,7 @@ class EventItemFactory(
                         thumbnailSource = type.info?.thumbnailSource,
                         blurHash = type.info?.blurhash,
                         validationState = validationState,
+                        captionTree = parseCaptionTree(type.formattedCaption),
                     ))
                     is VideoMessageType -> listOf(MediaItem.Video(
                         id = currentTimelineItem.uniqueId,
@@ -305,6 +319,7 @@ class EventItemFactory(
                         thumbnailSource = type.info?.thumbnailSource,
                         blurHash = type.info?.blurhash,
                         validationState = validationState,
+                        captionTree = parseCaptionTree(type.formattedCaption),
                     ))
                     is VoiceMessageType -> listOf(MediaItem.Voice(
                         id = currentTimelineItem.uniqueId,
@@ -327,9 +342,22 @@ class EventItemFactory(
                         ),
                         mediaSource = type.source,
                         validationState = validationState,
+                        captionTree = parseCaptionTree(type.formattedCaption),
                     ))
                 }
             }
+        }
+    }
+
+    /**
+     * Parse the [formattedCaption] into a tree of [DocumentNode] for the native Compose renderer, only if the new timeline event renderer is enabled.
+     */
+    private suspend fun parseCaptionTree(formattedCaption: FormattedBody?): DocumentNode? {
+        val document = formattedCaption?.toHtmlDocument(permalinkParser = permalinkParser) ?: return null
+        return if (featureFlagService.isFeatureEnabled(FeatureFlags.NewTimelineEventRenderer)) {
+            htmlMessageParser.parse(document)
+        } else {
+            null
         }
     }
 

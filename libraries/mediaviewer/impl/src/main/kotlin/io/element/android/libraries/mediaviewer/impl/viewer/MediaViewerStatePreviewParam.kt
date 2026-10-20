@@ -14,6 +14,7 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.libraries.architecture.AsyncData
 import io.element.android.libraries.designsystem.components.media.WaveFormSamples
 import io.element.android.libraries.designsystem.preview.USER_NAME_ALICE
+import io.element.android.libraries.htmlrenderer.api.DocumentNode
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.media.MediaSource
 import io.element.android.libraries.matrix.api.timeline.Timeline
@@ -325,6 +326,7 @@ fun aMediaViewerPageData(
     mediaInfo: MediaInfo = anImageMediaInfo(),
     mediaSource: MediaSource = MediaSource(""),
     validationState: ContentValidationState = NoopContentValidationState(),
+    captionTree: DocumentNode? = null,
 ): MediaViewerPageData.MediaViewerData = MediaViewerPageData.MediaViewerData(
     eventId = null,
     mediaInfo = mediaInfo,
@@ -333,6 +335,7 @@ fun aMediaViewerPageData(
     downloadedMedia = mutableStateOf(downloadedMedia),
     pagerKey = 0L,
     validationState = validationState,
+    captionTree = captionTree,
 )
 
 fun aMediaViewerState(

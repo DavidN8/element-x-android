@@ -183,6 +183,7 @@ class MediaViewerDataSource(
                             downloadedMedia = localMedia,
                             pagerKey = pagerKeysHandler.getKey(mediaItem),
                             validationState = validationState,
+                            captionTree = mediaItem.captionTree,
                         )
                     )
                 }

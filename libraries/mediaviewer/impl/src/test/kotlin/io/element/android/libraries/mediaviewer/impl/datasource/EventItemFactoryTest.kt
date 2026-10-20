@@ -12,6 +12,10 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.androidutils.filesize.FakeFileSizeFormatter
 import io.element.android.libraries.core.mimetype.MimeTypes
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
+import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
+import io.element.android.libraries.htmlrenderer.api.DocumentNode
+import io.element.android.libraries.htmlrenderer.test.FakeHtmlMessageParser
 import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.media.AudioDetails
 import io.element.android.libraries.matrix.api.media.AudioInfo
@@ -27,11 +31,13 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EmoteMessageT
 import io.element.android.libraries.matrix.api.timeline.item.event.FailedToParseMessageLikeContent
 import io.element.android.libraries.matrix.api.timeline.item.event.FailedToParseStateContent
 import io.element.android.libraries.matrix.api.timeline.item.event.FileMessageType
+import io.element.android.libraries.matrix.api.timeline.item.event.FormattedBody
 import io.element.android.libraries.matrix.api.timeline.item.event.GalleryItemType
 import io.element.android.libraries.matrix.api.timeline.item.event.GalleryMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.ImageMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.LegacyCallInviteContent
 import io.element.android.libraries.matrix.api.timeline.item.event.LocationMessageType
+import io.element.android.libraries.matrix.api.timeline.item.event.MessageFormat
 import io.element.android.libraries.matrix.api.timeline.item.event.NoticeMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherMessageType
 import io.element.android.libraries.matrix.api.timeline.item.event.OtherState
@@ -45,6 +51,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.VoiceMessageT
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
 import io.element.android.libraries.matrix.test.A_UNIQUE_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
+import io.element.android.libraries.matrix.test.permalink.FakePermalinkParser
 import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import io.element.android.libraries.matrix.test.timeline.aPollContent
 import io.element.android.libraries.matrix.test.timeline.aProfileChangeMessageContent
@@ -59,12 +66,13 @@ import io.element.android.libraries.mediaviewer.impl.model.MediaItem
 import io.element.android.libraries.mediaviewer.test.util.FileExtensionExtractorWithoutValidation
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
 
 class EventItemFactoryTest {
     @Test
-    fun `create check all null cases`() {
+    fun `create check all null cases`() = runTest {
         val factory = createEventItemFactory()
         val contents = listOf(
             CallNotifyContent(
@@ -113,7 +121,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create MessageContent check all null cases`() {
+    fun `create MessageContent check all null cases`() = runTest {
         val factory = createEventItemFactory()
         val messageTypes = listOf(
             EmoteMessageType("", null),
@@ -138,7 +146,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for FileMessageType`() {
+    fun `create for FileMessageType`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -187,7 +195,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for ImageMessageType`() {
+    fun `create for ImageMessageType`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -241,7 +249,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for AudioMessageType`() {
+    fun `create for AudioMessageType`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -289,7 +297,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for VideoMessageType`() {
+    fun `create for VideoMessageType`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -344,7 +352,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for VoiceMessageType`() {
+    fun `create for VoiceMessageType`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -396,7 +404,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for GalleryMessageType with image item`() {
+    fun `create for GalleryMessageType with image item`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -458,7 +466,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for GalleryMessageType with video item`() {
+    fun `create for GalleryMessageType with video item`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -521,7 +529,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for GalleryMessageType with audio item`() {
+    fun `create for GalleryMessageType with audio item`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -577,7 +585,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for GalleryMessageType with file item`() {
+    fun `create for GalleryMessageType with file item`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -634,7 +642,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for GalleryMessageType with Other item returns empty list`() {
+    fun `create for GalleryMessageType with Other item returns empty list`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -656,7 +664,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for GalleryMessageType with multiple items produces indexed IDs`() {
+    fun `create for GalleryMessageType with multiple items produces indexed IDs`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -717,7 +725,7 @@ class EventItemFactoryTest {
     }
 
     @Test
-    fun `create for StickerMessageType`() {
+    fun `create for StickerMessageType`() = runTest {
         val factory = createEventItemFactory()
         val result = factory.create(
             MatrixTimelineItem.Event(
@@ -769,12 +777,50 @@ class EventItemFactoryTest {
             )
         )
     }
+
+    @Test
+    fun `create only parses the formatted caption if the feature flag is enabled`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(
+            initialState = mapOf(
+                FeatureFlags.NewTimelineEventRenderer.key to true
+            )
+        )
+        val factory = createEventItemFactory(featureFlagService = featureFlagService)
+        val timelineItem = MatrixTimelineItem.Event(
+            uniqueId = A_UNIQUE_ID,
+            event = anEventTimelineItem(
+                content = aMessageContent(
+                    messageType = ImageMessageType(
+                        filename = "filename.jpg",
+                        caption = "caption",
+                        formattedCaption = FormattedBody(MessageFormat.HTML, "<b>caption</b>"),
+                        source = MediaSource(""),
+                        info = null,
+                    )
+                )
+            )
+        )
+
+        // The caption tree is present when the feature flag is enabled
+        val resultWithFeatureFlag = factory.create(timelineItem)
+        assertThat(resultWithFeatureFlag.single().captionTree).isNotNull()
+
+        // The caption tree is null when the feature flag is disabled
+        featureFlagService.setFeatureEnabled(FeatureFlags.NewTimelineEventRenderer, false)
+        val resultWithoutFeatureFlag = factory.create(timelineItem)
+        assertThat(resultWithoutFeatureFlag.single().captionTree).isNull()
+    }
 }
 
 private val noopValidationState = NoopContentValidationState()
-private fun createEventItemFactory() = EventItemFactory(
+private fun createEventItemFactory(
+    featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+) = EventItemFactory(
     fileSizeFormatter = FakeFileSizeFormatter(),
     fileExtensionExtractor = FileExtensionExtractorWithoutValidation(),
     dateFormatter = FakeDateFormatter(),
     contentValidationCache = NoopEventContentValidationCache(noopValidationState),
+    permalinkParser = FakePermalinkParser(),
+    htmlMessageParser = FakeHtmlMessageParser(parseResult = { DocumentNode(persistentListOf()) }),
+    featureFlagService = featureFlagService,
 )

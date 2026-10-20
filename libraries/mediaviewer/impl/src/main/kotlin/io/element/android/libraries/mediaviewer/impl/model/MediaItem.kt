@@ -8,6 +8,7 @@
 
 package io.element.android.libraries.mediaviewer.impl.model
 
+import io.element.android.libraries.htmlrenderer.api.DocumentNode
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.media.MediaSource
@@ -31,6 +32,12 @@ sealed interface MediaItem {
 
     sealed interface Event : MediaItem {
         val validationState: ContentValidationState
+
+        /**
+         * The formatted caption parsed into a tree of [DocumentNode] for the native Compose renderer.
+         * Null when there is no formatted caption or when the new timeline event renderer is disabled.
+         */
+        val captionTree: DocumentNode?
     }
 
     data class Image(
@@ -41,6 +48,7 @@ sealed interface MediaItem {
         val thumbnailSource: MediaSource?,
         val blurHash: String?,
         override val validationState: ContentValidationState,
+        override val captionTree: DocumentNode? = null,
     ) : Event {
         val thumbnailMediaRequestData: MediaRequestData
             get() = MediaRequestData(thumbnailSource ?: mediaSource, MediaRequestData.Kind.Thumbnail(100))
@@ -54,6 +62,7 @@ sealed interface MediaItem {
         val thumbnailSource: MediaSource?,
         val blurHash: String?,
         override val validationState: ContentValidationState,
+        override val captionTree: DocumentNode? = null,
     ) : Event {
         val thumbnailMediaRequestData: MediaRequestData
             get() = MediaRequestData(thumbnailSource ?: mediaSource, MediaRequestData.Kind.Thumbnail(100))
@@ -65,6 +74,7 @@ sealed interface MediaItem {
         val mediaInfo: MediaInfo,
         val mediaSource: MediaSource,
         override val validationState: ContentValidationState,
+        override val captionTree: DocumentNode? = null,
     ) : Event
 
     data class Voice(
@@ -73,6 +83,7 @@ sealed interface MediaItem {
         val mediaInfo: MediaInfo,
         val mediaSource: MediaSource,
         override val validationState: ContentValidationState,
+        override val captionTree: DocumentNode? = null,
     ) : Event
 
     data class File(
@@ -81,6 +92,7 @@ sealed interface MediaItem {
         val mediaInfo: MediaInfo,
         val mediaSource: MediaSource,
         override val validationState: ContentValidationState,
+        override val captionTree: DocumentNode? = null,
     ) : Event
 }
 
