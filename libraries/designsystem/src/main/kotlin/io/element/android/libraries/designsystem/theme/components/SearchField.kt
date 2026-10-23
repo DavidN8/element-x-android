@@ -48,8 +48,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
 /**
  * https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=1985-3223
  *
- * @param onClear called by the clear button, which shows while the field is focused and not empty. Clears the text by default.
- * @param onSearch called by the keyboard's search action, before the keyboard is hidden.
+ * [onClear] is called by the clear button, which shows while the field is focused and not empty; it clears the text by default.
+ * [onSearch] is called by the keyboard's search action, before the keyboard is hidden.
  */
 @Composable
 fun SearchField(

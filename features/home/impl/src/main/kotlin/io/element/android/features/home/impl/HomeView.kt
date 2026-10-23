@@ -205,7 +205,7 @@ private fun HomeScaffold(
 
     // Each tab provides its content, its scrollable list (re-tapping the tab scrolls it to the top), and its action.
     val tab = when (state.currentHomeNavigationBarItem) {
-        HomeNavigationBarItem.Chats -> HomeTab(
+        HomeNavigationBarItem.Chats -> HomeTabContent(
             lazyListState = roomsLazyListState,
             floatingActionButton = {
                 HomeFloatingActionButton(CompoundIcons.ChatNew(), CommonStrings.action_start_chat, onStartChatClick)
@@ -229,7 +229,7 @@ private fun HomeScaffold(
             )
             SpaceFiltersView(roomListState.spaceFiltersState)
         }
-        HomeNavigationBarItem.Spaces -> HomeTab(
+        HomeNavigationBarItem.Spaces -> HomeTabContent(
             lazyListState = spacesLazyListState,
             floatingActionButton = {
                 HomeFloatingActionButton(CompoundIcons.Plus(), CommonStrings.action_create_space, onCreateSpaceClick)
@@ -342,7 +342,7 @@ private fun HomeScaffold(
  * @param floatingActionButton the tab's primary action, at the bottom end, if any.
  * @param content the tab's content, given the modifier that places it between the bars.
  */
-private class HomeTab(
+private data class HomeTabContent(
     val lazyListState: LazyListState?,
     val floatingActionButton: (@Composable () -> Unit)?,
     val content: @Composable (Modifier) -> Unit,

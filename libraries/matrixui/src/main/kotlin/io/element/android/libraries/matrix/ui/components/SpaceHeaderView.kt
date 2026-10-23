@@ -43,8 +43,7 @@ import kotlinx.collections.immutable.persistentListOf
 
 /**
  * The header of a space, like a WhatsApp community's: a large rounded-square avatar, the name, then "Space · N rooms".
- *
- * @param numberOfRooms the number of rooms in the space, or null while it is not known yet: then only "Space" is shown.
+ * While [numberOfRooms] is not known yet (null), only "Space" is shown.
  */
 @Composable
 fun SpaceHeaderView(

@@ -38,8 +38,7 @@ private const val DETAIL_PANE_WEIGHT = 3f
  * The nav model is untouched: this only changes how the existing backstack is drawn, so phone
  * behaviour is unchanged. While another element is active the Home node is stashed (lifecycle CREATED),
  * so back presses go to the detail pane first and Home's own back handlers only resume once it is active again.
- *
- * @param homeTab the tab selected in Home, which picks the message shown in the detail pane while nothing is open.
+ * While nothing is open, the detail pane shows a message for the tab selected in Home, [homeTab].
  */
 @Composable
 internal fun LoggedInFlowNode.LoggedInTwoPaneView(
