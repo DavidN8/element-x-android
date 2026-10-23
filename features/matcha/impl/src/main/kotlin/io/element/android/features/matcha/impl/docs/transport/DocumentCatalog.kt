@@ -79,11 +79,16 @@ class DocumentCatalog(
 
     private fun current() = catalogState(session.state.value, room.info().isEncrypted == true)
 
-    /** Publishes a new named document; returns its id once its catalog entry is acknowledged. */
+    /**
+     * Publishes a new named document; returns its id once its catalog entry is acknowledged. When only the save failed, the
+     * failure's [CatalogException.documentId] names the entry kept locally, so a retry renames it instead of adding another.
+     */
     suspend fun create(title: String): Result<String> {
         checkWrite(title)?.let { return Result.failure(it) }
         val id = newDocumentId()
-        return write(id, title.trim(), clock()).map { id }
+        val error = write(id, title.trim(), clock()).exceptionOrNull() ?: return Result.success(id)
+        val isKept = error is CatalogException && session.state.value.pendingUpdates > 0
+        return Result.failure(if (isKept) CatalogException(error.error, id) else error)
     }
 
     /** Renames a document's catalog entry, without touching its text. */
@@ -132,4 +137,8 @@ class DocumentCatalog(
     }
 }
 
-class CatalogException(val error: DocumentError) : Exception(error.name)
+class CatalogException(
+    val error: DocumentError,
+    /** The new document whose entry is kept, unsaved, after a failed create. */
+    val documentId: String? = null,
+) : Exception(error.name)

@@ -48,7 +48,6 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.error
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
@@ -60,7 +59,7 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.matcha.impl.R
-import io.element.android.libraries.designsystem.components.button.BackButton
+import io.element.android.features.matcha.impl.ui.SheetHeader
 import io.element.android.libraries.designsystem.components.list.ListItemContent
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -155,37 +154,6 @@ private fun RoomReminderContent(
             isCustomStep -> CustomStep(state)
             else -> OptionsStep(state)
         }
-    }
-}
-
-@Composable
-private fun SheetHeader(
-    title: String,
-    isBack: Boolean,
-    onNavigationClick: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .padding(horizontal = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        BackButton(
-            onClick = onNavigationClick,
-            imageVector = if (isBack) CompoundIcons.ArrowLeft() else CompoundIcons.Close(),
-            contentDescription = stringResource(if (isBack) CommonStrings.action_back else CommonStrings.action_close),
-            modifier = Modifier.align(Alignment.CenterStart),
-        )
-        Text(
-            text = title,
-            style = ElementTheme.typography.fontHeadingMdRegular,
-            color = ElementTheme.colors.textPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .padding(horizontal = 52.dp)
-                .semantics { heading() },
-        )
     }
 }
 
