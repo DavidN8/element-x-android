@@ -11,10 +11,12 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
+import io.element.android.libraries.matrix.api.room.RawEventsPage
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
@@ -79,6 +81,8 @@ class MatchaRoomStoreTest {
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
         createTimelineResult: (() -> Result<Timeline>)? = null,
         boardPointerResult: () -> Result<Map<String, String>> = { Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}""")) },
+        references: Map<String, List<String>> = emptyMap(),
+        liveEvents: kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.MutableSharedFlow(),
         scope: kotlinx.coroutines.CoroutineScope,
     ): Pair<MatchaRoomStore, MutableStateFlow<List<MatrixTimelineItem>>> {
         val timelineItems = MutableStateFlow(items)
@@ -98,12 +102,48 @@ class MatchaRoomStoreTest {
                 createTimelineResult?.invoke() ?: Result.success(timeline)
             },
             sendRawEventResult = sendRawEventResult,
+            fetchReferencingEventsJsonResult = { eventId, _ -> Result.success(RawEventsPage(references[eventId.value].orEmpty(), null)) },
+            rawMessageLikeEvents = liveEvents,
             getStateEventsJsonResult = { type ->
                 if (type == StateEventType.Custom(MatchaConfig.STATE_KANBAN)) boardPointerResult() else Result.success(emptyMap())
             },
         )
         val store = MatchaRoomStore(room, scope)
         return store to timelineItems
+    }
+
+    private fun rawJson(index: Int, type: String, content: String) =
+        """{"type": "$type", "event_id": "${'$'}r$index", "sender": "@bob:x", "origin_server_ts": $index, "content": $content}"""
+
+    @Test
+    fun `cards and thread names are read from the events relating to the board and to each thread, then from live events`() = runTest {
+        val live = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            items = emptyList(),
+            threads = listOf(threadItem(thread, "Original body")),
+            references = mapOf(
+                boardRoot to listOf(
+                    rawJson(
+                        2,
+                        MatchaConfig.EVENT_KANBAN_CARD,
+                        KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Card", thread), boardRoot)
+                    ),
+                ),
+                thread to listOf(
+                    rawJson(1, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(thread, name = "Renamed")),
+                ),
+            ),
+            liveEvents = live,
+        )
+        settle()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        assertThat(store.snapshot.value.threads.single().metadata.name).isEqualTo("Renamed")
+        assertThat(store.snapshot.value.board?.cards?.single()?.status).isEqualTo(TaskStatus.Doing)
+
+        live.emit(rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(thread, archived = true)))
+        settle()
+        assertThat(store.snapshot.value.threads.single().metadata.archived).isTrue()
     }
 
     @Test

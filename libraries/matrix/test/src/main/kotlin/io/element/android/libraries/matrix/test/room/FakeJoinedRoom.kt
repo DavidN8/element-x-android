@@ -20,6 +20,7 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.IntentionalMention
 import io.element.android.libraries.matrix.api.room.JoinedRoom
+import io.element.android.libraries.matrix.api.room.RawEventsPage
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMembersState
 import io.element.android.libraries.matrix.api.room.RoomNotificationSettingsState
@@ -98,6 +99,8 @@ class FakeJoinedRoom(
     private val sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> lambdaError() },
     private val getStateEventsJsonResult: (StateEventType) -> Result<Map<String, String>> = { Result.success(emptyMap()) },
     private val getStateEventIdResult: (StateEventType, String) -> Result<EventId?> = { _, _ -> Result.success(null) },
+    private val fetchReferencingEventsJsonResult: (EventId, String?) -> Result<RawEventsPage> = { _, _ -> Result.success(RawEventsPage(emptyList(), null)) },
+    private val rawMessageLikeEvents: Flow<String> = MutableSharedFlow(),
 ) : JoinedRoom, BaseRoom by baseRoom {
     private val sendQueueUpdates = MutableSharedFlow<SendQueueUpdate>(extraBufferCapacity = 10)
 
@@ -280,6 +283,12 @@ class FakeJoinedRoom(
     override suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?> {
         return getStateEventIdResult(eventType, stateKey)
     }
+
+    override suspend fun fetchReferencingEventsJson(eventId: EventId, from: String?, limit: Int): Result<RawEventsPage> {
+        return fetchReferencingEventsJsonResult(eventId, from)
+    }
+
+    override fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String> = rawMessageLikeEvents
 
     private suspend fun simulateSendMediaProgress(progressCallback: ProgressCallback?) {
         progressCallbackValues.forEach { (current, total) ->

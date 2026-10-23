@@ -1,0 +1,53 @@
+diff --git a/bindings/matrix-sdk-ffi/src/room/mod.rs b/bindings/matrix-sdk-ffi/src/room/mod.rs
+index c018a38..a80b661 100644
+--- a/bindings/matrix-sdk-ffi/src/room/mod.rs
++++ b/bindings/matrix-sdk-ffi/src/room/mod.rs
+@@ -1433,6 +1433,48 @@ impl Room {
+                 .collect::<Result<Vec<_>, _>>()?,
+         })
+     }
++
++    /// Matcha fork: fetches one page of the events related to `event_id` by
++    /// `relation_type` from the homeserver, newest first, decrypted when
++    /// possible, as raw event JSON. Unlike the timeline, this includes custom
++    /// event types. An event that cannot be decrypted is returned encrypted.
++    pub async fn fetch_relations_json(
++        &self,
++        event_id: String,
++        relation_type: RelationType,
++        from: Option<String>,
++        limit: u32,
++    ) -> Result<RelationsJsonPage, ClientError> {
++        let event_id = EventId::parse(event_id)?;
++        let options = matrix_sdk::room::RelationsOptions {
++            from,
++            dir: ruma::api::Direction::Backward,
++            limit: Some(limit.into()),
++            include_relations: matrix_sdk::room::IncludeRelations::RelationsOfType(
++                relation_type.into(),
++            ),
++            recurse: false,
++        };
++        let relations = self.inner.relations(event_id, options).await?;
++        Ok(RelationsJsonPage {
++            events: relations
++                .chunk
++                .into_iter()
++                .map(|event| event.into_raw().json().get().to_owned())
++                .collect(),
++            next_batch: relations.next_batch_token,
++        })
++    }
++}
++
++/// Matcha fork: one page of related events as raw JSON, see
++/// [`Room::fetch_relations_json`].
++#[derive(uniffi::Record)]
++pub struct RelationsJsonPage {
++    /// The raw JSON of each related event, newest first.
++    pub events: Vec<String>,
++    /// The token for the next (older) page, or `None` at the end.
++    pub next_batch: Option<String>,
+ }
+ 
+ /// The relation types that can be used to filter related events when calling

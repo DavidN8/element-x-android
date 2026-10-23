@@ -26,6 +26,7 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.IntentionalMention
 import io.element.android.libraries.matrix.api.room.JoinedRoom
+import io.element.android.libraries.matrix.api.room.RawEventsPage
 import io.element.android.libraries.matrix.api.room.RoomNotificationSettingsState
 import io.element.android.libraries.matrix.api.room.SendQueueUpdate
 import io.element.android.libraries.matrix.api.room.StateEventType
@@ -69,6 +70,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -78,6 +80,8 @@ import org.matrix.rustcomponents.sdk.IdentityStatusChangeListener
 import org.matrix.rustcomponents.sdk.KnockRequestsListener
 import org.matrix.rustcomponents.sdk.LiveLocationException
 import org.matrix.rustcomponents.sdk.RoomMessageEventMessageType
+import org.matrix.rustcomponents.sdk.RoomMessageLikeEvent
+import org.matrix.rustcomponents.sdk.RoomMessageLikeEventsListener
 import org.matrix.rustcomponents.sdk.RoomSendQueueUpdate
 import org.matrix.rustcomponents.sdk.SendQueueListener
 import org.matrix.rustcomponents.sdk.TimelineConfiguration
@@ -95,6 +99,7 @@ import uniffi.matrix_sdk_ui.TimelineEventCondition
 import uniffi.matrix_sdk_ui.TimelineEventFilter
 import uniffi.matrix_sdk_ui.TimelineEventFocusThreadMode
 import uniffi.matrix_sdk_ui.TimelineReadReceiptTracking
+import uniffi.ruma_events.messageLikeEventTypeFromString
 import uniffi.ruma_events.timelineEventTypeFromString
 import kotlin.coroutines.cancellation.CancellationException
 import org.matrix.rustcomponents.sdk.IdentityStatusChange as RustIdentityStateChange
@@ -605,6 +610,27 @@ class JoinedRustRoom(
             innerRoom.stateEvents(eventType.map()).firstOrNull { it.stateKey == stateKey }?.eventId?.let(::EventId)
         }
     }
+
+    override suspend fun fetchReferencingEventsJson(eventId: EventId, from: String?, limit: Int): Result<RawEventsPage> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            innerRoom.fetchReferencingEventsJson(eventId.value, from, limit)
+        }
+    }
+
+    override fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String> = eventTypes
+        .map { type ->
+            mxCallbackFlow {
+                innerRoom.subscribeToMessageLikeEvents(
+                    messageLikeEventTypeFromString(type),
+                    object : RoomMessageLikeEventsListener {
+                        override fun onEvent(event: RoomMessageLikeEvent) {
+                            trySend(event.toRawJson(type))
+                        }
+                    },
+                )
+            }
+        }
+        .merge()
 
     override fun close() = destroy()
 

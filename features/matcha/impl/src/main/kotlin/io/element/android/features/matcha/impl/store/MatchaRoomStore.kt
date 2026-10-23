@@ -52,11 +52,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** A thread of a room with its shared Matcha metadata. */
 data class MatchaThread(
@@ -147,6 +151,16 @@ class MatchaRoomStore(
     private val json = Json { ignoreUnknownKeys = true }
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
     private val scanEvents = MutableStateFlow<List<RawEvent>>(emptyList())
+
+    /** Matcha events read from the homeserver as relations of each anchor (board root, thread roots, document anchor), newest first. */
+    private val relationEvents = MutableStateFlow<Map<String, List<RawEvent>>>(emptyMap())
+
+    /** New Matcha events from sync, newest first; timelines of this SDK drop custom message-like events, so they come from here. */
+    private val liveEvents = MutableStateFlow<List<RawEvent>>(emptyList())
+    private val anchorsLoading = MutableStateFlow<Set<String>>(emptySet())
+    private val relationsUnavailable = MutableStateFlow(false)
+    private val requestedAnchors = HashSet<String>()
+    private val anchorPermits = Semaphore(MAX_CONCURRENT_ANCHORS)
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
@@ -224,6 +238,13 @@ class MatchaRoomStore(
     @OptIn(FlowPreview::class)
     private fun start() {
         openTimeline()
+        room.subscribeToRawMessageLikeEvents(MatchaConfig.MESSAGE_LIKE_EVENT_TYPES)
+            .onEach { json ->
+                val event = RawEvent.parse(json) ?: return@onEach
+                liveEvents.update { list -> if (list.any { it.eventId == event.eventId }) list else listOf(event) + list }
+            }
+            .launchIn(coroutineScope)
+        if (extraEventTypes.isNotEmpty()) coroutineScope.launch { requestDocumentAnchor() }
         room.threadsListService.subscribeToItemUpdates()
             .onEach { threadItems.value = it }
             .launchIn(coroutineScope)
@@ -251,7 +272,9 @@ class MatchaRoomStore(
             )
         }
         combine(
-            combine(scanEvents, optimisticEvents) { scan, optimistic -> merge(scan, optimistic) },
+            combine(scanEvents, liveEvents, relationEvents, optimisticEvents) { scan, live, related, optimistic ->
+                merge((live + related.values.flatten() + scan).distinctBy { it.eventId ?: it }, optimistic)
+            },
             threadItems,
             storedState,
             permissions,
@@ -260,15 +283,62 @@ class MatchaRoomStore(
                 threadsPaginationStatus,
                 historyPagesRead,
                 loadingMore,
-                combine(utdCauses, loadFailed, readFailed, ::Health),
+                combine(utdCauses, loadFailed, readFailed, anchorsLoading, relationsUnavailable, ::Health),
                 ::Status,
             ),
         ) { events, threads, state, perms, status ->
             buildSnapshot(events, threads, state, perms, status)
         }
             .distinctUntilChanged()
-            .onEach { _snapshot.value = it }
+            .onEach { snapshot ->
+                _snapshot.value = snapshot
+                requestAnchors(listOfNotNull(snapshot.board?.rootId) + snapshot.threads.map { it.id.value })
+            }
             .launchIn(coroutineScope)
+    }
+
+    /** The room's `m.room.create` event, which document frames relate to. */
+    private suspend fun requestDocumentAnchor() {
+        room.getStateEventId(StateEventType.RoomCreate, "").getOrNull()?.let { requestAnchors(listOf(it.value)) }
+    }
+
+    /** Fetches, once each, the events that reference new anchors, a few anchors at a time. */
+    private fun requestAnchors(anchors: Collection<String>) {
+        val fresh = synchronized(requestedAnchors) { anchors.filter { it.startsWith("$") && requestedAnchors.add(it) } }
+        if (fresh.isEmpty()) return
+        anchorsLoading.update { it + fresh }
+        for (anchor in fresh) {
+            coroutineScope.launch {
+                try {
+                    anchorPermits.withPermit { fetchAllReferences(anchor) }
+                        .onSuccess { events -> relationEvents.update { it + (anchor to events) } }
+                        .onFailure { error ->
+                            if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
+                            Timber.w(error, "Could not read the events related to a Matcha anchor")
+                        }
+                } finally {
+                    anchorsLoading.update { it - anchor }
+                }
+            }
+        }
+    }
+
+    /**
+     * Reads every event that references [anchor], newest first, page by page.
+     *
+     * ponytail: a fixed page cap bounds very long histories (MAX_RELATION_PAGES × 100 events); add paging on demand if one anchor
+     * ever needs more.
+     */
+    private suspend fun fetchAllReferences(anchor: String): Result<List<RawEvent>> {
+        val events = ArrayList<RawEvent>()
+        var from: String? = null
+        repeat(MAX_RELATION_PAGES) {
+            val page = room.fetchReferencingEventsJson(EventId(anchor), from, RELATIONS_PAGE_SIZE).getOrElse { return Result.failure(it) }
+            page.events.mapNotNullTo(events) { RawEvent.parse(it) }
+            from = page.nextBatch ?: return Result.success(events)
+        }
+        Timber.w("Stopped reading the events related to a Matcha anchor after %d pages", MAX_RELATION_PAGES)
+        return Result.success(events)
     }
 
     private data class Status(
@@ -285,6 +355,10 @@ class MatchaRoomStore(
         val loadFailed: Boolean,
         /** The last read of history or of the thread list failed. */
         val readFailed: Boolean,
+        /** Anchors whose related events are still being fetched. */
+        val anchorsLoading: Set<String>,
+        /** The SDK can't fetch related events as JSON, so cards, thread names and documents can't be read. */
+        val relationsUnavailable: Boolean,
     )
 
     private suspend fun readInitialHistory(timeline: Timeline) {
@@ -410,9 +484,10 @@ class MatchaRoomStore(
             .filter { item -> threads.firstOrNull { it.id == item.threadId }?.metadata?.nameSource != ThreadNameSource.Explicit }
             .map { item -> ((item.rootEvent.content as UnableToDecryptContent).data as? UnableToDecryptContent.Data.MegolmV1AesSha2)?.utdCause }
         val warning = (unreadableCauses + unreadableRootCauses).map(::warningFor).minOrNull()
+            ?: MatchaWarning.HistoryUnavailable.takeIf { health.relationsUnavailable }
             ?: MatchaWarning.Network.takeIf { health.readFailed }
         return MatchaRoomSnapshot(
-            isLoaded = historyRead && threadsRead && state.isRead,
+            isLoaded = historyRead && threadsRead && state.isRead && health.anchorsLoading.isEmpty(),
             threads = threads,
             board = board,
             permissions = permissions,
@@ -447,6 +522,9 @@ class MatchaRoomStore(
                 .also { readFailed.value = it.isFailure }
                 .onFailure { Timber.w(it, "Could not read older Matcha history") }
             if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) paginateThreads()
+            if (extraEventTypes.isNotEmpty()) requestDocumentAnchor()
+            // Related events are read in full per anchor, so "no more history" also means every anchor has been read.
+            if (history.isSuccess) withTimeoutOrNull(ANCHORS_TIMEOUT) { anchorsLoading.first { it.isEmpty() } }
             history.map { timeline.backwardPaginationStatus.value.hasMoreToLoad }
         } finally {
             loadingMore.value = false
@@ -525,6 +603,10 @@ class MatchaRoomStore(
         const val INITIAL_HISTORY_PAGES = 10
         private const val EVENT_ROOM_ENCRYPTED = "m.room.encrypted"
         private const val PAGINATION_ATTEMPTS = 5
+        private const val MAX_CONCURRENT_ANCHORS = 4
+        private const val RELATIONS_PAGE_SIZE = 100
+        private const val MAX_RELATION_PAGES = 50
+        private val ANCHORS_TIMEOUT = 30.seconds
     }
 }
 
