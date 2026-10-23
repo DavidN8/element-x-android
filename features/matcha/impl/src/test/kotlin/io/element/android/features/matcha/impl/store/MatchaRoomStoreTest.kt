@@ -111,8 +111,16 @@ class MatchaRoomStoreTest {
             scope = backgroundScope,
             items = listOf(
                 event(1, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("c-standalone", "Standalone", null), boardRoot)),
-                event(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Old title", thread), boardRoot)),
-                event(3, MatchaConfig.EVENT_THREAD_METADATA, """{"version": 1, "name": "Renamed", "m.relates_to": {"rel_type": "m.reference", "event_id": "$thread"}}"""),
+                event(
+                    2,
+                    MatchaConfig.EVENT_KANBAN_CARD,
+                    KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Old title", thread), boardRoot)
+                ),
+                event(
+                    3,
+                    MatchaConfig.EVENT_THREAD_METADATA,
+                    """{"version": 1, "name": "Renamed", "m.relates_to": {"rel_type": "m.reference", "event_id": "$thread"}}"""
+                ),
             ),
             threads = listOf(threadItem(thread, "Original body")),
         )
@@ -135,7 +143,10 @@ class MatchaRoomStoreTest {
         settle()
         assertThat(store.snapshot.value.events.map { it.eventId }).containsExactly("\$sent")
         timelineItems.value = listOf(
-            item(9, """{"type": "${MatchaConfig.EVENT_THREAD_METADATA}", "event_id": "${'$'}sent", "sender": "@me:x", "origin_server_ts": 9, "content": $content}"""),
+            item(
+                9,
+                """{"type": "${MatchaConfig.EVENT_THREAD_METADATA}", "event_id": "${'$'}sent", "sender": "@me:x", "origin_server_ts": 9, "content": $content}"""
+            ),
         )
         settle()
         assertThat(store.snapshot.value.events.map { it.eventId }).containsExactly("\$sent")

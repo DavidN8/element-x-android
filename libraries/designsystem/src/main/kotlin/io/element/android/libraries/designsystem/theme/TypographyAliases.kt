@@ -9,6 +9,8 @@
 package io.element.android.libraries.designsystem.theme
 
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import io.element.android.compound.tokens.generated.TypographyTokens
 
 /*
@@ -20,3 +22,11 @@ val TypographyTokens.aliasScreenTitle: TextStyle
 
 val TypographyTokens.aliasButtonText: TextStyle
     get() = fontBodyLgMedium
+
+/** Home tab titles (the app name on Chats, then Tasks and Spaces): 22sp, weight 500. */
+val TypographyTokens.aliasAppTitle: TextStyle
+    get() = fontHeadingMdRegular.copy(fontWeight = FontWeight.Medium)
+
+/** The chat name in a chat's top bar: 17sp, weight 500. */
+val TypographyTokens.aliasChatTitle: TextStyle
+    get() = fontBodyLgMedium.copy(fontSize = 17.sp)

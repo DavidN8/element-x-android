@@ -47,7 +47,9 @@ class KanbanProtocolTest {
     @Test
     fun `optional fields are read when valid and dropped when not`() {
         val card = KanbanProtocol.parseCard(
-            cardEvent("""$valid, "thread_id": "${'$'}t", "due_at": 1767225600000, "reminder_requested": {"event_id": "${'$'}cmd", "at": 1767225600000}, "show_to_room": false"""),
+            cardEvent(
+                """$valid, "thread_id": "${'$'}t", "due_at": 1767225600000, "reminder_requested": {"event_id": "${'$'}cmd", "at": 1767225600000}, "show_to_room": false"""
+            ),
             root,
         )!!
         assertThat(card.threadId).isEqualTo("\$t")

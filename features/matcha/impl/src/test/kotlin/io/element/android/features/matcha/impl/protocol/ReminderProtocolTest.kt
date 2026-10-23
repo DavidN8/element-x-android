@@ -48,7 +48,9 @@ class ReminderProtocolTest {
 
     @Test
     fun `the bot acknowledgement is parsed`() {
-        val ack = ReminderProtocol.parseAcknowledgement("Scheduled r-0123456789abcdef for 2026-01-01T09:00:00.000Z. Cancel with !remind cancel r-0123456789abcdef.")
+        val ack = ReminderProtocol.parseAcknowledgement(
+            "Scheduled r-0123456789abcdef for 2026-01-01T09:00:00.000Z. Cancel with !remind cancel r-0123456789abcdef."
+        )
         assertThat(ack).isEqualTo(ReminderAcknowledgement("r-0123456789abcdef", now + 9 * 3_600_000L))
         assertThat(ReminderProtocol.parseAcknowledgement("Reminder for @a:b: hi")).isNull()
     }
