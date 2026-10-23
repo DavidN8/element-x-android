@@ -34,11 +34,11 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.annotations.CoreColorToken
+import io.element.android.compound.colors.matchaColorsDark
+import io.element.android.compound.colors.matchaColorsLight
 import io.element.android.compound.tokens.compoundTypography
 import io.element.android.compound.tokens.generated.SemanticColors
 import io.element.android.compound.tokens.generated.TypographyTokens
-import io.element.android.compound.colors.matchaColorsDark
-import io.element.android.compound.colors.matchaColorsLight
 import io.element.android.compound.tokens.generated.internal.DarkColorTokens
 
 /**
