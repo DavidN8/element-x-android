@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.api
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Modifier
 import io.element.android.libraries.matrix.api.core.ThreadId
 
@@ -26,6 +27,7 @@ interface MatchaChatBarRenderer {
 }
 
 /** What the screen under the bar is showing. */
+@Immutable
 sealed interface MatchaChatBarSelection {
     /** The main chat timeline. */
     data object General : MatchaChatBarSelection
@@ -44,6 +46,10 @@ sealed interface MatchaChatBarSelection {
 interface MatchaChatBarActions {
     fun openGeneral()
     fun openTasks()
+
+    /** Opens the board on the task of [threadId], from a thread chip's "View task"; the board offers to create one if there is none. */
+    fun openThreadTask(threadId: ThreadId) = openTasks()
+
     fun openThread(threadId: ThreadId)
     fun openAllThreads()
 
