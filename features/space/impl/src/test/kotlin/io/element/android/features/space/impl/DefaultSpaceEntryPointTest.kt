@@ -13,6 +13,7 @@ import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.testing.junit4.util.MainDispatcherRule
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.createroom.test.FakeCreateRoomEntryPoint
+import io.element.android.features.matcha.test.FakeMatchaSpaceDocsEntryPoint
 import io.element.android.features.rolesandpermissions.test.FakeChangeRoomMemberRolesEntryPoint
 import io.element.android.features.space.api.SpaceEntryPoint
 import io.element.android.features.space.impl.di.FakeSpaceFlowGraph
@@ -49,6 +50,7 @@ class DefaultSpaceEntryPointTest {
                 graphFactory = FakeSpaceFlowGraph.Factory,
                 createRoomEntryPoint = FakeCreateRoomEntryPoint(),
                 changeRoomMemberRolesEntryPoint = FakeChangeRoomMemberRolesEntryPoint(),
+                matchaSpaceDocsEntryPoint = FakeMatchaSpaceDocsEntryPoint(),
                 sessionCoroutineScope = backgroundScope,
             )
         }

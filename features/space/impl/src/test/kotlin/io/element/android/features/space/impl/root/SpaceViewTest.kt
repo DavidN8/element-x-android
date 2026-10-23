@@ -56,6 +56,23 @@ class SpaceViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `clicking on the Docs row invokes the expected callback`() = runAndroidComposeUiTest {
+        ensureCalledOnce {
+            setSpaceView(
+                aSpaceState(showDocs = true, eventSink = EventsRecorder(expectEvents = false)),
+                onDocsClick = it,
+            )
+            onNodeWithText(activity!!.getString(CommonStrings.common_matcha_docs_row_subtitle)).performClick()
+        }
+    }
+
+    @Test
+    fun `the Docs row is hidden when docs are off`() = runAndroidComposeUiTest {
+        setSpaceView(aSpaceState(showDocs = false, eventSink = EventsRecorder(expectEvents = false)))
+        onNodeWithText(activity!!.getString(CommonStrings.common_matcha_docs_row_subtitle)).assertDoesNotExist()
+    }
+
+    @Test
     fun `clicking on a room name invokes the expected callback`() = runAndroidComposeUiTest {
         val aSpaceRoom = aSpaceRoom(roomId = A_ROOM_ID, displayName = A_ROOM_NAME)
         val eventsRecorder = EventsRecorder<SpaceEvent>(expectEvents = false)
@@ -244,6 +261,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setSpaceView(
     onViewMembersClick: () -> Unit = EnsureNeverCalled(),
     onCreateRoomClick: () -> Unit = EnsureNeverCalled(),
     onAddRoomClick: () -> Unit = EnsureNeverCalled(),
+    onDocsClick: () -> Unit = EnsureNeverCalled(),
     acceptDeclineInviteView: @Composable () -> Unit = {},
 ) {
     setContent {
@@ -256,6 +274,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setSpaceView(
             onSettingsClick = onSettingsClick,
             onViewMembersClick = onViewMembersClick,
             onAddRoomClick = onAddRoomClick,
+            onDocsClick = onDocsClick,
             acceptDeclineInviteView = acceptDeclineInviteView,
             onCreateRoomClick = onCreateRoomClick,
         )

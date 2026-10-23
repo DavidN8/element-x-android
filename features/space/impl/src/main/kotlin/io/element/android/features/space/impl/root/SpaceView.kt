@@ -25,7 +25,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -108,6 +110,7 @@ fun SpaceView(
     onViewMembersClick: () -> Unit,
     onCreateRoomClick: () -> Unit,
     onAddRoomClick: () -> Unit,
+    onDocsClick: () -> Unit,
     modifier: Modifier = Modifier,
     acceptDeclineInviteView: @Composable () -> Unit,
 ) {
@@ -147,6 +150,7 @@ fun SpaceView(
                         canAccessSpaceSettings = state.canAccessSpaceSettings,
                         canEditSpaceGraph = state.canEditSpaceGraph,
                         showManageRoomsAction = state.showManageRoomsAction,
+                        showDocs = state.showDocs,
                         onBackClick = onBackClick,
                         onLeaveSpaceClick = onLeaveSpaceClick,
                         onSettingsClick = onSettingsClick,
@@ -155,6 +159,7 @@ fun SpaceView(
                         onManageRoomsClick = { state.eventSink(SpaceEvent.EnterManageMode) },
                         onAddRoomClick = onAddRoomClick,
                         onCreateRoomClick = onCreateRoomClick,
+                        onDocsClick = onDocsClick,
                     )
                 }
             }
@@ -178,6 +183,7 @@ fun SpaceView(
                     },
                     onCreateRoomClick = onCreateRoomClick,
                     onAddRoomClick = onAddRoomClick,
+                    onDocsClick = onDocsClick,
                 )
                 JoinFailuresEffect(
                     hasAnyFailure = state.hasAnyJoinFailures,
@@ -252,6 +258,7 @@ private fun SpaceViewContent(
     onTopicClick: (String) -> Unit,
     onCreateRoomClick: () -> Unit,
     onAddRoomClick: () -> Unit,
+    onDocsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
@@ -276,6 +283,18 @@ private fun SpaceViewContent(
                     numberOfMembers = spaceInfo.joinedMembersCount.toInt(),
                     onTopicClick = onTopicClick
                 )
+            }
+        }
+
+        if (state.showDocs) {
+            item(key = "docs") {
+                AnimatedVisibility(
+                    !state.isManageMode,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    DocsRow(onClick = onDocsClick)
+                }
             }
         }
 
@@ -349,6 +368,52 @@ private fun SpaceViewContent(
                     LoadingMoreIndicator(eventSink = state.eventSink)
                 }
             }
+        }
+    }
+}
+
+/**
+ * The space's docs, like the "Media, links and docs" row of a WhatsApp group: a rounded document tile, the title and what the docs are for.
+ */
+@Composable
+private fun DocsRow(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .heightIn(min = 72.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(ElementTheme.colors.bgSubtleSecondary, RoundedCornerShape(12.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = CompoundIcons.Document(),
+                contentDescription = null,
+                tint = ElementTheme.colors.iconSecondary,
+            )
+        }
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 16.dp),
+        ) {
+            Text(
+                text = stringResource(CommonStrings.common_matcha_docs),
+                style = ElementTheme.typography.fontBodyLgMedium,
+                color = ElementTheme.colors.textPrimary,
+            )
+            Text(
+                text = stringResource(CommonStrings.common_matcha_docs_row_subtitle),
+                style = ElementTheme.typography.fontBodyMdRegular,
+                color = ElementTheme.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -437,6 +502,7 @@ private fun SpaceViewTopBar(
     canAccessSpaceSettings: Boolean,
     canEditSpaceGraph: Boolean,
     showManageRoomsAction: Boolean,
+    showDocs: Boolean,
     onBackClick: () -> Unit,
     onLeaveSpaceClick: () -> Unit,
     onSettingsClick: () -> Unit,
@@ -445,6 +511,7 @@ private fun SpaceViewTopBar(
     onManageRoomsClick: () -> Unit,
     onAddRoomClick: () -> Unit,
     onCreateRoomClick: () -> Unit,
+    onDocsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     TopAppBar(
@@ -505,6 +572,16 @@ private fun SpaceViewTopBar(
                         )
                     }
                     HorizontalDivider()
+                }
+                if (showDocs) {
+                    SpaceMenuItem(
+                        titleRes = CommonStrings.common_matcha_docs,
+                        icon = CompoundIcons.Document(),
+                        onClick = {
+                            showMenu = false
+                            onDocsClick()
+                        }
+                    )
                 }
                 SpaceMenuItem(
                     titleRes = R.string.screen_space_menu_action_members,
@@ -719,6 +796,7 @@ internal fun SpaceViewPreview(
         onViewMembersClick = {},
         onCreateRoomClick = {},
         onAddRoomClick = {},
+        onDocsClick = {},
         onBackClick = {},
     )
 }

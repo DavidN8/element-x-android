@@ -49,6 +49,9 @@ class SpaceNode(
         fun navigateToAddRoom()
 
         fun onCreateRoom()
+
+        /** Opens the space's Matcha docs. */
+        fun navigateToDocs()
     }
 
     private val callback: Callback = callback()
@@ -108,6 +111,7 @@ class SpaceNode(
                 )
             },
             onCreateRoomClick = callback::onCreateRoom,
+            onDocsClick = callback::navigateToDocs,
             modifier = modifier
         )
     }

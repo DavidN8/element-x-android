@@ -24,6 +24,7 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.annotations.ContributesNode
 import io.element.android.features.createroom.api.CreateRoomEntryPoint
+import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.rolesandpermissions.api.ChangeRoomMemberRolesEntryPoint
 import io.element.android.features.rolesandpermissions.api.ChangeRoomMemberRolesListType
 import io.element.android.features.space.api.SpaceEntryPoint
@@ -59,6 +60,7 @@ class SpaceFlowNode(
     graphFactory: SpaceFlowGraph.Factory,
     private val createRoomEntryPoint: CreateRoomEntryPoint,
     private val changeRoomMemberRolesEntryPoint: ChangeRoomMemberRolesEntryPoint,
+    private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
 ) : BaseFlowNode<SpaceFlowNode.NavTarget>(
     backstack = BackStack(
@@ -90,6 +92,10 @@ class SpaceFlowNode(
 
         @Parcelize
         data object ChangeOwners : NavTarget
+
+        /** The space's Matcha docs: the list, or [documentId] directly. */
+        @Parcelize
+        data class Docs(val documentId: String? = null) : NavTarget
     }
 
     override fun onBuilt() {
@@ -147,6 +153,10 @@ class SpaceFlowNode(
                     override fun navigateToAddRoom() {
                         backstack.push(NavTarget.AddRoom)
                     }
+
+                    override fun navigateToDocs() {
+                        backstack.push(NavTarget.Docs())
+                    }
                 }
                 createNode<SpaceNode>(buildContext, listOf(callback))
             }
@@ -193,6 +203,19 @@ class SpaceFlowNode(
                     }
                 }
                 createNode<AddRoomToSpaceNode>(buildContext, listOf(callback))
+            }
+            is NavTarget.Docs -> {
+                val callback = object : MatchaSpaceDocsEntryPoint.Callback {
+                    override fun close() {
+                        backstack.pop()
+                    }
+                }
+                matchaSpaceDocsEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaSpaceDocsEntryPoint.Params(spaceId = room.roomId, documentId = navTarget.documentId),
+                    callback = callback,
+                )
             }
             NavTarget.ChangeOwners -> {
                 val node = changeRoomMemberRolesEntryPoint.createNode(

@@ -14,6 +14,9 @@ android {
 
 dependencies {
     api(projects.features.matcha.api)
+    implementation(projects.libraries.architecture)
     implementation(projects.libraries.matrix.api)
     implementation(projects.tests.testutils)
+    implementation(libs.coroutines.core)
+    implementation(libs.kotlinx.collections.immutable)
 }

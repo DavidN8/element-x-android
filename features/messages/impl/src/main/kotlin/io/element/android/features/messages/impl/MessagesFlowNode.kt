@@ -40,9 +40,11 @@ import io.element.android.features.location.api.RenderingMapsNotSupportedDialog
 import io.element.android.features.location.api.ShareLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationMode
+import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.messages.api.MessagesEntryPoint
 import io.element.android.features.messages.impl.attachments.Attachment
 import io.element.android.features.messages.impl.attachments.preview.AttachmentsPreviewNode
+import io.element.android.features.messages.impl.matcha.ChooseSpaceBottomSheet
 import io.element.android.features.messages.impl.pinned.DefaultPinnedEventsTimelineProvider
 import io.element.android.features.messages.impl.pinned.list.PinnedMessagesListNode
 import io.element.android.features.messages.impl.report.ReportMessageNode
@@ -83,6 +85,8 @@ import io.element.android.libraries.designsystem.components.async.AsyncIndicator
 import io.element.android.libraries.designsystem.components.async.AsyncIndicatorHost
 import io.element.android.libraries.designsystem.components.async.AsyncIndicatorState
 import io.element.android.libraries.di.RoomScope
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
@@ -95,6 +99,8 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.alias.matches
 import io.element.android.libraries.matrix.api.room.joinedRoomMembers
 import io.element.android.libraries.matrix.api.roomlist.RoomListService
+import io.element.android.libraries.matrix.api.spaces.SpaceRoom
+import io.element.android.libraries.matrix.api.spaces.SpaceService
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.TimelineProvider
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
@@ -111,12 +117,16 @@ import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.services.analytics.api.AnalyticsService
 import io.element.android.services.analyticsproviders.api.trackers.captureInteraction
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
+import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 
 @ContributesNode(RoomScope::class)
@@ -145,6 +155,9 @@ class MessagesFlowNode(
     private val dateFormatter: DateFormatter,
     private val coroutineDispatchers: CoroutineDispatchers,
     private val hasVulkanSupport: DeviceHasVulkanSupport,
+    private val featureFlagService: FeatureFlagService,
+    private val spaceService: SpaceService,
+    private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
 ) : BaseFlowNode<MessagesFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = plugins.filterIsInstance<MessagesEntryPoint.Params>().first().initialTarget.toNavTarget(),
@@ -222,12 +235,22 @@ class MessagesFlowNode(
 
         @Parcelize
         data class AvatarPreview(val name: String, val avatarUrl: String) : NavTarget
+
+        /** The Matcha docs of [spaceId], one of the chat's joined parent spaces. */
+        @Parcelize
+        data class SpaceDocs(val spaceId: RoomId) : NavTarget
     }
 
     private val callback: MessagesEntryPoint.Callback = callback()
     private val asyncIndicatorState = AsyncIndicatorState()
 
     private var displayVulkanNotSupportedError by mutableStateOf(false)
+
+    /** The joined spaces this chat belongs to, whose docs can be opened from the chat; empty while the Matcha workspaces are off. */
+    private var parentSpaces by mutableStateOf<ImmutableList<SpaceRoom>>(persistentListOf())
+
+    /** The spaces offered by the "Choose a space" sheet, while it is shown. */
+    private var spaceDocsChoice by mutableStateOf<ImmutableList<SpaceRoom>?>(null)
 
     override fun onBuilt() {
         super.onBuilt()
@@ -237,8 +260,36 @@ class MessagesFlowNode(
             }
         )
         setupCacheUpdaters()
+        loadParentSpaces()
 
         pinnedEventsTimelineProvider.launchIn(lifecycleScope)
+    }
+
+    private fun loadParentSpaces() {
+        featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces)
+            .distinctUntilChanged()
+            .onEach { isEnabled ->
+                parentSpaces = if (isEnabled) {
+                    spaceService.joinedParents(room.roomId)
+                        .onFailure { Timber.w(it, "Could not read the parent spaces of the room") }
+                        .getOrNull()
+                        .orEmpty()
+                        .toImmutableList()
+                } else {
+                    persistentListOf()
+                }
+            }
+            .launchIn(lifecycleScope)
+    }
+
+    /** Opens the docs of the chat's space; with several joined parent spaces, the user chooses one first. */
+    private fun openSpaceDocs() {
+        val spaces = parentSpaces
+        when (spaces.size) {
+            0 -> Timber.w("No joined parent space to open the docs of")
+            1 -> backstack.push(NavTarget.SpaceDocs(spaces.single().roomId))
+            else -> spaceDocsChoice = spaces
+        }
     }
 
     private fun setupCacheUpdaters() {
@@ -709,6 +760,19 @@ class MessagesFlowNode(
                 }
                 createNode<ThreadsListNode>(buildContext, listOf(callback))
             }
+            is NavTarget.SpaceDocs -> {
+                val callback = object : MatchaSpaceDocsEntryPoint.Callback {
+                    override fun close() {
+                        backstack.pop()
+                    }
+                }
+                matchaSpaceDocsEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaSpaceDocsEntryPoint.Params(spaceId = navTarget.spaceId),
+                    callback = callback,
+                )
+            }
             is NavTarget.AvatarPreview -> {
                 val callback = object : MediaViewerEntryPoint.Callback {
                     override fun onDone() {
@@ -981,6 +1045,17 @@ class MessagesFlowNode(
 
         if (displayVulkanNotSupportedError) {
             RenderingMapsNotSupportedDialog { displayVulkanNotSupportedError = false }
+        }
+
+        spaceDocsChoice?.let { spaces ->
+            ChooseSpaceBottomSheet(
+                spaces = spaces,
+                onSelectSpace = { spaceId ->
+                    spaceDocsChoice = null
+                    backstack.push(NavTarget.SpaceDocs(spaceId))
+                },
+                onDismiss = { spaceDocsChoice = null },
+            )
         }
 
         CompositionLocalProvider(

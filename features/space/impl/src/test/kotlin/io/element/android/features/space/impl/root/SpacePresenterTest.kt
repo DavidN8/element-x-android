@@ -22,6 +22,8 @@ import io.element.android.features.invite.api.toInviteData
 import io.element.android.features.invite.test.InMemorySeenInvitesStore
 import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.Presenter
+import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.RoomIdOrAlias
@@ -76,6 +78,17 @@ class SpacePresenterTest {
             assertThat(state.acceptDeclineInviteState).isEqualTo(anAcceptDeclineInviteState())
             assertThat(state.topicViewerState).isEqualTo(TopicViewerState.Hidden)
             assertThat(state.canAccessSpaceSettings).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - docs follow the Matcha workspaces feature`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to false))
+        val presenter = createSpacePresenter(featureFlagService = featureFlagService)
+        presenter.test {
+            assertThat(awaitItem().showDocs).isFalse()
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, true)
+            assertThat(expectMostRecentItem().showDocs).isTrue()
         }
     }
 
@@ -685,6 +698,7 @@ class SpacePresenterTest {
         ),
         acceptDeclineInvitePresenter: Presenter<AcceptDeclineInviteState> = Presenter { anAcceptDeclineInviteState() },
         spaceService: FakeSpaceService = FakeSpaceService(),
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
     ): SpacePresenter {
         return SpacePresenter(
             client = client,
@@ -695,6 +709,7 @@ class SpacePresenterTest {
             acceptDeclineInvitePresenter = acceptDeclineInvitePresenter,
             sessionCoroutineScope = this,
             spaceService = spaceService,
+            featureFlagService = featureFlagService,
         )
     }
 }

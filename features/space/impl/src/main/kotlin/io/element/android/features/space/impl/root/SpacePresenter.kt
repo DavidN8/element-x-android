@@ -29,6 +29,8 @@ import io.element.android.libraries.architecture.AsyncAction
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.core.coroutine.mapState
 import io.element.android.libraries.di.annotations.SessionCoroutineScope
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.toRoomIdOrAlias
@@ -66,6 +68,7 @@ class SpacePresenter(
     private val acceptDeclineInvitePresenter: Presenter<AcceptDeclineInviteState>,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
     private val spaceService: SpaceService,
+    private val featureFlagService: FeatureFlagService,
 ) : Presenter<SpaceState> {
     private var children by mutableStateOf<ImmutableList<SpaceRoom>>(persistentListOf())
 
@@ -76,6 +79,7 @@ class SpacePresenter(
         }
 
         val hideInvitesAvatar by client.rememberHideInvitesAvatar()
+        val showDocs by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
         val seenSpaceInvites by remember {
             seenInvitesStore.seenRoomIds().map { it.toImmutableSet() }
         }.collectAsState(persistentSetOf())
@@ -238,6 +242,7 @@ class SpacePresenter(
             selectedRoomIds = selectedRoomIds.toImmutableSet(),
             canEditSpaceGraph = canEditSpaceGraph,
             removeRoomsAction = removeRoomsAction,
+            showDocs = showDocs,
             eventSink = ::handleEvent,
         )
     }
