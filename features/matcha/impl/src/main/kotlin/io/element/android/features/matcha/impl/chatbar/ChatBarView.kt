@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -132,6 +133,7 @@ private fun ChipRow(state: ChatBarState) {
             PillFilterChip(
                 label = stringResource(R.string.screen_matcha_threads_general),
                 selected = state.selection == MatchaChatBarSelection.General,
+                role = Role.Tab,
                 onClick = { eventSink(ChatBarEvent.Select(MatchaChatBarSelection.General)) },
             )
         }
@@ -142,6 +144,7 @@ private fun ChipRow(state: ChatBarState) {
             PillFilterChip(
                 label = label,
                 selected = state.selection == MatchaChatBarSelection.Tasks,
+                role = Role.Tab,
                 trailingText = count.takeIf { it > 0 }?.toString(),
                 onClick = { eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Tasks)) },
                 modifier = if (description != null) Modifier.semantics { contentDescription = description } else Modifier,
@@ -159,6 +162,7 @@ private fun ChipRow(state: ChatBarState) {
                 PillFilterChip(
                     label = stringResource(CommonStrings.common_matcha_new_thread),
                     selected = false,
+                    role = Role.Button,
                     leadingIcon = CompoundIcons.Plus(),
                     onClick = { eventSink(ChatBarEvent.NewThread) },
                 )
@@ -168,6 +172,7 @@ private fun ChipRow(state: ChatBarState) {
             PillFilterChip(
                 label = stringResource(CommonStrings.common_matcha_all_threads),
                 selected = false,
+                role = Role.Button,
                 leadingIcon = CompoundIcons.Threads(),
                 onClick = { eventSink(ChatBarEvent.OpenAllThreads) },
             )
@@ -191,6 +196,7 @@ private fun ThreadChip(
     PillFilterChip(
         label = name,
         selected = selected,
+        role = Role.Tab,
         leadingIcon = if (thread.isArchived) ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive) else null,
         maxLabelWidth = 160.dp,
         onClick = { eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Thread(thread.id))) },
@@ -206,6 +212,7 @@ private fun MoreChip(state: ChatBarState) {
         PillFilterChip(
             label = null,
             selected = false,
+            role = Role.Button,
             leadingIcon = CompoundIcons.OverflowHorizontal(),
             contentDescription = stringResource(CommonStrings.common_matcha_more),
             onClick = { expanded = true },

@@ -168,7 +168,6 @@ private fun TasksTabChips(state: TasksTabState) {
                 label = filter.label(),
                 selected = state.filter == filter,
                 onClick = { state.eventSink(TasksTabEvent.SetFilter(filter)) },
-                modifier = Modifier.semantics { role = Role.RadioButton },
             )
         }
         val chat = state.chatFilter
@@ -178,8 +177,9 @@ private fun TasksTabChips(state: TasksTabState) {
             // Tapping the chosen chat shows every chat again, like the other chips.
             contentDescription = chat?.let { stringResource(CommonStrings.action_clear) },
             maxLabelWidth = CHAT_CHIP_MAX_WIDTH,
+            role = Role.Button,
+            trailingIcon = CompoundIcons.ChevronDown(),
             onClick = { state.eventSink(TasksTabEvent.ToggleChatFilter) },
-            modifier = Modifier.semantics { role = Role.Button },
         )
     }
 }

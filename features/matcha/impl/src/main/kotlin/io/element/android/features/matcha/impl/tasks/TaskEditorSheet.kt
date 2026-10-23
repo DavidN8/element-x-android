@@ -54,12 +54,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
-import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -322,7 +320,6 @@ private fun StatusRow(state: TaskEditorState) {
                     label = status.label(),
                     selected = state.status == status,
                     onClick = { state.eventSink(TaskEditorEvent.SetStatus(status)) },
-                    modifier = Modifier.semantics { role = Role.RadioButton },
                 )
             }
         }
