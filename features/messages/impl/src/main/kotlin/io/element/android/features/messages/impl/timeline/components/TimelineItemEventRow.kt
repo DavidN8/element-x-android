@@ -164,6 +164,11 @@ private val REACTIONS_OVERLAP = (-12).dp
 private val MEDIA_INSET = 3.dp
 private val MEDIA_RADIUS = 6.dp
 private val MEDIA_SCRIM_COLOR = Color(0x66000000)
+
+/** Stickers have no bubble, as in WhatsApp, unless they quote a message: the quote needs the bubble as its surface. */
+private val TimelineItem.Event.isBubbleless: Boolean
+    get() = isSticker && inReplyTo == null
+
 private val GROUP_BUBBLE_START_MARGIN = 48.dp - BUBBLE_TAIL_WIDTH
 
 /** Shared instance so that rows which never slide keep comparing equal, and keep skipping. */
@@ -401,32 +406,40 @@ private fun ThreadFooter(
             .heightIn(min = 40.dp)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        // The footer wraps its content so that it does not widen the bubble; once EqualWidthColumn gives it the bubble's width,
+        // the avatar goes to the end.
+        horizontalArrangement = Arrangement.SpaceBetween,
     ) {
-        Icon(
-            modifier = Modifier.size(16.dp),
-            imageVector = CompoundIcons.ThreadsSolid(),
-            contentDescription = null,
-            tint = ElementTheme.colors.iconAccentPrimary,
-        )
-        Text(
+        Row(
             modifier = Modifier.weight(1f, fill = false),
-            text = threadName ?: stringResource(CommonStrings.common_thread),
-            style = ElementTheme.typography.fontBodyMdMedium,
-            color = ElementTheme.colors.textPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        val replies = threadSummary.numberOfReplies.toInt()
-        Text(
-            text = "· " + pluralStringResource(CommonPlurals.common_replies, replies, replies),
-            style = ElementTheme.typography.fontBodyMdRegular,
-            color = ElementTheme.colors.bubbleSecondaryText,
-            maxLines = 1,
-        )
-        Spacer(modifier = Modifier.weight(1f))
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Icon(
+                modifier = Modifier.size(16.dp),
+                imageVector = CompoundIcons.ThreadsSolid(),
+                contentDescription = null,
+                tint = ElementTheme.colors.iconAccentPrimary,
+            )
+            Text(
+                modifier = Modifier.weight(1f, fill = false),
+                text = threadName ?: stringResource(CommonStrings.common_thread),
+                style = ElementTheme.typography.fontBodyMdMedium,
+                color = ElementTheme.colors.textPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val replies = threadSummary.numberOfReplies.toInt()
+            Text(
+                text = "· " + pluralStringResource(CommonPlurals.common_replies, replies, replies),
+                style = ElementTheme.typography.fontBodyMdRegular,
+                color = ElementTheme.colors.bubbleSecondaryText,
+                maxLines = 1,
+            )
+        }
         threadSummary.latestEvent.dataOrNull()?.let { latestEvent ->
             Avatar(
+                modifier = Modifier.padding(start = 8.dp),
                 avatarData = AvatarData(
                     id = latestEvent.senderId.value,
                     name = latestEvent.senderProfile.getDisplayName(),
@@ -564,6 +577,8 @@ private fun TimelineItemEventRowContent(
             onLongClick = onLongClick,
             customBackgroundColor = dangerousContentBubbleColor,
             borderColor = borderColor,
+            // Invalid media keeps its bubble: the critical background and border are its warning.
+            drawBubble = !event.isBubbleless || needsInvalidContentCustomisations,
         ) {
             MessageEventBubbleContent(
                 event = event,
@@ -827,6 +842,7 @@ private fun MessageEventBubbleContent(
             ContentPadding.CaptionedMedia ->
                 Modifier.padding(start = MEDIA_INSET, end = MEDIA_INSET, top = if (hasBlockAbove) 0.dp else MEDIA_INSET, bottom = 6.dp)
             ContentPadding.InvalidContent -> Modifier.padding(top = topPadding, bottom = 6.dp)
+            ContentPadding.Bubbleless -> Modifier.clip(RoundedCornerShape(MEDIA_RADIUS))
         }
 
         val senderName = @Composable {
@@ -963,7 +979,7 @@ private fun MessageEventBubbleContent(
             is TimelineItemVideoContent -> if (event.content.showCaption) ContentPadding.CaptionedMedia else ContentPadding.Media
             is TimelineItemGalleryContent -> ContentPadding.CaptionedMedia
             is TimelineItemAttachmentsContent -> ContentPadding.CaptionedMedia
-            is TimelineItemStickerContent,
+            is TimelineItemStickerContent -> if (event.isBubbleless) ContentPadding.Bubbleless else ContentPadding.Media
             is TimelineItemLocationContent -> ContentPadding.Media
             else -> ContentPadding.Textual
         }

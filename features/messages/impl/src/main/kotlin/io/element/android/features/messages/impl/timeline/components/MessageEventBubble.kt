@@ -76,6 +76,7 @@ fun MessageEventBubble(
     modifier: Modifier = Modifier,
     customBackgroundColor: Color? = null,
     borderColor: Color? = null,
+    drawBubble: Boolean = true,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val clickableModifier = if (isTalkbackActive()) {
@@ -98,35 +99,40 @@ fun MessageEventBubble(
     val shadowColor = if (ElementTheme.colors.isLight) BUBBLE_SHADOW_COLOR else Color.Transparent
 
     val updatedBorderColor by rememberUpdatedState(borderColor)
-    BoxWithConstraints(
-        modifier = modifier
-            .drawWithCache {
-                // Calculate the outline of the background and cache it
-                val outline = bubbleShape.createOutline(size, layoutDirection, this)
-                val shadowOffsetPx = BUBBLE_SHADOW_OFFSET.toPx()
+    // Without a bubble (stickers), there is no background, tail, shadow or clip: the content keeps the bubble's layout only.
+    val bubbleDrawingModifier = if (!drawBubble) {
+        Modifier
+    } else {
+        Modifier.drawWithCache {
+            // Calculate the outline of the background and cache it
+            val outline = bubbleShape.createOutline(size, layoutDirection, this)
+            val shadowOffsetPx = BUBBLE_SHADOW_OFFSET.toPx()
 
-                onDrawWithContent {
-                    translate(top = shadowOffsetPx) {
-                        drawOutline(outline, shadowColor)
-                    }
-                    // Draw the contents in a layer to be able to clip them with the same outline
-                    // For some reason, doing this clipping outside a layer messes up with the touch events
-                    drawInLayer(
-                        composingStrategy = CompositingStrategy.Offscreen,
-                        outline = outline,
-                        clip = true,
-                    ) {
-                        // Draw the background first, so that it's behind the content
-                        drawRect(backgroundBubbleColor)
-
-                        // Then draw the content on top of it
-                        drawContent()
-
-                        // Draw border color, if any
-                        updatedBorderColor?.let { drawOutline(outline, it, style = Stroke(width = 1.dp.toPx())) }
-                    }
+            onDrawWithContent {
+                translate(top = shadowOffsetPx) {
+                    drawOutline(outline, shadowColor)
                 }
-            },
+                // Draw the contents in a layer to be able to clip them with the same outline
+                // For some reason, doing this clipping outside a layer messes up with the touch events
+                drawInLayer(
+                    composingStrategy = CompositingStrategy.Offscreen,
+                    outline = outline,
+                    clip = true,
+                ) {
+                    // Draw the background first, so that it's behind the content
+                    drawRect(backgroundBubbleColor)
+
+                    // Then draw the content on top of it
+                    drawContent()
+
+                    // Draw border color, if any
+                    updatedBorderColor?.let { drawOutline(outline, it, style = Stroke(width = 1.dp.toPx())) }
+                }
+            }
+        }
+    }
+    BoxWithConstraints(
+        modifier = modifier.then(bubbleDrawingModifier),
         // Need to set the contentAlignment again (it's already set in TimelineItemEventRow), for the case
         // when content width is low.
         contentAlignment = if (state.isMine) Alignment.CenterEnd else Alignment.CenterStart
