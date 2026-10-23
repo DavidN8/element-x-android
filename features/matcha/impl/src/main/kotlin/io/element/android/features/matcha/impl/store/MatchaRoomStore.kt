@@ -47,6 +47,7 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -106,7 +107,7 @@ data class MatchaRoomSnapshot(
 class MatchaRoomStore(
     private val room: JoinedRoom,
     private val coroutineScope: CoroutineScope,
-    /** More event types to read into [MatchaRoomSnapshot.events], such as `m.room.create` for documents. */
+    /** More event types to read into [MatchaRoomSnapshot.events], such as `m.room.encrypted` for documents. */
     private val extraEventTypes: Set<String> = emptySet(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
@@ -148,6 +149,8 @@ class MatchaRoomStore(
                 openedTimeline.complete(null)
                 return@launch
             }
+            // The SDK timeline lives until it is closed, so it goes with the store's scope.
+            coroutineContext.job.invokeOnCompletion { created.close() }
             created.backwardPaginationStatus.onEach { pagination.value = it }.launchIn(this)
             created.timelineItems
                 .map { items -> items.mapNotNull(::parse).asReversed() }

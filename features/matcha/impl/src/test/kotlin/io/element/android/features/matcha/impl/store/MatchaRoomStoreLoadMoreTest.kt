@@ -15,6 +15,10 @@ import io.element.android.features.matcha.impl.docs.settle
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.timeline.TimelineException
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -38,6 +42,18 @@ class MatchaRoomStoreLoadMoreTest {
         settle()
         assertThat((params as CreateTimelineParams.OnlyEventTypes).types).contains(DocsProtocol.EVENT_ROOM_CREATE)
         assertThat(store.snapshot.value.events.single().type).isEqualTo(DocsProtocol.EVENT_ROOM_CREATE)
+    }
+
+    @Test
+    fun `the timeline is closed when the store's scope ends`() = runTest {
+        val fixture = DocsRoomFixture(emptyList())
+        val scope = CoroutineScope(backgroundScope.coroutineContext + Job(backgroundScope.coroutineContext.job))
+        fixture.store(scope)
+        settle()
+        assertThat(fixture.timeline.closeCounter).isEqualTo(0)
+        scope.cancel()
+        settle()
+        assertThat(fixture.timeline.closeCounter).isEqualTo(1)
     }
 
     @Test
