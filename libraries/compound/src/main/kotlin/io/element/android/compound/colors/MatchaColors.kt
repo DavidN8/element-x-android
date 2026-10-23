@@ -20,8 +20,15 @@ import io.element.android.compound.tokens.generated.compoundColorsLight
 object MatchaPalette {
     // Greens
     val green = Color(0xFF1DAA61)
+    val greenHovered = Color(0xFF1A9A58)
+    val greenPressed = Color(0xFF178C50)
     val greenDark = Color(0xFF21C063)
+    val greenDarkHovered = Color(0xFF1EB05B)
+    val greenDarkPressed = Color(0xFF1C9F52)
     val greenText = Color(0xFF1B8755)
+    val greenTextHovered = Color(0xFF187A4C)
+    val greenTextPressed = Color(0xFF156B43)
+    val greenPositiveDark = Color(0xFF71EB85)
     val greenDeep = Color(0xFF15603E)
     val greenTint = Color(0xFFD9FDD3)
     val greenTintDark = Color(0xFF103529)
@@ -33,10 +40,10 @@ object MatchaPalette {
     val inkDisabled = Color(0xFFB3B9BD)
     val paper = Color(0xFFFFFFFF)
     val paperRaised = Color(0xFFF7F5F3)
-    val paperPressed = Color(0xFFEFEDEB)
+    val paperPressed = Color(0xFFEFECE9)
     val paperSubtle = Color(0xFFFAF9F8)
     val lineLight = Color(0xFFE7E8E9)
-    val lineLightSubtle = Color(0xFFF0F1F2)
+    val dividerLight = Color(0x1A111B21)
 
     // Dark neutrals
     val night = Color(0xFF0A1014)
@@ -48,7 +55,7 @@ object MatchaPalette {
     val snowTertiary = Color(0xFF6B7478)
     val snowDisabled = Color(0xFF3E474D)
     val lineDark = Color(0xFF22292D)
-    val lineDarkSubtle = Color(0xFF182024)
+    val dividerDark = Color(0x1AFFFFFF)
 
     // Feedback
     val red = Color(0xFFEA0038)
@@ -68,14 +75,14 @@ val matchaColorsLight: SemanticColors = with(MatchaPalette) {
     compoundColorsLight.copy(
         // Accent: FAB, badges, unread timestamps, selection.
         bgAccentRest = green,
-        bgAccentHovered = greenText,
-        bgAccentPressed = greenDeep,
+        bgAccentHovered = greenHovered,
+        bgAccentPressed = greenPressed,
         bgAccentSelected = greenTint,
         bgAccentSubtle = greenTint,
         // Primary buttons are green, in the darker green so white labels stay readable.
         bgActionPrimaryRest = greenText,
-        bgActionPrimaryHovered = greenDeep,
-        bgActionPrimaryPressed = greenDeep,
+        bgActionPrimaryHovered = greenTextHovered,
+        bgActionPrimaryPressed = greenTextPressed,
         bgActionPrimaryDisabled = inkDisabled,
         bgActionSecondaryRest = paper,
         bgActionTertiaryRest = paper,
@@ -110,8 +117,8 @@ val matchaColorsLight: SemanticColors = with(MatchaPalette) {
         bgSubtleSecondaryLevel0 = paperRaised,
         bgSubtleTertiary = paperSubtle,
         bgSuccessRest = green,
-        bgSuccessHovered = greenText,
-        bgSuccessPressed = greenDeep,
+        bgSuccessHovered = greenHovered,
+        bgSuccessPressed = greenPressed,
         bgSuccessSubtle = greenTint,
         borderAccentPrimary = green,
         borderAccentSubtle = greenTint,
@@ -134,7 +141,8 @@ val matchaColorsLight: SemanticColors = with(MatchaPalette) {
         gradientActionStop2 = green,
         gradientActionStop3 = greenText,
         gradientActionStop4 = greenDeep,
-        iconAccentPrimary = green,
+        // Badges carry digits, so they use the text green (white on it is 4.5:1).
+        iconAccentPrimary = greenText,
         iconAccentTertiary = green,
         iconCriticalPrimary = red,
         iconDisabled = inkDisabled,
@@ -149,8 +157,8 @@ val matchaColorsLight: SemanticColors = with(MatchaPalette) {
         iconQuaternaryAlpha = inkDisabled,
         iconSuccessPrimary = green,
         iconWarningPrimary = amber,
-        separatorPrimary = lineLight,
-        separatorSecondary = lineLightSubtle,
+        separatorPrimary = dividerLight,
+        separatorSecondary = dividerLight,
         textActionAccent = greenText,
         textActionPrimary = ink,
         textActionSuccess = greenText,
@@ -170,13 +178,13 @@ val matchaColorsLight: SemanticColors = with(MatchaPalette) {
 val matchaColorsDark: SemanticColors = with(MatchaPalette) {
     compoundColorsDark.copy(
         bgAccentRest = greenDark,
-        bgAccentHovered = green,
-        bgAccentPressed = green,
+        bgAccentHovered = greenDarkHovered,
+        bgAccentPressed = greenDarkPressed,
         bgAccentSelected = greenTintDark,
         bgAccentSubtle = greenTintDark,
         bgActionPrimaryRest = greenDark,
-        bgActionPrimaryHovered = green,
-        bgActionPrimaryPressed = green,
+        bgActionPrimaryHovered = greenDarkHovered,
+        bgActionPrimaryPressed = greenDarkPressed,
         bgActionPrimaryDisabled = snowDisabled,
         bgActionSecondaryRest = night,
         bgActionTertiaryRest = night,
@@ -186,7 +194,7 @@ val matchaColorsDark: SemanticColors = with(MatchaPalette) {
         bgBadgePrimary = snow,
         bgBadgeSecondary = nightPressed,
         bgCanvasDefault = night,
-        bgCanvasDefaultLevel1 = nightRaised,
+        bgCanvasDefaultLevel1 = night,
         bgCanvasDisabled = nightRaised,
         bgCriticalPrimary = redDark,
         bgCriticalHovered = red,
@@ -210,8 +218,8 @@ val matchaColorsDark: SemanticColors = with(MatchaPalette) {
         bgSubtleSecondaryLevel0 = nightElevated,
         bgSubtleTertiary = nightRaised,
         bgSuccessRest = greenDark,
-        bgSuccessHovered = green,
-        bgSuccessPressed = green,
+        bgSuccessHovered = greenDarkHovered,
+        bgSuccessPressed = greenDarkPressed,
         bgSuccessSubtle = greenTintDark,
         borderAccentPrimary = greenDark,
         borderAccentSubtle = greenTintDark,
@@ -249,8 +257,8 @@ val matchaColorsDark: SemanticColors = with(MatchaPalette) {
         iconQuaternaryAlpha = snowDisabled,
         iconSuccessPrimary = greenDark,
         iconWarningPrimary = amberDark,
-        separatorPrimary = lineDark,
-        separatorSecondary = lineDarkSubtle,
+        separatorPrimary = dividerDark,
+        separatorSecondary = dividerDark,
         textActionAccent = greenDark,
         textActionPrimary = snow,
         textActionSuccess = greenDark,
@@ -261,7 +269,7 @@ val matchaColorsDark: SemanticColors = with(MatchaPalette) {
         textOnSolidPrimary = night,
         textPrimary = snow,
         textSecondary = snowSecondary,
-        textSuccessPrimary = greenDark,
+        textSuccessPrimary = greenPositiveDark,
         textWarningPrimary = amberDark,
     )
 }
