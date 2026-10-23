@@ -179,7 +179,10 @@ class RoomFlowNode(
                         membershipUpdateFlow.replayCache.lastOrNull()?.isUserInRoom == false
 
                 if (leavingFromCurrentDevice) {
-                    navigateUp()
+                    // Close this room through the callback, which removes this node's own element.
+                    // navigateUp() would pop whichever room is active, a different one when this node is stashed
+                    // behind the two-pane layout.
+                    plugins<JoinedRoomLoadedFlowNode.Callback>().forEach { it.onDone() }
                 } else {
                     backstack.newRoot(
                         NavTarget.JoinRoom(

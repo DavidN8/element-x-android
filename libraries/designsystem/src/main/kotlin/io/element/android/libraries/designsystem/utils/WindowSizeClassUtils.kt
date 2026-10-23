@@ -10,10 +10,23 @@ package io.element.android.libraries.designsystem.utils
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun hasCompactHeightWindowSize(): Boolean {
     return currentWindowAdaptiveInfo().windowSizeClass.heightSizeClass == WindowHeightSizeClass.Compact
+}
+
+/**
+ * True when the window is wide and tall enough for a list/detail two-pane layout
+ * (tablets, unfolded foldables). Phones, including in landscape, return false.
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+@Composable
+fun hasTwoPaneWindowSize(): Boolean {
+    val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
+    return windowSizeClass.widthSizeClass != WindowWidthSizeClass.Compact &&
+        windowSizeClass.heightSizeClass != WindowHeightSizeClass.Compact
 }

@@ -45,11 +45,13 @@ import com.bumble.appyx.core.node.LocalSharedElementScope
 import com.bumble.appyx.core.node.ParentNode
 import io.element.android.libraries.core.coroutine.withPreviousValue
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import kotlin.reflect.KClass
+import kotlin.time.Duration.Companion.seconds
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 // All the components in this file come from Appyx, and they've been modified to fix an issue with
@@ -135,8 +137,12 @@ class SafeChildrenTransitionScope<T : Any, S>(
                         // Wait for the NavKey to be disposed before removing its key from saveableStateHolder:
                         // Otherwise, the child SaveableStateRegistry will be removed but not the `SavedState`, which will accumulate
                         // and may cause TransactionTooLargeExceptions
-                        while (!disposedNavKeys.contains(navKey)) {
-                            delay(10)
+                        // Bounded: an element removed while stashed may never have been composed by this instance
+                        // (e.g. after switching between single and two-pane rendering) and must not block the others.
+                        withTimeoutOrNull(1.seconds) {
+                            while (!disposedNavKeys.contains(navKey)) {
+                                delay(10)
+                            }
                         }
                         disposedNavKeys.remove(navKey)
                         Timber.v("Removed NavKey ${navKey} from saveableStateHolder. NavTarget: ${navKey.navTarget}")

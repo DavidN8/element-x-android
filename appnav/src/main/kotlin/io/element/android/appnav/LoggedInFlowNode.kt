@@ -28,9 +28,11 @@ import com.bumble.appyx.core.plugin.Plugin
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStack.State.ACTIVE
 import com.bumble.appyx.navmodel.backstack.BackStack.State.CREATED
+import com.bumble.appyx.navmodel.backstack.BackStack.State.DESTROYED
 import com.bumble.appyx.navmodel.backstack.BackStack.State.STASHED
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import com.bumble.appyx.navmodel.backstack.BackStackElements
+import com.bumble.appyx.navmodel.backstack.activeElement
 import com.bumble.appyx.navmodel.backstack.operation.BackStackOperation
 import com.bumble.appyx.navmodel.backstack.operation.Push
 import com.bumble.appyx.navmodel.backstack.operation.pop
@@ -77,6 +79,7 @@ import io.element.android.libraries.architecture.waitForChildAttached
 import io.element.android.libraries.architecture.waitForNavTargetAttached
 import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.designsystem.theme.ElementThemeApp
+import io.element.android.libraries.designsystem.utils.hasTwoPaneWindowSize
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.di.annotations.SessionCoroutineScope
@@ -312,6 +315,15 @@ class LoggedInFlowNode(
             NavTarget.Home -> {
                 val callback = object : HomeEntryPoint.Callback {
                     override fun navigateToRoom(roomId: RoomId, eventId: EventId?, joinedRoom: JoinedRoom?) {
+                        val activeRoom = backstack.activeElement as? NavTarget.Room
+                        if (eventId == null &&
+                            activeRoom?.roomIdOrAlias == roomId.toRoomIdOrAlias() &&
+                            activeRoom.initialElement is RoomNavigationTarget.Root
+                        ) {
+                            // Two-pane layout: the room's timeline is already open in the detail pane, don't rebuild it.
+                            joinedRoom?.destroy()
+                            return
+                        }
                         lifecycleScope.launch {
                             attachRoom(
                                 roomIdOrAlias = roomId.toRoomIdOrAlias(),
@@ -372,7 +384,9 @@ class LoggedInFlowNode(
             is NavTarget.Room -> {
                 val joinedRoomCallback = object : JoinedRoomLoadedFlowNode.Callback {
                     override fun onDone() {
-                        backstack.pop()
+                        // Remove this room's own element rather than popping the top: in the two-pane layout
+                        // a stashed room can be left from the room list while another room is active.
+                        backstack.removeLast(navTarget)
                     }
 
                     override fun navigateToRoom(roomId: RoomId, serverNames: List<String>, clearBackStack: Boolean) {
@@ -665,7 +679,16 @@ class LoggedInFlowNode(
                     ) { contentModifier ->
                         Box(modifier = contentModifier) {
                             val ftueState by ftueService.state.collectAsState()
-                            BackstackView(transitionHandler = rememberLoggedInFlowTransitionHandler(backstack))
+                            val isTwoPane = hasTwoPaneWindowSize()
+                            val elements by backstack.elements.collectAsState()
+                            val homeElement = elements.firstOrNull { element ->
+                                element.key.navTarget == NavTarget.Home && element.targetState != DESTROYED
+                            }
+                            if (isTwoPane && homeElement != null) {
+                                LoggedInTwoPaneView(homeElement = homeElement)
+                            } else {
+                                BackstackView(transitionHandler = rememberLoggedInFlowTransitionHandler(backstack))
+                            }
                             if (ftueState is FtueState.Complete) {
                                 PermanentChild(permanentNavModel = permanentNavModel, navTarget = NavTarget.LoggedInPermanent)
                             }
