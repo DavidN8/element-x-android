@@ -437,13 +437,16 @@ private fun ThreadFooter(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val replies = threadSummary.numberOfReplies.toInt()
-            Text(
-                text = "· " + pluralStringResource(CommonPlurals.common_replies, replies, replies),
-                style = ElementTheme.typography.fontBodyMdRegular,
-                color = ElementTheme.colors.bubbleSecondaryText,
-                maxLines = 1,
-            )
+            val replies = (threadSummary.numberOfReplies - (threadInfo?.hiddenReplies ?: 0)).coerceAtLeast(0).toInt()
+            // A named thread nobody answered yet only shows its name.
+            if (replies > 0) {
+                Text(
+                    text = "· " + pluralStringResource(CommonPlurals.common_replies, replies, replies),
+                    style = ElementTheme.typography.fontBodyMdRegular,
+                    color = ElementTheme.colors.bubbleSecondaryText,
+                    maxLines = 1,
+                )
+            }
         }
         threadSummary.latestEvent.dataOrNull()?.let { latestEvent ->
             Avatar(

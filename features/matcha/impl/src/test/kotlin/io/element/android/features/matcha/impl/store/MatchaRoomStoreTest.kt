@@ -152,7 +152,7 @@ class MatchaRoomStoreTest {
     }
 
     @Test
-    fun `only the hidden bootstrap reply is kept from a task thread's replies`() = runTest {
+    fun `a thread's hidden first reply is read from its replies and left out of its reply count`() = runTest {
         val (store, _) = aStore(
             scope = backgroundScope,
             items = emptyList(),
@@ -176,8 +176,9 @@ class MatchaRoomStoreTest {
         settle()
         val snapshot = store.snapshot.value
         assertThat(snapshot.isLoaded).isTrue()
-        assertThat(snapshot.events.mapNotNull { it.eventId }).contains("\$r3")
         assertThat(snapshot.events.mapNotNull { it.eventId }).doesNotContain("\$r4")
+        assertThat(snapshot.threads.single().hasHiddenFirstReply).isTrue()
+        assertThat(snapshot.threads.single().visibleReplies()).isEqualTo(2)
     }
 
     @Test

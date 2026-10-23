@@ -32,4 +32,6 @@ data class MatchaThreadInfo(
     /** The shared name, else the root message text; null when only the event id is known. */
     val name: String?,
     val isArchived: Boolean,
+    /** Replies the server counts but nobody sees, like the hidden first reply of a named thread; reply counts leave them out. */
+    val hiddenReplies: Int = 0,
 )

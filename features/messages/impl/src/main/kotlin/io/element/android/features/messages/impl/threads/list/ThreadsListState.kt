@@ -47,6 +47,10 @@ data class ThreadsListState(
     /** The name a row shows: the Matcha name, else the first line of the root message, else none ("Untitled thread"). */
     fun nameOf(row: ThreadListRowItem): String? =
         matchaThreads[row.item.threadId]?.name ?: row.rootEventText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
+
+    /** The replies a row counts, without the ones nobody sees. */
+    fun repliesOf(row: ThreadListRowItem): Int =
+        (row.item.numberOfReplies - (matchaThreads[row.item.threadId]?.hiddenReplies ?: 0)).coerceAtLeast(0).toInt()
 }
 
 /** The chips of the thread list while the Matcha workspaces are on. */

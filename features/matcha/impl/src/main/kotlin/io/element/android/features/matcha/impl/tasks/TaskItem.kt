@@ -8,13 +8,8 @@
 package io.element.android.features.matcha.impl.tasks
 
 import androidx.compose.runtime.Immutable
-import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
-import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
-import io.element.android.features.matcha.impl.protocol.RawEvent
 import io.element.android.features.matcha.impl.protocol.TaskStatus
-import io.element.android.features.matcha.impl.protocol.objectOrNull
-import io.element.android.features.matcha.impl.protocol.stringOrNull
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.libraries.matrix.api.core.ThreadId
 
@@ -47,8 +42,6 @@ data class TaskItem(
 internal fun MatchaRoomSnapshot.toTaskItems(deadlineFormatter: DeadlineFormatter, nowMillis: Long): List<TaskItem> {
     val cards = board?.cards ?: return emptyList()
     val threadsById = threads.associateBy { it.id.value }
-    // The store fetches the bootstrap replies of task threads; see MatchaRoomStore.bootstrapCandidates for the limit.
-    val bootstrapped = events.mapNotNullTo(HashSet()) { it.bootstrapRootId() }
     return cards
         .sortedWith(
             compareBy<ProjectedCard> { it.dueAt ?: Long.MAX_VALUE }
@@ -67,18 +60,8 @@ internal fun MatchaRoomSnapshot.toTaskItems(deadlineFormatter: DeadlineFormatter
                 dueAt = card.dueAt,
                 deadline = card.dueAt?.let(deadlineFormatter::format),
                 isOverdue = card.dueAt != null && card.dueAt < nowMillis && card.status != TaskStatus.Done,
-                replyCount = threadId?.let {
-                    val replies = threadsById[it]?.numberOfReplies ?: 0
-                    (replies - if (it in bootstrapped) 1 else 0).coerceAtLeast(0).toInt()
-                },
+                replyCount = threadId?.let { threadsById[it]?.visibleReplies() ?: 0 },
                 hasReminder = card.reminderRequested != null,
             )
         }
-}
-
-/** The thread root of a hidden first reply sent when a named thread is created, or null for any other event. */
-private fun RawEvent.bootstrapRootId(): String? {
-    if (type != MatchaConfig.EVENT_THREAD_METADATA) return null
-    val relation = content.objectOrNull("m.relates_to") ?: return null
-    return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == REL_TYPE_THREAD }
 }

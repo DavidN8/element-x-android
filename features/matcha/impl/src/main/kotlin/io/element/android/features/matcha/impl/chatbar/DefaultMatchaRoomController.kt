@@ -52,6 +52,7 @@ class DefaultMatchaRoomController(
                 thread.id to MatchaThreadInfo(
                     name = thread.metadata.name.takeIf { thread.metadata.nameSource != ThreadNameSource.EventId },
                     isArchived = thread.metadata.archived,
+                    hiddenReplies = if (thread.hasHiddenFirstReply) 1 else 0,
                 )
             }.toImmutableMap()
         }

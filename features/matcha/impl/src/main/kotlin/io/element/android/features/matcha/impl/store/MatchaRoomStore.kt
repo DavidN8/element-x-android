@@ -11,13 +11,16 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
+import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
 import io.element.android.features.matcha.impl.protocol.RawEvent
 import io.element.android.features.matcha.impl.protocol.ThreadMetadata
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.protocol.booleanOrNull
+import io.element.android.features.matcha.impl.protocol.objectOrNull
 import io.element.android.features.matcha.impl.protocol.referenceTarget
+import io.element.android.features.matcha.impl.protocol.stringOrNull
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
@@ -75,7 +78,12 @@ data class MatchaThread(
     val rootTimestamp: Long = 0,
     /** True when the root message could not be decrypted on this device, so a name taken from it is missing. */
     val isRootUnreadable: Boolean = false,
-)
+    /** True when the thread was created with a name, so its first reply is the hidden bootstrap reply that [numberOfReplies] counts. */
+    val hasHiddenFirstReply: Boolean = false,
+) {
+    /** The replies people can see. */
+    fun visibleReplies(): Int = (numberOfReplies - if (hasHiddenFirstReply) 1 else 0).coerceAtLeast(0).toInt()
+}
 
 /** A room's board, if it has one. */
 data class MatchaBoard(
@@ -305,14 +313,14 @@ class MatchaRoomStore(
     }
 
     /**
-     * Task threads whose reply count may include the hidden bootstrap reply, checked through their `m.thread` relations.
+     * Threads whose reply count may include the hidden bootstrap reply, checked through their `m.thread` relations. A thread named
+     * when it was created usually takes its name from the root message, so any thread may have one.
      *
-     * ponytail: only threads that fit in one page of replies are checked; a longer thread may count one reply too many.
+     * ponytail: one request per thread, and only threads that fit in one page of replies are checked; a longer thread may count one
+     * reply too many.
      */
-    private fun MatchaRoomSnapshot.bootstrapCandidates(): List<String> {
-        val taskThreads = board?.cards?.mapNotNullTo(HashSet()) { it.threadId }.orEmpty()
-        return threads.filter { it.id.value in taskThreads && it.numberOfReplies in 1L..RELATIONS_PAGE_SIZE }.map { it.id.value }
-    }
+    private fun MatchaRoomSnapshot.bootstrapCandidates(): List<String> =
+        threads.filter { !it.hasHiddenFirstReply && it.numberOfReplies in 1L..RELATIONS_PAGE_SIZE }.map { it.id.value }
 
     /**
      * Fetches, once each, the events related to new anchors by [relation], a few anchors at a time.
@@ -468,6 +476,7 @@ class MatchaRoomStore(
             ThreadMetadataProtocol.parsePatch(event, root)?.let { patchesByRoot.getOrPut(root) { mutableListOf() } += it }
         }
         val listed = threadList.associateBy { it.threadId.value }
+        val bootstrapped = events.mapNotNullTo(HashSet()) { it.bootstrapRootId() }
         val threadIds = LinkedHashSet<String>().apply {
             addAll(listed.keys)
             latestCards.mapNotNullTo(this) { it.threadId }
@@ -485,6 +494,7 @@ class MatchaRoomStore(
                 lastActivityTimestamp = item?.let { it.latestEvent?.timestamp ?: it.rootEvent.timestamp } ?: 0,
                 rootTimestamp = item?.rootEvent?.timestamp ?: 0,
                 isRootUnreadable = item?.rootEvent?.content is UnableToDecryptContent,
+                hasHiddenFirstReply = id in bootstrapped,
             )
         }.sortedByDescending { it.lastActivityTimestamp }
 
@@ -642,4 +652,11 @@ private fun warningFor(cause: UtdCause?): MatchaWarning = when (cause) {
     UtdCause.HistoricalMessageAndBackupIsDisabled,
     UtdCause.HistoricalMessageAndDeviceIsUnverified -> MatchaWarning.HistoryUnavailable
     else -> MatchaWarning.Undecryptable
+}
+
+/** The thread root of a hidden first reply sent when a named thread is created, or null for any other event. */
+private fun RawEvent.bootstrapRootId(): String? {
+    if (type != MatchaConfig.EVENT_THREAD_METADATA) return null
+    val relation = content.objectOrNull("m.relates_to") ?: return null
+    return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == REL_TYPE_THREAD }
 }

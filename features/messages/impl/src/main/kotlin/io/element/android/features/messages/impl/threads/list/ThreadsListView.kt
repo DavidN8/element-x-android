@@ -219,6 +219,7 @@ private fun ThreadsList(
             ThreadListItemRow(
                 threadItem = row,
                 name = state.nameOf(row),
+                replies = state.repliesOf(row),
                 onClick = onThreadClick,
             )
         }
@@ -316,6 +317,7 @@ private fun ScrollHelper(
 private fun ThreadListItemRow(
     threadItem: ThreadListRowItem,
     name: String?,
+    replies: Int,
     onClick: (ThreadId) -> Unit,
 ) {
     Row(
@@ -390,7 +392,6 @@ private fun ThreadListItemRow(
                     contentDescription = null,
                     tint = ElementTheme.colors.iconSecondary
                 )
-                val replies = threadItem.item.numberOfReplies.toInt()
                 val repliesDescription = pluralStringResource(CommonPlurals.common_replies, replies, replies)
                 Text(
                     modifier = Modifier.clearAndSetSemantics {
@@ -425,6 +426,7 @@ internal fun ThreadListItemRowPreview() {
         ThreadListItemRow(
             threadItem = aThreadListRowItem(),
             name = "Hello world!",
+            replies = 42,
             onClick = {},
         )
     }
