@@ -4,6 +4,19 @@ Read with: `MATCHA_PORT_PLAN.md` (what and why, wire protocol §2) and `WHATSAPP
 code contract between the feature track (everything inside `features/matcha/**`) and the integration step that wires it
 into `features/messages`, `features/home` and `features/space`.
 
+> **Spec v2 update (2026-10-24 02:10).** `WHATSAPP_DESIGN.md` is now v2. Its §4.0 "Contract" and §6.1 "Supersedes"
+> override this brief where they differ. Ownership of the v2 changes, so the two tracks never edit the same file:
+> - **Track B owns** every v2 API change in `features/matcha/api` (remove `MatchaChatBarSelection.AllThreads`, add
+>   `MatchaRoomEntryPoint.Callback.openRoomDetails()`, add `MatchaRoomController` + `MatchaThreadInfo` implemented as
+>   `DefaultMatchaRoomController` in `chatbar/`) **and** the v2 store additions in `store/MatchaRoomStore.kt`
+>   (`unreadable`, `warning`, `boardPointerRead`, `loadFailed`, `ThreadMetadata.nameSource`). Track B step 2 starts by
+>   adapting step 1's chip bar to these changes if step 1 did not already.
+> - **Track C** must not edit `features/matcha/api` or `store/`; it only uses them. If C needs
+>   something from the store, it reads `events` and computes it in its own package.
+> - Archive has no confirmation dialog (snackbar with Undo). The task editor is one full-height sheet with no thread
+>   picker. Reminder quick options do not send on tap; the confirm pill sends. Chips are filled grey when unselected
+>   (the shared `PillFilterChip` is restyled at integration; do not fork it).
+
 ## Ground rules
 
 - Edit only `features/matcha/**` (api, impl, test). Do not touch other modules; integration happens later.
