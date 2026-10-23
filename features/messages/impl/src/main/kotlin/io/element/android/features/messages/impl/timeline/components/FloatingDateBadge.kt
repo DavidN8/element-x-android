@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -36,7 +35,6 @@ import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemDaySeparatorModel
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.Surface
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.floatingDateBadgeBackground
 import kotlinx.collections.immutable.ImmutableList
@@ -125,17 +123,14 @@ internal fun FloatingDateBadge(
     dateText: String,
     modifier: Modifier = Modifier,
 ) {
-    Surface(
+    SystemPill(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
         color = ElementTheme.colors.floatingDateBadgeBackground,
-        shadowElevation = 4.dp,
     ) {
         Text(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             text = dateText,
-            style = ElementTheme.typography.fontBodyMdMedium,
-            color = ElementTheme.colors.textPrimary,
+            style = ElementTheme.typography.fontBodySmRegular,
+            color = ElementTheme.colors.textSecondary,
         )
     }
 }

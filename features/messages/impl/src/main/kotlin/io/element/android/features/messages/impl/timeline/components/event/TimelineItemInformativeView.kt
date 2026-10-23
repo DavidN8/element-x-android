@@ -19,12 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+import io.element.android.libraries.designsystem.theme.bubbleSecondaryText
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.ui.common.layout.ContentAvoidingLayoutData
@@ -53,15 +53,14 @@ fun TimelineItemInformativeView(
         ) {
             Icon(
                 resourceId = iconResourceId,
-                tint = ElementTheme.colors.iconSecondary,
+                tint = ElementTheme.colors.bubbleSecondaryText,
                 contentDescription = iconDescription,
                 modifier = Modifier.size(16.dp)
             )
         }
         Spacer(modifier = Modifier.width(4.dp))
         Text(
-            fontStyle = FontStyle.Italic,
-            color = ElementTheme.colors.textSecondary,
+            color = ElementTheme.colors.bubbleSecondaryText,
             style = ElementTheme.typography.fontBodyMdRegular,
             text = text
         )

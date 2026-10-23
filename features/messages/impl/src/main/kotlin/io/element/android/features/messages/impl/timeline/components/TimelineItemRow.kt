@@ -8,19 +8,22 @@
 
 package io.element.android.features.messages.impl.timeline.components
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -29,7 +32,6 @@ import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.messages.impl.timeline.TimelineEvent
@@ -44,11 +46,11 @@ import io.element.android.features.messages.impl.timeline.model.event.TimelineIt
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStateContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemVoiceContent
 import io.element.android.features.messages.impl.timeline.protection.TimelineProtectionState
-import io.element.android.libraries.designsystem.colors.gradientSubtleColors
 import io.element.android.libraries.designsystem.modifiers.onKeyboardContextMenuAction
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.text.toPx
+import io.element.android.libraries.designsystem.theme.chatWallpaper
+import io.element.android.libraries.designsystem.theme.focusHighlight
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.user.MatrixUser
@@ -56,6 +58,7 @@ import io.element.android.libraries.ui.common.layout.ContentAvoidingLayoutData
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.ui.utils.a11y.isTalkbackActive
 import io.element.android.wysiwyg.link.Link
+import kotlinx.coroutines.delay
 import kotlin.time.DurationUnit
 
 @Composable
@@ -101,18 +104,10 @@ internal fun TimelineItemRow(
     val isSelectionModeActive = selectionData.isSelectionModeActive
     val isSelected = selectionData.isSelected
     val backgroundModifier = when {
-        timelineItem.isEvent(focusedEventId) && !isSelectionModeActive -> {
-            val focusedEventOffset =
-                if ((timelineItem as? TimelineItem.Event)?.showSenderInformation == true) {
-                    14.dp
-                } else {
-                    2.dp
-                }
-            Modifier.focusedEvent(focusedEventOffset)
-        }
-        else -> {
-            Modifier
-        }
+        timelineItem.isEvent(focusedEventId) && !isSelectionModeActive -> Modifier.focusedEvent()
+        // A selected row gets a full-width tonal green tint.
+        isSelectionModeActive && isSelected -> Modifier.background(ElementTheme.colors.bgAccentRest.copy(alpha = SELECTED_ROW_TINT_ALPHA))
+        else -> Modifier
     }
     val selectableEvent = (timelineItem as? TimelineItem.Event)?.takeIf { selectionData.canBeSelected }
     Box(modifier = modifier.then(backgroundModifier)) {
@@ -314,43 +309,47 @@ private fun TimelineItemRowContent(
     }
 }
 
+private const val SELECTED_ROW_TINT_ALPHA = 0.15f
+private const val FOCUS_HIGHLIGHT_HOLD_MILLIS = 1_000L
+private const val FOCUS_HIGHLIGHT_FADE_MILLIS = 600
+
+/**
+ * A full-width neutral tint behind the message the user jumped to. It holds for a second, then fades out.
+ */
 @Suppress("ModifierComposable")
 @Composable
-private fun Modifier.focusedEvent(
-    focusedEventOffset: Dp,
-): Modifier {
-    val highlightedLineColor = ElementTheme.colors.borderAccentSubtle
-    val gradientColors = gradientSubtleColors()
-    val verticalOffset = focusedEventOffset.toPx()
-    val verticalRatio = 0.7f
-    return drawWithCache {
-        val brush = Brush.verticalGradient(
-            colors = gradientColors,
-            endY = size.height * verticalRatio,
-        )
-        onDrawBehind {
-            drawRect(
-                brush,
-                topLeft = Offset(0f, verticalOffset),
-                size = Size(size.width, size.height * verticalRatio)
-            )
-            drawLine(
-                highlightedLineColor,
-                start = Offset(0f, verticalOffset),
-                end = Offset(size.width, verticalOffset)
-            )
-        }
-    }.padding(top = 4.dp)
+private fun Modifier.focusedEvent(): Modifier {
+    val highlightColor = ElementTheme.colors.focusHighlight
+    val alpha = remember { Animatable(1f) }
+    LaunchedEffect(Unit) {
+        delay(FOCUS_HIGHLIGHT_HOLD_MILLIS)
+        alpha.animateTo(0f, animationSpec = tween(FOCUS_HIGHLIGHT_FADE_MILLIS))
+    }
+    return drawBehind {
+        drawRect(highlightColor.copy(alpha = highlightColor.alpha * alpha.value))
+    }
 }
 
 @PreviewsDayNight
 @Composable
 internal fun FocusedEventPreview() = ElementPreview {
-    Box(
+    Column(
         modifier = Modifier
-            .padding(16.dp)
-            .fillMaxWidth()
-            .height(160.dp)
-            .focusedEvent(0.dp),
-    )
+            .background(ElementTheme.colors.chatWallpaper)
+            .padding(vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+                .focusedEvent(),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(80.dp)
+                .background(ElementTheme.colors.bgAccentRest.copy(alpha = SELECTED_ROW_TINT_ALPHA)),
+        )
+    }
 }

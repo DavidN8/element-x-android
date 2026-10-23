@@ -8,7 +8,6 @@
 
 package io.element.android.features.messages.impl.timeline.components.event
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,7 +16,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -46,6 +44,7 @@ import io.element.android.libraries.designsystem.atomic.atoms.PlaybackSpeedButto
 import io.element.android.libraries.designsystem.components.media.WaveformPlaybackView
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+import io.element.android.libraries.designsystem.theme.bubbleSecondaryText
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.IconButton
@@ -128,7 +127,7 @@ fun TimelineItemVoiceView(
             )
             Text(
                 text = state.time,
-                color = ElementTheme.colors.textSecondary,
+                color = ElementTheme.colors.bubbleSecondaryText,
                 style = ElementTheme.typography.fontBodySmMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -252,9 +251,7 @@ private fun CustomIconButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier
-            .background(color = ElementTheme.colors.bgCanvasDefault, shape = CircleShape)
-            .size(36.dp),
+        modifier = Modifier.size(36.dp),
         enabled = enabled,
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = ElementTheme.colors.iconSecondary,

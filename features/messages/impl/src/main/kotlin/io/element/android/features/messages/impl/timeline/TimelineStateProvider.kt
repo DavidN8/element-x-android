@@ -292,6 +292,7 @@ internal fun aTimelineRoomInfo(
     pinnedEventIds: List<EventId> = emptyList(),
     typingNotificationState: TypingNotificationState = aTypingNotificationState(),
     predecessorRoom: PredecessorRoom? = null,
+    isEncrypted: Boolean = false,
 ) = TimelineRoomInfo(
     currentUserId = currentUserId,
     isDm = isDm,
@@ -302,4 +303,5 @@ internal fun aTimelineRoomInfo(
     pinnedEventIds = pinnedEventIds.toImmutableList(),
     typingNotificationState = typingNotificationState,
     predecessorRoom = predecessorRoom,
+    isEncrypted = isEncrypted,
 )

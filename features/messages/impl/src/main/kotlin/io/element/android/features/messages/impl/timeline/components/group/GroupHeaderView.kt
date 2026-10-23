@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -25,7 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -39,6 +40,7 @@ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Surface
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.systemPillBackground
 import io.element.android.libraries.ui.strings.CommonStrings
 
 private val CORNER_RADIUS = 8.dp
@@ -52,7 +54,7 @@ fun GroupHeaderView(
     modifier: Modifier = Modifier
 ) {
     // Ignore isHighlighted for now, we need a design decision on it.
-    val backgroundColor = Color.Transparent
+    val backgroundColor = ElementTheme.colors.systemPillBackground
     val shape = RoundedCornerShape(CORNER_RADIUS)
 
     val expandedStateDescription = stringResource(CommonStrings.a11y_state_expanded)
@@ -73,6 +75,8 @@ fun GroupHeaderView(
     ) {
         Surface(
             modifier = Modifier
+                .padding(vertical = 4.dp)
+                .then(if (ElementTheme.colors.isLight) Modifier.shadow(1.dp, shape) else Modifier)
                 .clip(shape)
                 .clickable(onClick = onClick),
             color = backgroundColor,
@@ -80,13 +84,13 @@ fun GroupHeaderView(
         ) {
             Row(
                 modifier = Modifier
-                    .padding(8.dp),
+                    .padding(start = 12.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
                     text = text,
                     color = ElementTheme.colors.textSecondary,
-                    style = ElementTheme.typography.fontBodyMdRegular,
+                    style = ElementTheme.typography.fontBodySmRegular,
                 )
                 val rotation: Float by animateFloatAsState(
                     targetValue = if (isExpanded) 90f else 0f,
@@ -97,7 +101,9 @@ fun GroupHeaderView(
                     label = "chevron"
                 )
                 Icon(
-                    modifier = Modifier.rotate(rotation),
+                    modifier = Modifier
+                        .size(16.dp)
+                        .rotate(rotation),
                     imageVector = CompoundIcons.ChevronRight(),
                     contentDescription = null,
                     tint = ElementTheme.colors.iconSecondary

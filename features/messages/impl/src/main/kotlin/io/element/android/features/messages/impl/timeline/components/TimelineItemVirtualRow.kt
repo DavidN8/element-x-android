@@ -46,6 +46,7 @@ fun TimelineItemVirtualRow(
                     predecessorRoom = timelineRoomInfo.predecessorRoom,
                     roomName = timelineRoomInfo.name,
                     isDm = timelineRoomInfo.isDm,
+                    isEncrypted = timelineRoomInfo.isEncrypted,
                     onPredecessorRoomClick = { roomId ->
                         eventSink(TimelineEvent.NavigateToPredecessorOrSuccessorRoom(roomId))
                     },

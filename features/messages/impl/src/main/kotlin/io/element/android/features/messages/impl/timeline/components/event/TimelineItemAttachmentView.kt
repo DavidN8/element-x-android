@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
+import io.element.android.libraries.designsystem.theme.bubbleSecondaryText
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
@@ -67,7 +68,7 @@ private fun TimelineItemAttachmentHeaderView(
     onContentLayoutChange: (ContentAvoidingLayoutData) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val iconSize = 36.dp
+    val iconSize = 40.dp
     val spacing = 8.dp
     Row(
         modifier = modifier,
@@ -77,7 +78,7 @@ private fun TimelineItemAttachmentHeaderView(
         Box(
             modifier = Modifier
                 .size(iconSize)
-                .background(ElementTheme.colors.bgCanvasDefault, RoundedCornerShape(4.dp)),
+                .background(ElementTheme.colors.bgSubtleSecondary, RoundedCornerShape(8.dp)),
             contentAlignment = Alignment.Center,
         ) {
             if (isLoading) {
@@ -89,7 +90,7 @@ private fun TimelineItemAttachmentHeaderView(
                 Icon(
                     imageVector = icon,
                     contentDescription = iconContentDescription,
-                    tint = ElementTheme.colors.iconPrimary,
+                    tint = ElementTheme.colors.iconSecondary,
                     modifier = Modifier.size(24.dp),
                 )
             }
@@ -98,13 +99,13 @@ private fun TimelineItemAttachmentHeaderView(
             Text(
                 text = filename,
                 color = ElementTheme.colors.textPrimary,
-                maxLines = 2,
+                maxLines = 1,
                 style = ElementTheme.typography.fontBodyLgRegular,
                 overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = fileExtensionAndSize,
-                color = ElementTheme.colors.textSecondary,
+                color = ElementTheme.colors.bubbleSecondaryText,
                 style = ElementTheme.typography.fontBodySmRegular,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
