@@ -272,18 +272,26 @@ private fun DocSkeleton() {
 @Composable
 private fun DocTextEditor(state: DocEditorState) {
     var value by remember { mutableStateOf(TextFieldValue(state.text, TextRange(state.text.length))) }
+    val echoes = remember { EditEchoes(state.text) }
     // Edits from others arrive between keystrokes; the cursor keeps its place in the text around it.
     LaunchedEffect(state.text, state.isApplyingEdits) {
+        if (echoes.isBehindField(state.text)) return@LaunchedEffect
         if (!state.isApplyingEdits && state.text != value.text) {
+            echoes.reset(state.text)
             val changes = TextDiff.changes(value.text, state.text)
             value = TextFieldValue(
                 text = state.text,
                 selection = TextRange(TextDiff.mapOffset(value.selection.start, changes), TextDiff.mapOffset(value.selection.end, changes)),
+                // Keeping the word being typed lets the keyboard carry on with it.
+                composition = value.composition?.let { TextRange(TextDiff.mapOffset(it.start, changes), TextDiff.mapOffset(it.end, changes)) },
             )
         }
     }
     fun update(newValue: TextFieldValue) {
-        if (newValue.text != value.text) state.eventSink(DocEditorEvent.Edit(value.text, newValue.text))
+        if (newValue.text != value.text) {
+            echoes.sent(newValue.text)
+            state.eventSink(DocEditorEvent.Edit(value.text, newValue.text))
+        }
         value = newValue
     }
     val focusRequester = remember { FocusRequester() }
