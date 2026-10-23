@@ -27,6 +27,7 @@ import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.IntentionalMention
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.RoomNotificationSettingsState
 import io.element.android.libraries.matrix.api.room.SendQueueUpdate
 import io.element.android.libraries.matrix.api.room.StateEventType
@@ -611,9 +612,14 @@ class JoinedRustRoom(
         }
     }
 
-    override suspend fun fetchReferencingEventsJson(eventId: EventId, from: String?, limit: Int): Result<RawEventsPage> = withContext(roomDispatcher) {
+    override suspend fun fetchRelatedEventsJson(
+        eventId: EventId,
+        relation: RawRelationType,
+        from: String?,
+        limit: Int,
+    ): Result<RawEventsPage> = withContext(roomDispatcher) {
         runCatchingExceptions {
-            innerRoom.fetchReferencingEventsJson(eventId.value, from, limit)
+            innerRoom.fetchRelatedEventsJson(eventId.value, relation, from, limit)
         }
     }
 

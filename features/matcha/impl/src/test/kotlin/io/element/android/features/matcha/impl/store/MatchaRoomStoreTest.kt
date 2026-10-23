@@ -17,6 +17,7 @@ import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
@@ -82,6 +83,7 @@ class MatchaRoomStoreTest {
         createTimelineResult: (() -> Result<Timeline>)? = null,
         boardPointerResult: () -> Result<Map<String, String>> = { Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}""")) },
         references: Map<String, List<String>> = emptyMap(),
+        threadReplies: Map<String, List<String>> = emptyMap(),
         liveEvents: kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.MutableSharedFlow(),
         scope: kotlinx.coroutines.CoroutineScope,
     ): Pair<MatchaRoomStore, MutableStateFlow<List<MatrixTimelineItem>>> {
@@ -102,7 +104,10 @@ class MatchaRoomStoreTest {
                 createTimelineResult?.invoke() ?: Result.success(timeline)
             },
             sendRawEventResult = sendRawEventResult,
-            fetchReferencingEventsJsonResult = { eventId, _ -> Result.success(RawEventsPage(references[eventId.value].orEmpty(), null)) },
+            fetchRelatedEventsJsonResult = { eventId, relation, _ ->
+                val related = if (relation == RawRelationType.Reference) references else threadReplies
+                Result.success(RawEventsPage(related[eventId.value].orEmpty(), null))
+            },
             rawMessageLikeEvents = liveEvents,
             getStateEventsJsonResult = { type ->
                 if (type == StateEventType.Custom(MatchaConfig.STATE_KANBAN)) boardPointerResult() else Result.success(emptyMap())
@@ -144,6 +149,35 @@ class MatchaRoomStoreTest {
         live.emit(rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(thread, archived = true)))
         settle()
         assertThat(store.snapshot.value.threads.single().metadata.archived).isTrue()
+    }
+
+    @Test
+    fun `only the hidden bootstrap reply is kept from a task thread's replies`() = runTest {
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            items = emptyList(),
+            threads = listOf(threadItem(thread, "Plan")),
+            references = mapOf(
+                boardRoot to listOf(
+                    rawJson(
+                        2,
+                        MatchaConfig.EVENT_KANBAN_CARD,
+                        KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Plan", thread), boardRoot),
+                    ),
+                ),
+            ),
+            threadReplies = mapOf(
+                thread to listOf(
+                    rawJson(4, "m.room.message", """{"msgtype": "m.text", "body": "Hi", "m.relates_to": {"rel_type": "m.thread", "event_id": "$thread"}}"""),
+                    rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.bootstrapReplyContent(thread, "Plan")),
+                ),
+            ),
+        )
+        settle()
+        val snapshot = store.snapshot.value
+        assertThat(snapshot.isLoaded).isTrue()
+        assertThat(snapshot.events.mapNotNull { it.eventId }).contains("\$r3")
+        assertThat(snapshot.events.mapNotNull { it.eventId }).doesNotContain("\$r4")
     }
 
     @Test

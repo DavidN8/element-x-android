@@ -357,13 +357,13 @@ interface JoinedRoom : BaseRoom {
     suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?>
 
     /**
-     * Fetches one page of the events that reference [eventId] (`m.reference` relations) from the homeserver, newest first,
+     * Fetches one page of the events related to [eventId] by [relation] from the homeserver, newest first,
      * decrypted when possible, as raw event JSON. Unlike timelines this includes custom event types; an event that can't be
      * decrypted comes back encrypted. Fails when the Rust SDK in use doesn't offer it (it needs the Matcha SDK patch).
      *
      * @param from the [RawEventsPage.nextBatch] of the previous page, or null for the newest page.
      */
-    suspend fun fetchReferencingEventsJson(eventId: EventId, from: String?, limit: Int): Result<RawEventsPage>
+    suspend fun fetchRelatedEventsJson(eventId: EventId, relation: RawRelationType, from: String?, limit: Int): Result<RawEventsPage>
 
     /**
      * New message-like events of the given types as they arrive in this room, decrypted, as raw event JSON with `type`,
@@ -372,7 +372,16 @@ interface JoinedRoom : BaseRoom {
     fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String>
 }
 
-/** One page of raw event JSON, see [JoinedRoom.fetchReferencingEventsJson]. */
+/** The relations [JoinedRoom.fetchRelatedEventsJson] can follow. */
+enum class RawRelationType {
+    /** `m.reference`. */
+    Reference,
+
+    /** `m.thread`: the replies of a thread root. */
+    Thread,
+}
+
+/** One page of raw event JSON, see [JoinedRoom.fetchRelatedEventsJson]. */
 data class RawEventsPage(
     val events: List<String>,
     /** The token of the next, older page, or null at the end. */

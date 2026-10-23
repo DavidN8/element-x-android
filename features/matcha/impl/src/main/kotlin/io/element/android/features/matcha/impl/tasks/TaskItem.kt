@@ -47,7 +47,7 @@ data class TaskItem(
 internal fun MatchaRoomSnapshot.toTaskItems(deadlineFormatter: DeadlineFormatter, nowMillis: Long): List<TaskItem> {
     val cards = board?.cards ?: return emptyList()
     val threadsById = threads.associateBy { it.id.value }
-    // ponytail: only bootstrap replies within the history read so far are known; older threads may count one reply too many.
+    // The store fetches the bootstrap replies of task threads; see MatchaRoomStore.bootstrapCandidates for the limit.
     val bootstrapped = events.mapNotNullTo(HashSet()) { it.bootstrapRootId() }
     return cards
         .sortedWith(

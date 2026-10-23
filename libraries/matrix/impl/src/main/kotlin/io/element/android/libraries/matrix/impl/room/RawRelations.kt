@@ -8,6 +8,7 @@
 package io.element.android.libraries.matrix.impl.room
 
 import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import org.matrix.rustcomponents.sdk.RelationType
 import org.matrix.rustcomponents.sdk.Room
 import org.matrix.rustcomponents.sdk.RoomMessageLikeEvent
@@ -21,13 +22,17 @@ import kotlin.coroutines.intrinsics.suspendCoroutineUninterceptedOrReturn
  * ponytail: reflection keeps the published SDK buildable; call it directly once the method is upstream or the patched AAR is
  * the only SDK this fork builds with.
  */
-internal suspend fun Room.fetchReferencingEventsJson(eventId: String, from: String?, limit: Int): RawEventsPage {
+internal suspend fun Room.fetchRelatedEventsJson(eventId: String, relation: RawRelationType, from: String?, limit: Int): RawEventsPage {
     // Kotlin mangles the name because the limit is an unsigned value class, e.g. fetchRelationsJson-<hash>.
     val method = fetchRelationsJsonMethod
         ?: throw UnsupportedOperationException("This Rust SDK can't fetch related events as JSON; build with the Matcha SDK patch")
     val page = try {
         suspendCoroutineUninterceptedOrReturn<Any?> { continuation ->
-            method.invoke(this, eventId, RelationType.REFERENCE, from, limit, continuation)
+            val relationType = when (relation) {
+                RawRelationType.Reference -> RelationType.REFERENCE
+                RawRelationType.Thread -> RelationType.THREAD
+            }
+            method.invoke(this, eventId, relationType, from, limit, continuation)
         }
     } catch (e: InvocationTargetException) {
         throw e.cause ?: e

@@ -25,6 +25,7 @@ import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.MessageEventType
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.powerlevels.permissionsFlow
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
@@ -293,6 +294,7 @@ class MatchaRoomStore(
             .onEach { snapshot ->
                 _snapshot.value = snapshot
                 requestAnchors(listOfNotNull(snapshot.board?.rootId) + snapshot.threads.map { it.id.value })
+                requestAnchors(snapshot.bootstrapCandidates(), RawRelationType.Thread)
             }
             .launchIn(coroutineScope)
     }
@@ -302,38 +304,56 @@ class MatchaRoomStore(
         room.getStateEventId(StateEventType.RoomCreate, "").getOrNull()?.let { requestAnchors(listOf(it.value)) }
     }
 
-    /** Fetches, once each, the events that reference new anchors, a few anchors at a time. */
-    private fun requestAnchors(anchors: Collection<String>) {
-        val fresh = synchronized(requestedAnchors) { anchors.filter { it.startsWith("$") && requestedAnchors.add(it) } }
+    /**
+     * Task threads whose reply count may include the hidden bootstrap reply, checked through their `m.thread` relations.
+     *
+     * ponytail: only threads that fit in one page of replies are checked; a longer thread may count one reply too many.
+     */
+    private fun MatchaRoomSnapshot.bootstrapCandidates(): List<String> {
+        val taskThreads = board?.cards?.mapNotNullTo(HashSet()) { it.threadId }.orEmpty()
+        return threads.filter { it.id.value in taskThreads && it.numberOfReplies in 1L..RELATIONS_PAGE_SIZE }.map { it.id.value }
+    }
+
+    /**
+     * Fetches, once each, the events related to new anchors by [relation], a few anchors at a time.
+     * For thread relations only the hidden bootstrap replies are kept, from one page.
+     */
+    private fun requestAnchors(anchors: Collection<String>, relation: RawRelationType = RawRelationType.Reference) {
+        val byKey = anchors.filter { it.startsWith("$") }.associateBy { if (relation == RawRelationType.Thread) "$it$THREAD_KEY_SUFFIX" else it }
+        val fresh = synchronized(requestedAnchors) { byKey.keys.filter { requestedAnchors.add(it) } }
         if (fresh.isEmpty()) return
         anchorsLoading.update { it + fresh }
-        for (anchor in fresh) {
+        for (key in fresh) {
             coroutineScope.launch {
                 try {
-                    anchorPermits.withPermit { fetchAllReferences(anchor) }
-                        .onSuccess { events -> relationEvents.update { it + (anchor to events) } }
+                    anchorPermits.withPermit { fetchAllRelated(byKey.getValue(key), relation) }
+                        .onSuccess { events -> relationEvents.update { it + (key to events) } }
                         .onFailure { error ->
                             if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
                             Timber.w(error, "Could not read the events related to a Matcha anchor")
                         }
                 } finally {
-                    anchorsLoading.update { it - anchor }
+                    anchorsLoading.update { it - key }
                 }
             }
         }
     }
 
     /**
-     * Reads every event that references [anchor], newest first, page by page.
+     * Reads every event related to [anchor] by [relation], newest first, page by page; for threads, the bootstrap replies of one page.
      *
      * ponytail: a fixed page cap bounds very long histories (MAX_RELATION_PAGES × 100 events); add paging on demand if one anchor
      * ever needs more.
      */
-    private suspend fun fetchAllReferences(anchor: String): Result<List<RawEvent>> {
+    private suspend fun fetchAllRelated(anchor: String, relation: RawRelationType): Result<List<RawEvent>> {
+        if (relation == RawRelationType.Thread) {
+            return room.fetchRelatedEventsJson(EventId(anchor), relation, null, RELATIONS_PAGE_SIZE)
+                .map { page -> page.events.mapNotNull { RawEvent.parse(it) }.filter { it.type == MatchaConfig.EVENT_THREAD_METADATA } }
+        }
         val events = ArrayList<RawEvent>()
         var from: String? = null
         repeat(MAX_RELATION_PAGES) {
-            val page = room.fetchReferencingEventsJson(EventId(anchor), from, RELATIONS_PAGE_SIZE).getOrElse { return Result.failure(it) }
+            val page = room.fetchRelatedEventsJson(EventId(anchor), relation, from, RELATIONS_PAGE_SIZE).getOrElse { return Result.failure(it) }
             page.events.mapNotNullTo(events) { RawEvent.parse(it) }
             from = page.nextBatch ?: return Result.success(events)
         }
@@ -606,6 +626,7 @@ class MatchaRoomStore(
         private const val MAX_CONCURRENT_ANCHORS = 4
         private const val RELATIONS_PAGE_SIZE = 100
         private const val MAX_RELATION_PAGES = 50
+        private const val THREAD_KEY_SUFFIX = "#thread"
         private val ANCHORS_TIMEOUT = 30.seconds
     }
 }
