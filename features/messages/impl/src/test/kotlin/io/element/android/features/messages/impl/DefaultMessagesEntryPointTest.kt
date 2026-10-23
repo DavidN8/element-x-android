@@ -19,6 +19,7 @@ import io.element.android.features.knockrequests.test.FakeKnockRequestsListEntry
 import io.element.android.features.location.test.FakeLocationService
 import io.element.android.features.location.test.FakeShareLocationEntryPoint
 import io.element.android.features.location.test.FakeShowLocationEntryPoint
+import io.element.android.features.matcha.test.FakeMatchaRoomEntryPoint
 import io.element.android.features.matcha.test.FakeMatchaSpaceDocsEntryPoint
 import io.element.android.features.messages.api.MessagesEntryPoint
 import io.element.android.features.messages.impl.pinned.banner.createPinnedEventsTimelineProvider
@@ -94,6 +95,7 @@ class DefaultMessagesEntryPointTest {
                 featureFlagService = FakeFeatureFlagService(),
                 spaceService = FakeSpaceService(joinedParentsResult = { Result.success(emptyList()) }),
                 matchaSpaceDocsEntryPoint = FakeMatchaSpaceDocsEntryPoint(),
+                matchaRoomEntryPoint = FakeMatchaRoomEntryPoint(),
             )
         }
         val callback = object : MessagesEntryPoint.Callback {

@@ -25,8 +25,12 @@ import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.core.node.Node
 import com.bumble.appyx.core.plugin.Plugin
 import com.bumble.appyx.navmodel.backstack.BackStack
+import com.bumble.appyx.navmodel.backstack.active
+import com.bumble.appyx.navmodel.backstack.operation.newRoot
 import com.bumble.appyx.navmodel.backstack.operation.pop
 import com.bumble.appyx.navmodel.backstack.operation.push
+import com.bumble.appyx.navmodel.backstack.operation.replace
+import com.bumble.appyx.navmodel.backstack.operation.singleTop
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.Interaction
@@ -40,6 +44,7 @@ import io.element.android.features.location.api.RenderingMapsNotSupportedDialog
 import io.element.android.features.location.api.ShareLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationMode
+import io.element.android.features.matcha.api.MatchaRoomEntryPoint
 import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.messages.api.MessagesEntryPoint
 import io.element.android.features.messages.impl.attachments.Attachment
@@ -158,6 +163,7 @@ class MessagesFlowNode(
     private val featureFlagService: FeatureFlagService,
     private val spaceService: SpaceService,
     private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
+    private val matchaRoomEntryPoint: MatchaRoomEntryPoint,
 ) : BaseFlowNode<MessagesFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = plugins.filterIsInstance<MessagesEntryPoint.Params>().first().initialTarget.toNavTarget(),
@@ -236,6 +242,10 @@ class MessagesFlowNode(
         @Parcelize
         data class AvatarPreview(val name: String, val avatarUrl: String) : NavTarget
 
+        /** The chat's Matcha task board, opening the task of [initialThreadId] when set. */
+        @Parcelize
+        data class Tasks(val initialThreadId: ThreadId?) : NavTarget
+
         /** The Matcha docs of [spaceId], one of the chat's joined parent spaces. */
         @Parcelize
         data class SpaceDocs(val spaceId: RoomId) : NavTarget
@@ -280,6 +290,31 @@ class MessagesFlowNode(
                 }
             }
             .launchIn(lifecycleScope)
+    }
+
+    /**
+     * Shows a Matcha screen of this chat: from a thread or the board it replaces them, so switching threads and the board doesn't
+     * stack screens and back always returns to the chat; from anywhere else it is pushed.
+     */
+    private fun showMatchaScreen(navTarget: NavTarget) {
+        when (backstack.active?.key?.navTarget) {
+            is NavTarget.Thread, is NavTarget.Tasks -> backstack.replace(navTarget)
+            else -> backstack.push(navTarget)
+        }
+    }
+
+    /** Goes back to the chat's own timeline, closing the threads and the board opened above it. */
+    private fun openGeneral() {
+        val messages = backstack.elements.value
+            .lastOrNull { it.key.navTarget is NavTarget.Messages && it.targetState != BackStack.State.DESTROYED }
+            ?.key
+            ?.navTarget
+        if (messages != null) {
+            backstack.singleTop(messages)
+        } else {
+            // The flow started on another screen, such as the pinned messages.
+            backstack.newRoot(NavTarget.Messages(focusedEventId = null))
+        }
     }
 
     /** Opens the docs of the chat's space; with several joined parent spaces, the user chooses one first. */
@@ -759,6 +794,25 @@ class MessagesFlowNode(
                     }
                 }
                 createNode<ThreadsListNode>(buildContext, listOf(callback))
+            }
+            is NavTarget.Tasks -> {
+                val callback = object : MatchaRoomEntryPoint.Callback {
+                    override fun openThread(threadId: ThreadId) = showMatchaScreen(NavTarget.Thread(threadId, focusedEventId = null))
+
+                    override fun openGeneral() = this@MessagesFlowNode.openGeneral()
+
+                    override fun openAllThreads() = backstack.push(NavTarget.ThreadsList)
+
+                    override fun openSpaceDocs() = this@MessagesFlowNode.openSpaceDocs()
+
+                    override fun openRoomDetails() = callback.navigateToRoomDetails()
+                }
+                matchaRoomEntryPoint.createTasksNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaRoomEntryPoint.Params(initialThreadId = navTarget.initialThreadId),
+                    callback = callback,
+                )
             }
             is NavTarget.SpaceDocs -> {
                 val callback = object : MatchaSpaceDocsEntryPoint.Callback {
