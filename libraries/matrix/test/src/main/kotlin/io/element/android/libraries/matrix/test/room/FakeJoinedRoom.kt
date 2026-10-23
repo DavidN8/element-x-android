@@ -24,6 +24,7 @@ import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMembersState
 import io.element.android.libraries.matrix.api.room.RoomNotificationSettingsState
 import io.element.android.libraries.matrix.api.room.SendQueueUpdate
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.history.RoomHistoryVisibility
 import io.element.android.libraries.matrix.api.room.join.JoinRule
 import io.element.android.libraries.matrix.api.room.knock.KnockRequest
@@ -93,6 +94,9 @@ class FakeJoinedRoom(
     private val stopLiveLocationShareResult: () -> Result<Unit> = { lambdaError() },
     private val sendLiveLocationResult: (String) -> Result<Unit> = { lambdaError() },
     private val setOwnMemberDisplayNameResult: (String) -> Result<Unit> = { lambdaError() },
+    private val sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> lambdaError() },
+    private val sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> lambdaError() },
+    private val getStateEventsJsonResult: (StateEventType) -> Result<Map<String, String>> = { Result.success(emptyMap()) },
 ) : JoinedRoom, BaseRoom by baseRoom {
     private val sendQueueUpdates = MutableSharedFlow<SendQueueUpdate>(extraBufferCapacity = 10)
 
@@ -258,6 +262,18 @@ class FakeJoinedRoom(
 
     override suspend fun setOwnMemberDisplayName(displayName: String): Result<Unit> = simulateLongTask {
         setOwnMemberDisplayNameResult(displayName)
+    }
+
+    override suspend fun sendRawEvent(eventType: String, contentJson: String): Result<EventId> = simulateLongTask {
+        sendRawEventResult(eventType, contentJson)
+    }
+
+    override suspend fun sendRawStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId> = simulateLongTask {
+        sendRawStateEventResult(eventType, stateKey, contentJson)
+    }
+
+    override suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>> {
+        return getStateEventsJsonResult(eventType)
     }
 
     private suspend fun simulateSendMediaProgress(progressCallback: ProgressCallback?) {

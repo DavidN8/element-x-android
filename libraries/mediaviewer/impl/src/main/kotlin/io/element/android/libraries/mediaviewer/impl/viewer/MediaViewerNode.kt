@@ -99,6 +99,8 @@ class MediaViewerNode(
                 val timelineMode = inputs.mode.getTimelineMode()
                 when (timelineMode) {
                     Timeline.Mode.Live,
+                    // Media is never opened from an event-types timeline, but it behaves like the live one.
+                    Timeline.Mode.EventTypes,
                     is Timeline.Mode.FocusedOnEvent,
                     is Timeline.Mode.Thread -> {
                         // Does timelineMediaGalleryDataSource knows the eventId?

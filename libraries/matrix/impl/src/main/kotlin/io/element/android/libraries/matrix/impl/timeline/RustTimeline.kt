@@ -152,7 +152,7 @@ class RustTimeline(
             else -> Unit
         }
 
-        if (mode == Timeline.Mode.Live) {
+        if (mode == Timeline.Mode.Live || mode == Timeline.Mode.EventTypes) {
             // When timeline is live, we need to listen to the back pagination status as
             // sdk can automatically paginate backwards.
             coroutineScope.registerBackPaginationStatusListener()

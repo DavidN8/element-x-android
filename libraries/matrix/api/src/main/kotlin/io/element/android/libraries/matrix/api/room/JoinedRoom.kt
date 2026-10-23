@@ -323,4 +323,30 @@ interface JoinedRoom : BaseRoom {
      * the user's display name across all of their rooms.
      */
     suspend fun setOwnMemberDisplayName(displayName: String): Result<Unit>
+
+    /**
+     * Sends a timeline event of any type, waiting for the homeserver to accept it. It is encrypted like a message in encrypted rooms.
+     * Unlike messages it bypasses the send queue, so it fails immediately when offline.
+     *
+     * @param eventType the event type, e.g. a custom `com.example.card` type.
+     * @param contentJson the event content as a JSON object, including any `m.relates_to`.
+     * @return the id of the sent event.
+     */
+    suspend fun sendRawEvent(eventType: String, contentJson: String): Result<EventId>
+
+    /**
+     * Sends a state event of any type, waiting for the homeserver to accept it.
+     *
+     * @param eventType the state event type.
+     * @param stateKey the state key, often empty.
+     * @param contentJson the event content as a JSON object.
+     * @return the id of the sent event.
+     */
+    suspend fun sendRawStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId>
+
+    /**
+     * Returns the locally stored state events of a type as raw JSON content, keyed by state key.
+     * Custom state types are only stored when the sync requested them, so an empty result does not prove there is none.
+     */
+    suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>>
 }
