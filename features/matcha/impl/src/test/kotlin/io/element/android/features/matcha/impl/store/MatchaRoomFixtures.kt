@@ -9,6 +9,7 @@ package io.element.android.features.matcha.impl.store
 
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.libraries.matrix.api.core.EventId
+import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.MessageEventType
@@ -21,6 +22,7 @@ import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemDebugInfoProvider
+import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.powerlevels.FakeRoomPermissions
@@ -31,6 +33,7 @@ import io.element.android.libraries.matrix.test.timeline.aTimelineItemDebugInfo
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.TestScope
 
 /** Builds a [MatchaRoomStore] over fakes for presenter tests; everything the store reads is already loaded. */
 internal fun aMatchaRoomStore(
@@ -45,18 +48,55 @@ internal fun aMatchaRoomStore(
     /** Overrides how the board pointer is read; by default it points at [boardRoot]. */
     boardPointerResult: (() -> Result<Map<String, String>>)? = null,
     sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
-): MatchaRoomStore {
+): MatchaRoomStore = MatchaRoomStore(
+    aMatchaJoinedRoom(
+        items = items,
+        threads = threads,
+        threadsPaginationStatus = threadsPaginationStatus,
+        canSendMessage = canSendMessage,
+        boardRoot = boardRoot,
+        canSendState = canSendState,
+        sendRawStateEventResult = sendRawStateEventResult,
+        boardPointerResult = boardPointerResult,
+        sendRawEventResult = sendRawEventResult,
+    ),
+    scope,
+)
+
+/** A joined room whose Matcha timeline, thread list and state are already loaded. */
+internal fun aMatchaJoinedRoom(
+    roomId: RoomId = A_ROOM_ID,
+    roomCoroutineScope: CoroutineScope = TestScope(),
+    items: List<MatrixTimelineItem> = emptyList(),
+    threads: List<ThreadListItem> = emptyList(),
+    threadsPaginationStatus: ThreadListPaginationStatus = ThreadListPaginationStatus.Idle(hasMoreToLoad = false),
+    canSendMessage: (MessageEventType) -> Boolean = { true },
+    boardRoot: String? = null,
+    canSendState: Boolean = true,
+    sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> Result.success(EventId("\$state")) },
+    /** Overrides how the board pointer is read; by default it points at [boardRoot]. */
+    boardPointerResult: (() -> Result<Map<String, String>>)? = null,
+    sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
+    onCreateTimeline: () -> Unit = {},
+): FakeJoinedRoom {
     val timeline = FakeTimeline(
         timelineItems = MutableStateFlow(items),
         backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = false)),
     )
-    val room = FakeJoinedRoom(
-        baseRoom = FakeBaseRoom(roomPermissions = FakeRoomPermissions(canSendMessage = canSendMessage, canSendState = { canSendState }, canInvite = true)),
+    return FakeJoinedRoom(
+        baseRoom = FakeBaseRoom(
+            roomId = roomId,
+            roomPermissions = FakeRoomPermissions(canSendMessage = canSendMessage, canSendState = { canSendState }, canInvite = true),
+        ),
+        roomCoroutineScope = roomCoroutineScope,
         threadsListService = FakeThreadsListService(
             items = MutableStateFlow(threads),
             paginationStatus = MutableStateFlow(threadsPaginationStatus),
         ),
-        createTimelineResult = { Result.success(timeline) },
+        createTimelineResult = {
+            onCreateTimeline()
+            Result.success(timeline)
+        },
         sendRawEventResult = sendRawEventResult,
         sendRawStateEventResult = sendRawStateEventResult,
         getStateEventsJsonResult = { type ->
@@ -68,7 +108,6 @@ internal fun aMatchaRoomStore(
             }
         },
     )
-    return MatchaRoomStore(room, scope)
 }
 
 /** A timeline item carrying a Matcha event with the given raw [content]. */

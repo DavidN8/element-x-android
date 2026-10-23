@@ -97,9 +97,32 @@
     <string name="a11y_matcha_clear_deadline">"Clear deadline"</string>
     <!-- End of track B: task board. -->
     <!-- Track B: Tasks tab. -->
+    <string name="common_matcha_all">"All"</string>
     <string name="screen_matcha_tasks_open_chat">"Open chat"</string>
     <string name="screen_matcha_tasks_in_chat">"In %1$s"</string>
     <!-- Not in WHATSAPP_DESIGN.md §5: a Tasks-tab row's second line, the chat name then the description. -->
     <string name="screen_matcha_tasks_chat_and_summary">"%1$s · %2$s"</string>
+    <string name="screen_matcha_tasks_section_today">"Today"</string>
+    <string name="screen_matcha_tasks_section_tomorrow">"Tomorrow"</string>
+    <string name="screen_matcha_tasks_section_upcoming">"Upcoming"</string>
+    <string name="screen_matcha_tasks_section_no_deadline">"No deadline"</string>
+    <plurals name="screen_matcha_tasks_done_section">
+        <item quantity="one">"Done · %1$d"</item>
+        <item quantity="other">"Done · %1$d"</item>
+    </plurals>
+    <string name="screen_matcha_tasks_filter_chat">"Chat"</string>
+    <string name="screen_matcha_tasks_tab_empty_title">"No tasks yet"</string>
+    <string name="screen_matcha_tasks_tab_empty_body">"Tasks from your chats show up here."</string>
+    <string name="screen_matcha_tasks_tab_unreadable">"Some tasks can't be decrypted on this device yet."</string>
+    <string name="screen_matcha_tasks_pick_chat_title">"Choose a chat"</string>
+    <string name="screen_matcha_tasks_pick_chat_empty">"None of your chats has a task board yet."</string>
+    <plurals name="screen_matcha_tasks_checking_chats">
+        <item quantity="one">"Checking %1$d more chat…"</item>
+        <item quantity="other">"Checking %1$d more chats…"</item>
+    </plurals>
+    <plurals name="screen_matcha_tasks_check_failed">
+        <item quantity="one">"Couldn't check %1$d chat"</item>
+        <item quantity="other">"Couldn't check %1$d chats"</item>
+    </plurals>
     <!-- End of track B: Tasks tab. -->
 </resources>

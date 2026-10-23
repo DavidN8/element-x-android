@@ -33,6 +33,7 @@ dependencies {
     implementation(projects.libraries.dateformatter.api)
     implementation(projects.libraries.featureflag.api)
     implementation(projects.libraries.uiStrings)
+    implementation(projects.services.appnavstate.api)
     implementation(libs.serialization.json)
 
     testCommonDependencies(libs, true)
@@ -40,4 +41,5 @@ dependencies {
     testImplementation(projects.libraries.featureflag.test)
     testImplementation(projects.libraries.dateformatter.test)
     testImplementation(projects.features.matcha.test)
+    testImplementation(projects.services.appnavstate.test)
 }
