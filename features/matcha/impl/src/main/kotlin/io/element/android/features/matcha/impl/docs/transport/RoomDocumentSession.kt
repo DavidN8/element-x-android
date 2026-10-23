@@ -229,7 +229,8 @@ class RoomDocumentSession(
 
     private suspend fun load() {
         try {
-            // A space has little history: read all of it, so no frame is missed.
+            // Read all of the history, so no frame is missed. ponytail: cheap for a space, which has little history; a chat's
+            // earlier doc pages through the whole chat, which is what an SDK call listing the anchor's relations would avoid.
             var hasMoreHistory = true
             while (hasMoreHistory) hasMoreHistory = store.loadMore().getOrElse { throw DocumentException(DocumentError.LoadError, it) }
             // The timeline delivers its items a little after a page is read: wait for the store to see the start of the room.

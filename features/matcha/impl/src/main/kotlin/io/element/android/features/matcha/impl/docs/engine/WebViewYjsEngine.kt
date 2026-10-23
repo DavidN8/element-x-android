@@ -214,7 +214,8 @@ class WebViewYjsEngine(
                 requests.remove(id)
             }
             val json = tryOrNull { Json.parseToJsonElement(raw).jsonObject } ?: throw YjsEngineException("Malformed answer to $operation")
-            (json["error"] as? JsonPrimitive)?.let { throw YjsEngineException("$operation failed: ${it.content}") }
+            // The page's error message may quote its input, which can be document text: it is never logged.
+            if (json.containsKey("error")) throw YjsEngineException("$operation failed")
             return json["result"] as? JsonObject ?: throw YjsEngineException("No result for $operation")
         }
 
