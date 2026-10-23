@@ -20,15 +20,13 @@ import dev.zacsweers.metro.AssistedInject
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.impl.R
-import io.element.android.features.matcha.impl.protocol.CardRevision
-import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ReminderProtocol
 import io.element.android.features.matcha.impl.protocol.ReminderRequestRef
 import io.element.android.features.matcha.impl.protocol.ReminderTime
 import io.element.android.features.matcha.impl.protocol.ReminderUnit
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.tasks.TaskWriter
 import io.element.android.libraries.architecture.Presenter
-import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.matrix.api.core.EventId
@@ -253,31 +251,19 @@ class RoomReminderPresenter(
         }
     }
 
-    /** Records the request on the task, as a complete revision of the card as the board shows it, like the web client does. */
+    /**
+     * Records the request on the task's card. It goes through [TaskWriter], which reads the card's newest revision first, so a
+     * thread's card whose revision lies further back in the history doesn't get its other fields reset for everyone.
+     */
     private suspend fun recordRequest(cardId: String, eventId: EventId, at: Long) {
-        val snapshot = store.snapshot.value
-        val board = snapshot.board
-        val card = board?.cards?.firstOrNull { it.id == cardId }
-        if (board == null || card == null || !snapshot.permissions.canWriteCards) {
-            Timber.w("Reminder requested, but card %s could not be updated", cardId)
+        val boardRootId = store.snapshot.value.board?.rootId
+        if (boardRootId == null) {
+            Timber.w("Reminder requested, but the board of card %s is gone", cardId)
             return
         }
-        val revision = CardRevision(
-            cardId = card.id,
-            title = card.title,
-            description = card.description,
-            status = card.status,
-            archived = card.archived,
-            threadId = card.threadId,
-            dueAt = card.dueAt,
-            reminderRequested = ReminderRequestRef(eventId = eventId.value, at = at),
-            showToRoom = card.showToRoom,
-        )
-        runCatchingExceptions { KanbanProtocol.cardContent(revision, board.rootId) }
-            .onFailure { Timber.w(it, "Card %s cannot be written", cardId) }
-            .getOrNull()
-            ?.let { store.send(MatchaConfig.EVENT_KANBAN_CARD, it) }
-            ?.onFailure { Timber.w(it, "Reminder requested, but card %s could not be updated", cardId) }
+        TaskWriter(store)
+            .update(boardRootId, cardId) { it.copy(reminderRequested = ReminderRequestRef(eventId = eventId.value, at = at)) }
+            ?.let { error -> Timber.w("Reminder requested, but card %s could not be updated: %s", cardId, error) }
     }
 
     companion object {
