@@ -26,7 +26,7 @@ fun NavigationBarIcon(
         modifier = modifier,
         badge = {
             CounterAtom(
-                textStyle = ElementTheme.typography.fontBodyXsMedium,
+                textStyle = ElementTheme.typography.fontBodySmMedium,
                 count = count,
                 isCritical = isCritical,
             )

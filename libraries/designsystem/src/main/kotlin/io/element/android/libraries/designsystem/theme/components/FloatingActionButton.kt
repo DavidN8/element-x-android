@@ -37,7 +37,7 @@ fun FloatingActionButton(
     shape: Shape = FloatingActionButtonDefaults.shape,
     containerColor: Color = ElementTheme.colors.bgAccentRest,
     contentColor: Color = ElementTheme.colors.iconOnSolidPrimary,
-    elevation: FloatingActionButtonElevation = FloatingActionButtonDefaults.elevation(),
+    elevation: FloatingActionButtonElevation = ElementFloatingActionButtonDefaults.elevation(),
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     content: @Composable () -> Unit,
 ) {
@@ -51,6 +51,23 @@ fun FloatingActionButton(
         interactionSource = interactionSource,
         content = content,
     )
+}
+
+object ElementFloatingActionButtonDefaults {
+    /**
+     * Material 3 elevation in light mode; flat in dark mode, where the green fill on the dark canvas is enough.
+     */
+    @Composable
+    fun elevation(): FloatingActionButtonElevation = if (ElementTheme.isLightTheme) {
+        FloatingActionButtonDefaults.elevation()
+    } else {
+        FloatingActionButtonDefaults.elevation(
+            defaultElevation = 0.dp,
+            pressedElevation = 0.dp,
+            focusedElevation = 0.dp,
+            hoveredElevation = 0.dp,
+        )
+    }
 }
 
 @Preview(group = PreviewGroup.FABs)
