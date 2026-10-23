@@ -16,6 +16,8 @@ import io.element.android.libraries.matrix.api.user.MatrixUser
 import kotlinx.collections.immutable.ImmutableList
 
 data class HomeState(
+    /** The name of the app, the title of the Chats tab. */
+    val applicationName: String,
     /**
      * The current user of this session, in case of multiple accounts, will contains 3 items, with the
      * current user in the middle.

@@ -11,13 +11,14 @@ package io.element.android.features.home.impl.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -44,15 +46,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.element.android.appconfig.RoomListConfig
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.home.impl.HomeNavigationBarItem
+import io.element.android.features.home.impl.R
 import io.element.android.features.home.impl.filters.RoomListFiltersState
 import io.element.android.features.home.impl.filters.RoomListFiltersView
 import io.element.android.features.home.impl.filters.aRoomListFiltersState
@@ -68,11 +76,12 @@ import io.element.android.libraries.designsystem.modifiers.backgroundVerticalGra
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.preview.USER_NAME_ALICE
-import io.element.android.libraries.designsystem.text.AdaptativeTitle
+import io.element.android.libraries.designsystem.theme.aliasAppTitle
 import io.element.android.libraries.designsystem.theme.components.DropdownMenu
 import io.element.android.libraries.designsystem.theme.components.DropdownMenuItem
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.IconButton
+import io.element.android.libraries.designsystem.theme.components.Surface
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.matrix.api.core.SessionId
@@ -94,11 +103,14 @@ import kotlinx.coroutines.flow.filter
 @Composable
 fun HomeTopBar(
     selectedNavigationItem: HomeNavigationBarItem,
+    applicationName: String,
     currentUserAndNeighbors: ImmutableList<MatrixUser>,
     showAvatarIndicator: Boolean,
     areSearchResultsDisplayed: Boolean,
     onToggleSearch: () -> Unit,
     onMenuActionClick: (RoomListMenuAction) -> Unit,
+    onCreateRoomClick: () -> Unit,
+    onCreateSpaceClick: () -> Unit,
     onOpenSettings: () -> Unit,
     onAccountSwitch: (SessionId) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
@@ -122,126 +134,138 @@ fun HomeTopBar(
                 scrolledContainerColor = Color.Transparent,
             ),
             title = {
-                val displayTitle = when (selectedNavigationItem) {
-                    HomeNavigationBarItem.Chats -> {
-                        when (spaceFiltersState) {
-                            is SpaceFiltersState.Selected -> spaceFiltersState.selectedFilter.spaceRoom.displayName
-                            else -> stringResource(selectedNavigationItem.labelRes)
-                        }
-                    }
-                    HomeNavigationBarItem.Spaces -> null
-                }
-                displayTitle?.let {
-                    val style = when (spaceFiltersState) {
-                        // Space name
-                        is SpaceFiltersState.Selected -> ElementTheme.typography.fontHeadingSmMedium
-                        // "Chats"
-                        else -> ElementTheme.typography.fontHeadingLgBold
-                    }
-                    AdaptativeTitle(
-                        title = displayTitle,
-                        style = style,
-                        twoLinesStyle = ElementTheme.typography.fontHeadingSmMedium,
-                    )
-                }
+                // Chats shows the app name, the other tabs their own name. Plain text, never a wordmark.
+                val isChats = selectedNavigationItem == HomeNavigationBarItem.Chats
+                Text(
+                    text = if (isChats) applicationName else stringResource(selectedNavigationItem.labelRes),
+                    style = ElementTheme.typography.aliasAppTitle,
+                    color = if (isChats && ElementTheme.isLightTheme) ElementTheme.colors.textActionAccent else ElementTheme.colors.textPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() },
+                )
             },
-            navigationIcon = {
+            actions = {
                 NavigationIcon(
                     currentUserAndNeighbors = currentUserAndNeighbors,
                     showAvatarIndicator = showAvatarIndicator,
                     onAccountSwitch = onAccountSwitch,
                     onClick = onOpenSettings,
                 )
+                OverflowMenu(
+                    onMenuActionClick = onMenuActionClick,
+                    onCreateRoomClick = onCreateRoomClick,
+                    onCreateSpaceClick = onCreateSpaceClick,
+                    onOpenSettings = onOpenSettings,
+                    canReportBug = canReportBug,
+                )
             },
-            actions = {
-                if (selectedNavigationItem == HomeNavigationBarItem.Chats) {
-                    RoomListMenuItems(
-                        onToggleSearch = onToggleSearch,
-                        onMenuActionClick = onMenuActionClick,
-                        canReportBug = canReportBug,
-                    )
-                }
-            },
-            // We want a 16dp left padding for the navigationIcon :
-            // 4dp from default TopAppBarHorizontalPadding
-            // 8dp from AccountIcon default padding (48dp touch target around 32dp avatar)
-            // 4dp extra padding using left insets
-            windowInsets = WindowInsets(left = 4.dp),
+            // Without a navigation icon, the default title inset already starts the title 16dp from the edge.
+            windowInsets = WindowInsets(0),
         )
         if (displayFilters) {
             TopAppBarScrollBehaviorLayout(scrollBehavior = scrollBehavior) {
-                RoomListFiltersView(
-                    state = filtersState,
-                    spaceFiltersState = spaceFiltersState,
-                    modifier = Modifier
-                        .padding(bottom = 16.dp)
-                        .padding(contentPadding)
-                )
+                Column(modifier = Modifier.padding(contentPadding)) {
+                    SearchPill(onClick = onToggleSearch)
+                    RoomListFiltersView(
+                        state = filtersState,
+                        spaceFiltersState = spaceFiltersState,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
             }
         }
     }
 }
 
+/**
+ * A fake search field: it only opens the search overlay, which has the real one.
+ */
 @Composable
-private fun RowScope.RoomListMenuItems(
-    onToggleSearch: () -> Unit,
+private fun SearchPill(
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = CircleShape,
+        color = ElementTheme.colors.bgSubtleSecondary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            .height(48.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = CompoundIcons.Search(),
+                contentDescription = null,
+                tint = ElementTheme.colors.iconSecondary,
+            )
+            Text(
+                text = stringResource(CommonStrings.action_search),
+                style = ElementTheme.typography.fontBodyLgRegular,
+                color = ElementTheme.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OverflowMenu(
     onMenuActionClick: (RoomListMenuAction) -> Unit,
+    onCreateRoomClick: () -> Unit,
+    onCreateSpaceClick: () -> Unit,
+    onOpenSettings: () -> Unit,
     canReportBug: Boolean,
 ) {
-    IconButton(
-        onClick = onToggleSearch,
-    ) {
-        Icon(
-            imageVector = CompoundIcons.Search(),
-            contentDescription = stringResource(CommonStrings.action_search),
-        )
-    }
-    if (RoomListConfig.HAS_DROP_DOWN_MENU) {
-        var showMenu by remember { mutableStateOf(false) }
+    var showMenu by remember { mutableStateOf(false) }
+    Box {
         IconButton(
             onClick = { showMenu = !showMenu }
         ) {
             Icon(
                 imageVector = CompoundIcons.OverflowVertical(),
-                contentDescription = null,
+                contentDescription = stringResource(R.string.a11y_matcha_home_more_options),
             )
         }
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
+            fun onItemClick(action: () -> Unit) {
+                showMenu = false
+                action()
+            }
+            DropdownMenuItem(
+                onClick = { onItemClick(onCreateRoomClick) },
+                text = { Text(stringResource(id = CommonStrings.action_create_room)) },
+            )
+            DropdownMenuItem(
+                onClick = { onItemClick(onCreateSpaceClick) },
+                text = { Text(stringResource(id = CommonStrings.action_create_space)) },
+            )
             if (RoomListConfig.SHOW_INVITE_MENU_ITEM) {
                 DropdownMenuItem(
-                    onClick = {
-                        showMenu = false
-                        onMenuActionClick(RoomListMenuAction.InviteFriends)
-                    },
+                    onClick = { onItemClick { onMenuActionClick(RoomListMenuAction.InviteFriends) } },
                     text = { Text(stringResource(id = CommonStrings.action_invite)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = CompoundIcons.ShareAndroid(),
-                            tint = ElementTheme.colors.iconSecondary,
-                            contentDescription = null,
-                        )
-                    }
                 )
             }
             if (RoomListConfig.SHOW_REPORT_PROBLEM_MENU_ITEM && canReportBug) {
                 DropdownMenuItem(
-                    onClick = {
-                        showMenu = false
-                        onMenuActionClick(RoomListMenuAction.ReportBug)
-                    },
+                    onClick = { onItemClick { onMenuActionClick(RoomListMenuAction.ReportBug) } },
                     text = { Text(stringResource(id = CommonStrings.common_report_a_problem)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = CompoundIcons.ChatProblem(),
-                            tint = ElementTheme.colors.iconSecondary,
-                            contentDescription = null,
-                        )
-                    }
                 )
             }
+            DropdownMenuItem(
+                onClick = { onItemClick(onOpenSettings) },
+                text = { Text(stringResource(id = CommonStrings.action_open_settings)) },
+            )
         }
     }
 }
@@ -396,6 +420,7 @@ private fun StatusEmoji(
 internal fun HomeTopBarPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
+        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -408,6 +433,8 @@ internal fun HomeTopBarPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
+        onCreateRoomClick = {},
+        onCreateSpaceClick = {},
     )
 }
 
@@ -416,6 +443,7 @@ internal fun HomeTopBarPreview() = ElementPreview {
 internal fun HomeTopBarSpaceFiltersSelectedPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
+        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -428,6 +456,8 @@ internal fun HomeTopBarSpaceFiltersSelectedPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = aSelectedSpaceFiltersState(),
         onMenuActionClick = {},
+        onCreateRoomClick = {},
+        onCreateSpaceClick = {},
     )
 }
 
@@ -436,6 +466,7 @@ internal fun HomeTopBarSpaceFiltersSelectedPreview() = ElementPreview {
 internal fun HomeTopBarSpacesPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Spaces,
+        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -448,6 +479,8 @@ internal fun HomeTopBarSpacesPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
+        onCreateRoomClick = {},
+        onCreateSpaceClick = {},
     )
 }
 
@@ -456,6 +489,7 @@ internal fun HomeTopBarSpacesPreview() = ElementPreview {
 internal fun HomeTopBarWithIndicatorPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
+        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = true,
         areSearchResultsDisplayed = false,
@@ -468,6 +502,8 @@ internal fun HomeTopBarWithIndicatorPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
+        onCreateRoomClick = {},
+        onCreateSpaceClick = {},
     )
 }
 
@@ -476,6 +512,7 @@ internal fun HomeTopBarWithIndicatorPreview() = ElementPreview {
 internal fun HomeTopBarWithStatusPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
+        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(
             aMatrixUser(
                 id = "@id:domain",
@@ -494,6 +531,8 @@ internal fun HomeTopBarWithStatusPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
+        onCreateRoomClick = {},
+        onCreateSpaceClick = {},
     )
 }
 
@@ -502,6 +541,7 @@ internal fun HomeTopBarWithStatusPreview() = ElementPreview {
 internal fun HomeTopBarMultiAccountPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
+        applicationName = "Matcha",
         currentUserAndNeighbors = aMatrixUserList().take(3).toImmutableList(),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -514,5 +554,7 @@ internal fun HomeTopBarMultiAccountPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
+        onCreateRoomClick = {},
+        onCreateSpaceClick = {},
     )
 }

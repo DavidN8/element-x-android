@@ -25,6 +25,7 @@ import io.element.android.features.home.impl.roomlist.RoomListState
 import io.element.android.features.home.impl.spaces.HomeSpacesState
 import io.element.android.features.rageshake.api.RageshakeFeatureAvailability
 import io.element.android.libraries.architecture.Presenter
+import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.collectSnackbarMessageAsState
 import io.element.android.libraries.di.annotations.AppCoroutineScope
@@ -53,6 +54,7 @@ class HomePresenter(
     private val sessionStore: SessionStore,
     private val announcementService: AnnouncementService,
     private val featureFlagService: FeatureFlagService,
+    private val buildMeta: BuildMeta,
     @AppCoroutineScope
     private val appCoroutineScope: CoroutineScope,
 ) : Presenter<HomeState> {
@@ -130,6 +132,7 @@ class HomePresenter(
 
         val snackbarMessage by snackbarDispatcher.collectSnackbarMessageAsState()
         return HomeState(
+            applicationName = buildMeta.applicationName,
             currentUserAndNeighbors = currentUserAndNeighbors,
             showAvatarIndicator = showAvatarIndicator,
             hasNetworkConnection = isOnline,

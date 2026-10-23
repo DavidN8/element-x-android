@@ -54,6 +54,7 @@ open class HomeStatePreviewParam : PreviewParameterProvider<HomeState> {
 }
 
 internal fun aHomeState(
+    applicationName: String = "Matcha",
     matrixUser: MatrixUser = MatrixUser(userId = UserId("@id:domain"), displayName = "User#1"),
     currentUserAndNeighbors: List<MatrixUser> = listOf(matrixUser),
     showAvatarIndicator: Boolean = false,
@@ -67,6 +68,7 @@ internal fun aHomeState(
     totalUnreadCount: Int = 0,
     eventSink: (HomeEvent) -> Unit = {}
 ) = HomeState(
+    applicationName = applicationName,
     currentUserAndNeighbors = currentUserAndNeighbors.toImmutableList(),
     showAvatarIndicator = showAvatarIndicator,
     hasNetworkConnection = hasNetworkConnection,

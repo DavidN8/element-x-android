@@ -202,6 +202,7 @@ private fun HomeScaffold(
         topBar = {
             HomeTopBar(
                 selectedNavigationItem = state.currentHomeNavigationBarItem,
+                applicationName = state.applicationName,
                 currentUserAndNeighbors = state.currentUserAndNeighbors,
                 showAvatarIndicator = state.showAvatarIndicator,
                 areSearchResultsDisplayed = if (roomListState.globalSearchState.isEnabled) {
@@ -217,6 +218,8 @@ private fun HomeScaffold(
                     }
                 },
                 onMenuActionClick = onMenuActionClick,
+                onCreateRoomClick = onStartChatClick,
+                onCreateSpaceClick = onCreateSpaceClick,
                 onOpenSettings = onOpenSettings,
                 onAccountSwitch = { sessionId ->
                     // The user has switched account by swiping their avatar, so they know the gesture.
