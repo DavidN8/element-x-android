@@ -65,7 +65,7 @@ class ThreadMetadataProtocolTest {
         val restored = ThreadMetadataProtocol.resolve(root, "Body", listOf(ThreadMetadataPatch(name = null, archived = false)))
         assertThat(restored.archiveExplicit).isTrue()
         val untouched = ThreadMetadataProtocol.resolve(root, "Body", emptyList())
-        assertThat(untouched).isEqualTo(ThreadMetadata(name = "Body", archived = false, archiveExplicit = false))
+        assertThat(untouched).isEqualTo(ThreadMetadata(name = "Body", archived = false, archiveExplicit = false, nameSource = ThreadNameSource.RootBody))
     }
 
     @Test
@@ -73,6 +73,14 @@ class ThreadMetadataProtocolTest {
         assertThat(ThreadMetadataProtocol.resolve(root, "Body", emptyList(), legacyArchived = true).archived).isTrue()
         val patched = ThreadMetadataProtocol.resolve(root, "Body", listOf(ThreadMetadataPatch(null, false)), legacyArchived = true)
         assertThat(patched.archived).isFalse()
+    }
+
+    @Test
+    fun `the name source tells a shared name from a root message and an event id`() {
+        assertThat(ThreadMetadataProtocol.resolve(root, "Body", listOf(ThreadMetadataPatch("Named", null))).nameSource).isEqualTo(ThreadNameSource.Explicit)
+        assertThat(ThreadMetadataProtocol.resolve(root, "Body", emptyList()).nameSource).isEqualTo(ThreadNameSource.RootBody)
+        assertThat(ThreadMetadataProtocol.resolve(root, null, emptyList()).nameSource).isEqualTo(ThreadNameSource.EventId)
+        assertThat(ThreadMetadataProtocol.resolve(root, "  ", emptyList()).nameSource).isEqualTo(ThreadNameSource.EventId)
     }
 
     @Test
