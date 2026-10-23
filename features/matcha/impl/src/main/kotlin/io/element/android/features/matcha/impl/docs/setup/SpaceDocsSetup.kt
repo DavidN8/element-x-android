@@ -19,13 +19,18 @@ import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.powerlevels.use
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /** Whether a space's docs are turned on, and whether this user may turn them on. */
@@ -76,8 +81,17 @@ class SpaceDocsSetup(private val room: JoinedRoom) {
 
     private suspend fun awaitSynced(isDone: suspend () -> Boolean) {
         try {
-            // State changes arrive with syncs, which update the room info.
-            withTimeout(SYNC_TIMEOUT) { room.roomInfoFlow.first { isDone() } }
+            // State changes arrive with syncs. The room info doesn't emit for every state change (power levels don't always), so
+            // the stored state is checked again on each room info update and at least every SYNC_POLL_INTERVAL.
+            withTimeout(SYNC_TIMEOUT) {
+                val ticks = flow {
+                    while (true) {
+                        emit(Unit)
+                        delay(SYNC_POLL_INTERVAL)
+                    }
+                }
+                merge(room.roomInfoFlow.map { }, ticks).first { isDone() }
+            }
         } catch (e: TimeoutCancellationException) {
             throw IllegalStateException("The space state did not sync", e)
         }
@@ -87,6 +101,7 @@ class SpaceDocsSetup(private val room: JoinedRoom) {
         room.getStateEventsJson(type).getOrNull()?.get("")?.let { tryOrNull { Json.parseToJsonElement(it).jsonObject } }
 
     private companion object {
-        val SYNC_TIMEOUT = 10.seconds
+        val SYNC_TIMEOUT = 20.seconds
+        val SYNC_POLL_INTERVAL = 500.milliseconds
     }
 }

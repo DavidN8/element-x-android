@@ -17,6 +17,8 @@ import io.element.android.libraries.matrix.test.room.aRoomInfo
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.test
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.int
@@ -100,6 +102,25 @@ class SpaceDocsSetupPresenterTest {
             assertThat(plain.sentState).isEmpty()
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `power levels that sync without a room info update still finish the setup`() = runTest {
+        lateinit var fixture: DocsRoomFixture
+        fixture = DocsRoomFixture(
+            items = listOf(aCreateItem()),
+            roomInfo = aRoomInfo(isEncrypted = true, isSpace = true),
+            canSendState = true,
+            stateEvents = mapOf(StateEventType.RoomPowerLevels to powerLevels, StateEventType.RoomEncryption to encryption),
+            sendStateResult = { _, _, content ->
+                backgroundScope.launch {
+                    delay(2_000)
+                    fixture.stateEvents[StateEventType.RoomPowerLevels] = content
+                }
+                Result.success(EventId("\$pl"))
+            },
+        )
+        assertThat(SpaceDocsSetup(fixture.room).turnOn().isSuccess).isTrue()
     }
 
     @Test

@@ -384,9 +384,8 @@ class MatchaRoomStore(
     private suspend fun readInitialHistory(timeline: Timeline) {
         repeat(INITIAL_HISTORY_PAGES) {
             if (!timeline.backwardPaginationStatus.value.hasMoreToLoad) return
-            val result = historyMutex.withLock {
-                runCatchingExceptions { timeline.paginate(Timeline.PaginationDirection.BACKWARDS).getOrThrow() }
-            }
+            // Another read may have reached the start while this one waited for the lock; paginateBackwards allows for that.
+            val result = historyMutex.withLock { paginateBackwards(timeline) }
             readFailed.value = result.isFailure
             if (result.isFailure) {
                 Timber.w(result.exceptionOrNull(), "Could not read Matcha history")
