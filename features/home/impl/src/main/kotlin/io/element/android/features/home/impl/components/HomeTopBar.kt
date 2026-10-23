@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -48,6 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -383,7 +383,7 @@ private fun AccountIcon(
         if (reserveStatusEmojiSlot) {
             StatusEmoji(
                 emoji = matrixUser.displayedStatus?.toEmojiText(),
-                modifier = Modifier.offset(x = statusEmojiStartOffset),
+                modifier = Modifier.pullTowardsAvatar(),
             )
         }
     }
@@ -394,6 +394,18 @@ private val statusEmojiSize = 20.dp
 // The avatar is centered inside a 48dp touch target, so there is already 8dp of free space
 // on its trailing side. Compensate it to end up with a 4dp gap after the avatar itself.
 private val statusEmojiStartOffset = 4.dp - (48.dp - AvatarSize.CurrentUserTopBar.dp) / 2
+
+/**
+ * Moves the status emoji by [statusEmojiStartOffset] and gives the space back to the layout, so that the overflow
+ * button that follows the avatar in the top bar actions does not get an extra gap.
+ */
+private fun Modifier.pullTowardsAvatar() = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val offset = statusEmojiStartOffset.roundToPx()
+    layout((placeable.width + offset).coerceAtLeast(0), placeable.height) {
+        placeable.placeRelative(offset, 0)
+    }
+}
 
 @Composable
 private fun StatusEmoji(
