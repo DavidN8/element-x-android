@@ -32,7 +32,6 @@ import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.matrix.api.core.EventId
-import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.core.asEventId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.JoinedRoom
@@ -68,7 +67,7 @@ class RoomReminderPresenter(
         fun create(target: MatchaReminderTarget): RoomReminderPresenter
     }
 
-    private val botUserId = UserId(MatchaConfig.REMINDER_BOT_USER_ID)
+    private val botUserId = MatchaConfig.reminderBotUserId(room.sessionId)
 
     @Composable
     override fun present(): RoomReminderState {
@@ -200,6 +199,7 @@ class RoomReminderPresenter(
         }
 
         return RoomReminderState(
+            botUserId = botUserId,
             message = message,
             link = when {
                 linkUrl == null -> null

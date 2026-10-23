@@ -8,12 +8,15 @@
 package io.element.android.features.matcha.impl.reminders
 
 import androidx.compose.runtime.Immutable
+import io.element.android.libraries.matrix.api.core.UserId
 import kotlinx.collections.immutable.ImmutableList
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZonedDateTime
 
 data class RoomReminderState(
+    /** The reminder bot of the user's homeserver. */
+    val botUserId: UserId,
     val message: String,
     /** What the link appended to the reminder points at, or null when no link is added. */
     val link: RoomReminderLink?,

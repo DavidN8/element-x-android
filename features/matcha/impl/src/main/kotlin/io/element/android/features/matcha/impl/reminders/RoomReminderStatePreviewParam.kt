@@ -9,6 +9,7 @@ package io.element.android.features.matcha.impl.reminders
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.libraries.matrix.api.core.UserId
 import kotlinx.collections.immutable.toImmutableList
 import java.time.LocalDate
 import java.time.LocalTime
@@ -73,6 +74,7 @@ internal fun aRoomReminderState(
     customError: RoomReminderError? = null,
     eventSink: (RoomReminderEvent) -> Unit = {},
 ) = RoomReminderState(
+    botUserId = UserId("@matcha-reminder:matrix.org"),
     message = message,
     link = link,
     maxMessageLength = MatchaConfig.REMINDER_MESSAGE_MAX_LENGTH - if (link != null) 60 else 0,

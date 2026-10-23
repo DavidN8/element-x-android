@@ -65,6 +65,15 @@ class TimelineReadStatesTest {
     }
 
     @Test
+    fun `the reminder bot of another homeserver is waited for like any member`() {
+        val otherServerBot = UserId("@matcha-reminder:other.org")
+        val members = listOf(aRoomMember(me), aRoomMember(alice), aRoomMember(otherServerBot))
+        val items = listOf(anEvent(isMine = true, readers = listOf(alice)))
+        val result = items.withReadStates(members).filterIsInstance<TimelineItem.Event>()
+        assertThat(result.single().isReadByOthers).isFalse()
+    }
+
+    @Test
     fun `a room with nobody else, or with more members than the cap, never shows read`() {
         val alone = listOf(anEvent(isMine = true, readers = listOf(alice)))
             .withReadStates(listOf(aRoomMember(me)))

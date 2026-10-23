@@ -7,6 +7,8 @@
 
 package io.element.android.appconfig
 
+import io.element.android.libraries.matrix.api.core.UserId
+
 /**
  * Matcha workspace features (named threads, task boards, reminders, documents), shared with the Matcha web client.
  * The event types and limits are a wire protocol: they must stay identical to the web client's.
@@ -41,8 +43,11 @@ object MatchaConfig {
     /** State event types the Matcha features read. */
     val STATE_EVENT_TYPES = setOf(STATE_KANBAN, STATE_THREAD_ARCHIVE)
 
-    /** The bot that schedules and delivers reminders sent as `!remind` commands, or null to hide reminders. */
-    const val REMINDER_BOT_USER_ID: String = "@matcha-reminder:matchahoneylatte.com"
+    /** The localpart of the bot that schedules and delivers reminders sent as `!remind` commands; each homeserver runs its own. */
+    const val REMINDER_BOT_LOCALPART = "matcha-reminder"
+
+    /** The reminder bot of the homeserver of [sessionId]: `@matcha-reminder:<server name>`. */
+    fun reminderBotUserId(sessionId: UserId): UserId = UserId("@$REMINDER_BOT_LOCALPART:${sessionId.value.substringAfter(':')}")
 
     const val THREAD_NAME_MAX_LENGTH = 100
     const val CARD_TITLE_MAX_LENGTH = 200

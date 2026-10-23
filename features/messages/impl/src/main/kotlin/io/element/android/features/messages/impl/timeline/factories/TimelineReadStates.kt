@@ -7,6 +7,7 @@
 
 package io.element.android.features.messages.impl.timeline.factories
 
+import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStateContent
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemReadMarkerModel
@@ -16,10 +17,6 @@ import io.element.android.libraries.matrix.api.room.RoomMembershipState
 
 /** Rooms with more joined members than this never show the read tick: it stops at "sent". */
 internal const val MAX_MEMBERS_FOR_READ_TICK = 32
-
-// ponytail: the Matcha reminder bot sends no read receipts, so it must not count as a reader. Its user ID is built per homeserver by the
-// Matcha feature; matching the localpart here avoids a dependency on it. Service members (MSC4171) are excluded for the same reason.
-private const val MATCHA_REMINDER_BOT_LOCALPART = "matcha-reminder"
 
 /**
  * Fills in what can only be known from the whole timeline, in one pass from the newest item to the oldest:
@@ -60,11 +57,14 @@ internal fun List<TimelineItem>.withReadStates(roomMembers: List<RoomMember>): L
     }
 }
 
+/** The joined members who must have read a message for it to show as read; bots send no read receipts, so they are left out. */
 private fun List<RoomMember>.requiredReaders(currentUserId: UserId?): Set<String> {
     if (currentUserId == null) return emptySet()
+    // The Matcha reminder bot of the user's homeserver, and service members (MSC4171).
+    val reminderBotId = MatchaConfig.reminderBotUserId(currentUserId)
     return asSequence()
         .filter { it.membership == RoomMembershipState.JOIN }
-        .filter { it.userId != currentUserId && !it.isServiceMember && it.userId.extractedDisplayName != MATCHA_REMINDER_BOT_LOCALPART }
+        .filter { it.userId != currentUserId && !it.isServiceMember && it.userId != reminderBotId }
         .map { it.userId.value }
         .toSet()
 }

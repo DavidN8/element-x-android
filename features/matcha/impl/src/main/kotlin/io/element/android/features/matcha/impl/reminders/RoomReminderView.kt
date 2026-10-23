@@ -76,6 +76,7 @@ import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TextField
 import io.element.android.libraries.designsystem.theme.components.TextFieldValidity
 import io.element.android.libraries.designsystem.theme.components.hide
+import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.ui.strings.CommonStrings
 import java.text.NumberFormat
 import java.time.Instant
@@ -150,6 +151,7 @@ private fun RoomReminderContent(
         when {
             botState is RoomReminderBotState.CanInvite -> InviteBotStep(
                 botState = botState,
+                botUserId = state.botUserId,
                 onInvite = { state.eventSink(RoomReminderEvent.InviteBot) },
                 onCancel = onClose
             )
@@ -312,11 +314,12 @@ private fun WaitingForBot(isChecking: Boolean, onRetry: () -> Unit) {
 @Composable
 private fun InviteBotStep(
     botState: RoomReminderBotState.CanInvite,
+    botUserId: UserId,
     onInvite: () -> Unit,
     onCancel: () -> Unit,
 ) {
     Column {
-        InfoText(stringResource(R.string.screen_matcha_reminder_bot_invite_body, MatchaConfig.REMINDER_BOT_USER_ID))
+        InfoText(stringResource(R.string.screen_matcha_reminder_bot_invite_body, botUserId.value))
         if (botState.hasFailed) ErrorLine(stringResource(R.string.screen_matcha_reminder_bot_invite_error))
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),

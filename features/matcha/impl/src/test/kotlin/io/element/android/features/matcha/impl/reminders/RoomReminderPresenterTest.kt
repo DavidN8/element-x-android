@@ -68,7 +68,9 @@ class RoomReminderPresenterTest {
     private val messageId = EventId("\$message")
     private val threadId = ThreadId("\$thread")
     private val link = "https://matrix.to/#/!room:x/\$message"
-    private val botId = UserId(MatchaConfig.REMINDER_BOT_USER_ID)
+
+    /** The bot of the session's homeserver, A_SESSION_ID being on server.org. */
+    private val botId = UserId("@matcha-reminder:server.org")
     private val boardRoot = "\$board"
     private val cardId = "card-1"
 
