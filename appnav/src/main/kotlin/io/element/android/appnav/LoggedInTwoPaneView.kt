@@ -16,15 +16,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import io.element.android.appnav.twopane.NoRoomSelectedView
 import io.element.android.libraries.architecture.appyx.SafeChildren
-import io.element.android.libraries.designsystem.theme.components.ElementDividerDefaults
 
 // Room list / detail split, Material list-detail proportions.
 private const val LIST_PANE_WEIGHT = 2f
 private const val DETAIL_PANE_WEIGHT = 3f
+private val LIST_PANE_SHADOW_WIDTH = 12.dp
+private val LIST_PANE_SHADOW_COLOR = Color.Black.copy(alpha = 0.35f)
 
 /**
  * Two-pane rendering of [LoggedInFlowNode] for wide windows (tablets, unfolded foldables): the Home node
@@ -52,12 +56,6 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
         }
         Box(
             modifier = Modifier
-                .fillMaxHeight()
-                .width(ElementDividerDefaults.thickness)
-                .background(ElementDividerDefaults.color),
-        )
-        Box(
-            modifier = Modifier
                 .weight(DETAIL_PANE_WEIGHT)
                 .fillMaxHeight(),
         ) {
@@ -77,6 +75,13 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
                     }
                 }
             }
+            // Shadow cast by the list pane, drawn by hand: an elevation shadow is invisible on dark backgrounds.
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(LIST_PANE_SHADOW_WIDTH)
+                    .background(Brush.horizontalGradient(listOf(LIST_PANE_SHADOW_COLOR, Color.Transparent))),
+            )
         }
     }
 }
