@@ -21,7 +21,9 @@ import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
+import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemDebugInfoProvider
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
@@ -57,13 +59,13 @@ class MatchaRoomStoreTest {
     private fun event(index: Int, type: String, content: String) =
         item(index, """{"type": "$type", "event_id": "${'$'}e$index", "sender": "@bob:x", "origin_server_ts": $index, "content": $content}""")
 
-    private fun threadItem(id: String, body: String) = ThreadListItem(
+    private fun threadItem(id: String, body: String, content: EventContent = aMessageContent(body = body)) = ThreadListItem(
         rootEvent = ThreadListItemEvent(
             eventId = EventId(id),
             senderId = UserId("@bob:x"),
             senderProfile = ProfileDetails.Unavailable,
             isOwn = false,
-            content = aMessageContent(body = body),
+            content = content,
             timestamp = 10,
         ),
         latestEvent = null,
@@ -132,6 +134,20 @@ class MatchaRoomStoreTest {
         assertThat(snapshot.board?.cards?.map { it.title }).containsExactly("Standalone", "Renamed").inOrder()
         assertThat(snapshot.board?.cards?.last()?.status).isEqualTo(TaskStatus.Doing)
         assertThat(snapshot.permissions.canCreateBoard).isTrue()
+    }
+
+    @Test
+    fun `a thread whose root cannot be decrypted is flagged and keeps its root timestamp`() = runTest {
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            items = emptyList(),
+            threads = listOf(threadItem(thread, "", content = UnableToDecryptContent(UnableToDecryptContent.Data.Unknown, threadInfo = null))),
+        )
+        settle()
+        val matchaThread = store.snapshot.value.threads.single()
+        assertThat(matchaThread.isRootUnreadable).isTrue()
+        assertThat(matchaThread.rootTimestamp).isEqualTo(10)
+        assertThat(matchaThread.metadata.name).isEqualTo(thread)
     }
 
     @Test

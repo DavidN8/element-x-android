@@ -32,6 +32,7 @@ import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.EventTimelineItem
 import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
+import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -60,6 +61,10 @@ data class MatchaThread(
     val numberOfReplies: Long,
     /** Timestamp of the latest event in the thread, for ordering. */
     val lastActivityTimestamp: Long,
+    /** Timestamp of the thread root, 0 when unknown; the chip bar orders threads by it. */
+    val rootTimestamp: Long = 0,
+    /** True when the root message could not be decrypted on this device, so a name taken from it is missing. */
+    val isRootUnreadable: Boolean = false,
 )
 
 /** A room's board, if it has one. */
@@ -273,6 +278,8 @@ class MatchaRoomStore(
                 rootBody = rootBody,
                 numberOfReplies = item?.numberOfReplies ?: 0,
                 lastActivityTimestamp = item?.let { it.latestEvent?.timestamp ?: it.rootEvent.timestamp } ?: 0,
+                rootTimestamp = item?.rootEvent?.timestamp ?: 0,
+                isRootUnreadable = item?.rootEvent?.content is UnableToDecryptContent,
             )
         }.sortedByDescending { it.lastActivityTimestamp }
 
