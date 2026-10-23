@@ -395,7 +395,7 @@ private fun EmptyViewForFilterStates(
         bottomPart = {
             Spacer(modifier = Modifier.height(16.dp))
             TextButton(
-                text = stringResource(R.string.screen_matcha_roomlist_view_all_chats),
+                text = stringResource(R.string.screen_matcha_home_view_all_chats),
                 onClick = onViewAllChatsClick,
             )
             // Keep a spacer so that the content is not too low on the screen

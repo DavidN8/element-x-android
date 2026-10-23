@@ -21,6 +21,7 @@ import io.element.android.features.home.impl.spacefilters.SpaceFiltersEvent
 import io.element.android.features.home.impl.spacefilters.SpaceFiltersState
 import io.element.android.features.home.impl.spacefilters.aSelectedSpaceFiltersState
 import io.element.android.features.home.impl.spacefilters.anUnselectedSpaceFiltersState
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.EventsRecorder
 import io.element.android.tests.testutils.clickOn
 import io.element.android.tests.testutils.robolectric.RobolectricTest
@@ -57,7 +58,7 @@ class RoomListFiltersViewTest : RobolectricTest() {
                 spaceFiltersState = SpaceFiltersState.Disabled,
             )
         }
-        clickOn(R.string.screen_matcha_roomlist_filter_all)
+        clickOn(CommonStrings.common_matcha_all)
         eventsRecorder.assertList(
             listOf(
                 RoomListFiltersEvent.ClearSelectedFilters,

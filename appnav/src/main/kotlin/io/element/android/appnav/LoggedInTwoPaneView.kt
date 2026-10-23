@@ -18,17 +18,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import io.element.android.appnav.twopane.NoRoomSelectedView
 import io.element.android.compound.theme.ElementTheme
+import io.element.android.features.home.api.HomeTab
 import io.element.android.libraries.architecture.appyx.SafeChildren
 import io.element.android.libraries.designsystem.theme.components.ElementDividerDefaults
 import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 
-// WhatsApp's side panel width: the list keeps a phone-like width and the chat takes the rest, so it is never narrower than a phone.
-private val LIST_PANE_WIDTH = 360.dp
+// Room list / detail split, Material list-detail proportions (40/60).
+private const val LIST_PANE_WEIGHT = 2f
+private const val DETAIL_PANE_WEIGHT = 3f
 
 /**
  * Two-pane rendering of [LoggedInFlowNode] for wide windows (tablets, unfolded foldables): the Home node
@@ -37,10 +38,13 @@ private val LIST_PANE_WIDTH = 360.dp
  * The nav model is untouched: this only changes how the existing backstack is drawn, so phone
  * behaviour is unchanged. While another element is active the Home node is stashed (lifecycle CREATED),
  * so back presses go to the detail pane first and Home's own back handlers only resume once it is active again.
+ *
+ * @param homeTab the tab selected in Home, which picks the message shown in the detail pane while nothing is open.
  */
 @Composable
 internal fun LoggedInFlowNode.LoggedInTwoPaneView(
     homeElement: BackStackElement<LoggedInFlowNode.NavTarget>,
+    homeTab: HomeTab,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier = modifier) {
@@ -49,20 +53,20 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
         val homeNode = remember(homeElement.key.id) { childOrCreate(homeElement.key).node }
         Box(
             modifier = Modifier
-                .width(LIST_PANE_WIDTH)
+                .weight(LIST_PANE_WEIGHT)
                 .fillMaxHeight(),
         ) {
             homeNode.Compose()
         }
         Box(
             modifier = Modifier
-                .weight(1f)
+                .weight(DETAIL_PANE_WEIGHT)
                 .fillMaxHeight(),
         ) {
             // The screens of this pane continue the list pane's header band in their top bars.
             CompositionLocalProvider(LocalIsInDetailPane provides true) {
                 if (homeElement.targetState == BackStack.State.ACTIVE) {
-                    NoRoomSelectedView()
+                    NoRoomSelectedView(tab = homeTab)
                 }
                 // No transition: the phone slide animation would sweep across the whole pane on every room switch.
                 SafeChildren(

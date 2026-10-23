@@ -255,7 +255,6 @@ private fun HomeScaffold(
         topBar = {
             HomeTopBar(
                 selectedNavigationItem = state.currentHomeNavigationBarItem,
-                applicationName = state.applicationName,
                 currentUserAndNeighbors = state.currentUserAndNeighbors,
                 showAvatarIndicator = state.showAvatarIndicator,
                 areSearchResultsDisplayed = if (roomListState.globalSearchState.isEnabled) {
@@ -271,8 +270,6 @@ private fun HomeScaffold(
                     }
                 },
                 onMenuActionClick = onMenuActionClick,
-                onCreateRoomClick = onStartChatClick,
-                onCreateSpaceClick = onCreateSpaceClick,
                 onOpenSettings = onOpenSettings,
                 onAccountSwitch = { sessionId ->
                     // The user has switched account by swiping their avatar, so they know the gesture.
@@ -374,20 +371,14 @@ private fun HomeBottomBar(
     modifier: Modifier = Modifier,
 ) {
     NavigationBar(modifier = modifier) {
-        HomeNavigationBarItem.entries.forEach { item ->
+        HomeNavigationBarItem.barOrder.forEach { item ->
             val isSelected = currentHomeNavigationBarItem == item
             // Only Chats has a badge: the unread count
             val count = if (item == HomeNavigationBarItem.Chats) totalUnreadCount else 0
             NavigationBarItem(
                 selected = isSelected,
                 onClick = { onItemClick(item) },
-                icon = {
-                    if (count > 0) {
-                        NavigationBarIcon(imageVector = item.icon(isSelected), count = count)
-                    } else {
-                        Icon(imageVector = item.icon(isSelected), contentDescription = null)
-                    }
-                },
+                icon = { NavigationBarIcon(imageVector = item.icon(isSelected), count = count) },
                 label = { NavigationBarText(text = stringResource(item.labelRes)) },
             )
         }

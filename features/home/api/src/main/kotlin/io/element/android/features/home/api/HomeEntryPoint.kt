@@ -35,5 +35,8 @@ interface HomeEntryPoint : FeatureEntryPoint {
         fun navigateToBugReport()
         fun navigateToAddAccount()
         fun navigateToSession(sessionId: SessionId)
+
+        /** Called with the selected tab, once Home is shown and each time the user switches tabs. */
+        fun onTabSelected(tab: HomeTab)
     }
 }

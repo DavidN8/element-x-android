@@ -36,6 +36,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,7 +91,13 @@ internal fun RoomSummaryRow(
     showAllActivity: Boolean = false,
     eventSink: (RoomListEvent) -> Unit,
 ) {
-    val background = if (isSelected) Modifier.background(ElementTheme.colors.rowSelected) else Modifier
+    val background = if (isSelected) {
+        Modifier
+            .background(ElementTheme.colors.rowSelected)
+            .semantics { selected = true }
+    } else {
+        Modifier
+    }
     Box(modifier = modifier.then(background)) {
         when (room.displayType) {
             RoomSummaryDisplayType.PLACEHOLDER -> {

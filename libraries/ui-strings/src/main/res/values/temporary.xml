@@ -13,4 +13,21 @@
     <string name="common_switch_account">Switch accounts</string>
     <string name="common_no_room_selected">Select a chat to start messaging</string>
     <string name="common_no_chat_selected">No chat selected</string>
+    <string name="common_matcha_all">All</string>
+    <plurals name="common_matcha_member_count">
+        <item quantity="one">%1$d member</item>
+        <item quantity="other">%1$d members</item>
+    </plurals>
+    <plurals name="common_matcha_room_count">
+        <item quantity="one">%1$d room</item>
+        <item quantity="other">%1$d rooms</item>
+    </plurals>
+    <plurals name="common_matcha_space_rooms">
+        <item quantity="one">Space · %1$d room</item>
+        <item quantity="other">Space · %1$d rooms</item>
+    </plurals>
+    <string name="common_matcha_no_task_selected">No task selected</string>
+    <string name="common_matcha_select_task">Select a task to open its thread</string>
+    <string name="common_matcha_no_space_selected">No space selected</string>
+    <string name="common_matcha_select_space">Select a space to see its rooms</string>
 </resources>

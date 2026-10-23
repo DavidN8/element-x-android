@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.bumble.appyx.core.composable.PermanentChild
@@ -57,6 +59,7 @@ import io.element.android.features.ftue.api.FtueEntryPoint
 import io.element.android.features.ftue.api.state.FtueService
 import io.element.android.features.ftue.api.state.FtueState
 import io.element.android.features.home.api.HomeEntryPoint
+import io.element.android.features.home.api.HomeTab
 import io.element.android.features.linknewdevice.api.LinkNewDeviceEntryPoint
 import io.element.android.features.location.api.LocalMapTilerConfig
 import io.element.android.features.location.api.LocationService
@@ -177,6 +180,9 @@ class LoggedInFlowNode(
     }
 
     private val callback: Callback = callback()
+
+    // The tab selected in Home: in the two-pane layout, it picks the message of the empty detail pane.
+    private var homeTab by mutableStateOf(HomeTab.Chats)
     private val loggedInFlowProcessor = loggedInEventProcessorFactory.create(snackbarDispatcher)
 
     /**
@@ -373,6 +379,10 @@ class LoggedInFlowNode(
 
                     override fun navigateToSession(sessionId: SessionId) {
                         callback.navigateToSession(sessionId)
+                    }
+
+                    override fun onTabSelected(tab: HomeTab) {
+                        homeTab = tab
                     }
                 }
                 homeEntryPoint.createNode(
@@ -685,7 +695,7 @@ class LoggedInFlowNode(
                                 element.key.navTarget == NavTarget.Home && element.targetState != DESTROYED
                             }
                             if (isTwoPane && homeElement != null) {
-                                LoggedInTwoPaneView(homeElement = homeElement)
+                                LoggedInTwoPaneView(homeElement = homeElement, homeTab = homeTab)
                             } else {
                                 BackstackView(transitionHandler = rememberLoggedInFlowTransitionHandler(backstack))
                             }

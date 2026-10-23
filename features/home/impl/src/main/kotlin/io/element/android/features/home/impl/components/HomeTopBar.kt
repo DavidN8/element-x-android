@@ -76,6 +76,7 @@ import io.element.android.libraries.designsystem.modifiers.backgroundVerticalGra
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.preview.USER_NAME_ALICE
+import io.element.android.libraries.designsystem.text.AdaptativeTitle
 import io.element.android.libraries.designsystem.theme.aliasAppTitle
 import io.element.android.libraries.designsystem.theme.components.DropdownMenu
 import io.element.android.libraries.designsystem.theme.components.DropdownMenuItem
@@ -103,14 +104,11 @@ import kotlinx.coroutines.flow.filter
 @Composable
 fun HomeTopBar(
     selectedNavigationItem: HomeNavigationBarItem,
-    applicationName: String,
     currentUserAndNeighbors: ImmutableList<MatrixUser>,
     showAvatarIndicator: Boolean,
     areSearchResultsDisplayed: Boolean,
     onToggleSearch: () -> Unit,
     onMenuActionClick: (RoomListMenuAction) -> Unit,
-    onCreateRoomClick: () -> Unit,
-    onCreateSpaceClick: () -> Unit,
     onOpenSettings: () -> Unit,
     onAccountSwitch: (SessionId) -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
@@ -134,15 +132,9 @@ fun HomeTopBar(
                 scrolledContainerColor = Color.Transparent,
             ),
             title = {
-                // Chats shows the app name, the other tabs their own name. Plain text, never a wordmark.
-                val isChats = selectedNavigationItem == HomeNavigationBarItem.Chats
-                Text(
-                    text = if (isChats) applicationName else stringResource(selectedNavigationItem.labelRes),
-                    style = ElementTheme.typography.aliasAppTitle,
-                    color = if (isChats && ElementTheme.isLightTheme) ElementTheme.colors.textActionAccent else ElementTheme.colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { heading() },
+                HomeTopBarTitle(
+                    selectedNavigationItem = selectedNavigationItem,
+                    spaceFiltersState = spaceFiltersState,
                 )
             },
             actions = {
@@ -154,9 +146,6 @@ fun HomeTopBar(
                 )
                 OverflowMenu(
                     onMenuActionClick = onMenuActionClick,
-                    onCreateRoomClick = onCreateRoomClick,
-                    onCreateSpaceClick = onCreateSpaceClick,
-                    onOpenSettings = onOpenSettings,
                     canReportBug = canReportBug,
                 )
             },
@@ -175,6 +164,33 @@ fun HomeTopBar(
                 }
             }
         }
+    }
+}
+
+/**
+ * Chats shows the product name, or the name of the selected space; the other tabs show their own name. Plain text, never a wordmark.
+ */
+@Composable
+private fun HomeTopBarTitle(
+    selectedNavigationItem: HomeNavigationBarItem,
+    spaceFiltersState: SpaceFiltersState,
+) {
+    val isChats = selectedNavigationItem == HomeNavigationBarItem.Chats
+    if (isChats && spaceFiltersState is SpaceFiltersState.Selected) {
+        AdaptativeTitle(
+            title = spaceFiltersState.selectedFilter.spaceRoom.displayName,
+            style = ElementTheme.typography.fontHeadingSmMedium,
+            twoLinesStyle = ElementTheme.typography.fontHeadingSmMedium,
+        )
+    } else {
+        Text(
+            text = stringResource(if (isChats) R.string.screen_matcha_home_product_name else selectedNavigationItem.labelRes),
+            style = ElementTheme.typography.aliasAppTitle,
+            color = if (isChats && ElementTheme.isLightTheme) ElementTheme.colors.textActionAccent else ElementTheme.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() },
+        )
     }
 }
 
@@ -219,9 +235,6 @@ private fun SearchPill(
 @Composable
 private fun OverflowMenu(
     onMenuActionClick: (RoomListMenuAction) -> Unit,
-    onCreateRoomClick: () -> Unit,
-    onCreateSpaceClick: () -> Unit,
-    onOpenSettings: () -> Unit,
     canReportBug: Boolean,
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -238,34 +251,26 @@ private fun OverflowMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
-            fun onItemClick(action: () -> Unit) {
-                showMenu = false
-                action()
+            val items = buildList {
+                add(RoomListMenuAction.CreateRoom to CommonStrings.action_create_room)
+                add(RoomListMenuAction.CreateSpace to CommonStrings.action_create_space)
+                add(RoomListMenuAction.Settings to CommonStrings.action_open_settings)
+                if (RoomListConfig.SHOW_INVITE_MENU_ITEM) {
+                    add(RoomListMenuAction.InviteFriends to CommonStrings.action_invite)
+                }
+                if (RoomListConfig.SHOW_REPORT_PROBLEM_MENU_ITEM && canReportBug) {
+                    add(RoomListMenuAction.ReportBug to CommonStrings.common_report_a_problem)
+                }
             }
-            DropdownMenuItem(
-                onClick = { onItemClick(onCreateRoomClick) },
-                text = { Text(stringResource(id = CommonStrings.action_create_room)) },
-            )
-            DropdownMenuItem(
-                onClick = { onItemClick(onCreateSpaceClick) },
-                text = { Text(stringResource(id = CommonStrings.action_create_space)) },
-            )
-            if (RoomListConfig.SHOW_INVITE_MENU_ITEM) {
+            items.forEach { (action, titleRes) ->
                 DropdownMenuItem(
-                    onClick = { onItemClick { onMenuActionClick(RoomListMenuAction.InviteFriends) } },
-                    text = { Text(stringResource(id = CommonStrings.action_invite)) },
+                    onClick = {
+                        showMenu = false
+                        onMenuActionClick(action)
+                    },
+                    text = { Text(stringResource(id = titleRes)) },
                 )
             }
-            if (RoomListConfig.SHOW_REPORT_PROBLEM_MENU_ITEM && canReportBug) {
-                DropdownMenuItem(
-                    onClick = { onItemClick { onMenuActionClick(RoomListMenuAction.ReportBug) } },
-                    text = { Text(stringResource(id = CommonStrings.common_report_a_problem)) },
-                )
-            }
-            DropdownMenuItem(
-                onClick = { onItemClick(onOpenSettings) },
-                text = { Text(stringResource(id = CommonStrings.action_open_settings)) },
-            )
         }
     }
 }
@@ -420,7 +425,6 @@ private fun StatusEmoji(
 internal fun HomeTopBarPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
-        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -433,8 +437,6 @@ internal fun HomeTopBarPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
-        onCreateRoomClick = {},
-        onCreateSpaceClick = {},
     )
 }
 
@@ -443,7 +445,6 @@ internal fun HomeTopBarPreview() = ElementPreview {
 internal fun HomeTopBarSpaceFiltersSelectedPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
-        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -456,8 +457,6 @@ internal fun HomeTopBarSpaceFiltersSelectedPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = aSelectedSpaceFiltersState(),
         onMenuActionClick = {},
-        onCreateRoomClick = {},
-        onCreateSpaceClick = {},
     )
 }
 
@@ -466,7 +465,6 @@ internal fun HomeTopBarSpaceFiltersSelectedPreview() = ElementPreview {
 internal fun HomeTopBarSpacesPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Spaces,
-        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -479,8 +477,6 @@ internal fun HomeTopBarSpacesPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
-        onCreateRoomClick = {},
-        onCreateSpaceClick = {},
     )
 }
 
@@ -489,7 +485,6 @@ internal fun HomeTopBarSpacesPreview() = ElementPreview {
 internal fun HomeTopBarWithIndicatorPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
-        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(aMatrixUser(id = "@id:domain", displayName = USER_NAME_ALICE)),
         showAvatarIndicator = true,
         areSearchResultsDisplayed = false,
@@ -502,8 +497,6 @@ internal fun HomeTopBarWithIndicatorPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
-        onCreateRoomClick = {},
-        onCreateSpaceClick = {},
     )
 }
 
@@ -512,7 +505,6 @@ internal fun HomeTopBarWithIndicatorPreview() = ElementPreview {
 internal fun HomeTopBarWithStatusPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
-        applicationName = "Matcha",
         currentUserAndNeighbors = persistentListOf(
             aMatrixUser(
                 id = "@id:domain",
@@ -531,8 +523,6 @@ internal fun HomeTopBarWithStatusPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
-        onCreateRoomClick = {},
-        onCreateSpaceClick = {},
     )
 }
 
@@ -541,7 +531,6 @@ internal fun HomeTopBarWithStatusPreview() = ElementPreview {
 internal fun HomeTopBarMultiAccountPreview() = ElementPreview {
     HomeTopBar(
         selectedNavigationItem = HomeNavigationBarItem.Chats,
-        applicationName = "Matcha",
         currentUserAndNeighbors = aMatrixUserList().take(3).toImmutableList(),
         showAvatarIndicator = false,
         areSearchResultsDisplayed = false,
@@ -554,7 +543,5 @@ internal fun HomeTopBarMultiAccountPreview() = ElementPreview {
         filtersState = aRoomListFiltersState(),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         onMenuActionClick = {},
-        onCreateRoomClick = {},
-        onCreateSpaceClick = {},
     )
 }

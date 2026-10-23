@@ -11,6 +11,7 @@ package io.element.android.features.home.impl
 import com.bumble.appyx.core.modality.BuildContext
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.home.api.HomeEntryPoint
+import io.element.android.features.home.api.HomeTab
 import io.element.android.features.invite.test.declineandblock.FakeDeclineInviteAndBlockEntryPoint
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
@@ -55,6 +56,7 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
             override fun navigateToBugReport() = lambdaError()
             override fun navigateToAddAccount() = lambdaError()
             override fun navigateToSession(sessionId: SessionId) = lambdaError()
+            override fun onTabSelected(tab: HomeTab) = lambdaError()
         }
         val result = entryPoint.createNode(
             parentNode = parentNode,

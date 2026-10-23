@@ -8,7 +8,13 @@
 
 package io.element.android.features.home.impl.components
 
+/**
+ * The items of the Home top bar's overflow menu.
+ */
 enum class RoomListMenuAction {
+    CreateRoom,
+    CreateSpace,
+    Settings,
     InviteFriends,
     ReportBug
 }

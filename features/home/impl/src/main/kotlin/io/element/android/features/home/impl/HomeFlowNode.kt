@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.coroutineScope
+import androidx.lifecycle.lifecycleScope
 import com.bumble.appyx.core.lifecycle.subscribe
 import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.core.node.Node
@@ -62,6 +63,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -105,6 +108,12 @@ class HomeFlowNode(
                 analyticsService.screen(MobileScreen(screenName = MobileScreen.ScreenName.Home))
             }
         )
+        lifecycleScope.launch {
+            stateFlow
+                .map { it.currentHomeNavigationBarItem.homeTab }
+                .distinctUntilChanged()
+                .collect(callback::onTabSelected)
+        }
         whenChildAttached {
             commonLifecycle: Lifecycle,
             changeRoomMemberRolesNode: ChangeRoomMemberRolesEntryPoint.NodeProxy,
@@ -145,6 +154,9 @@ class HomeFlowNode(
 
     private fun onMenuActionClick(activity: Activity, roomListMenuAction: RoomListMenuAction) {
         when (roomListMenuAction) {
+            RoomListMenuAction.CreateRoom -> callback.navigateToCreateRoom()
+            RoomListMenuAction.CreateSpace -> callback.navigateToCreateSpace()
+            RoomListMenuAction.Settings -> callback.navigateToSettings()
             RoomListMenuAction.InviteFriends -> {
                 inviteFriendsUseCase.execute(activity)
             }

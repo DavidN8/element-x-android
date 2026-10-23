@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.tokens.generated.CompoundIcons
@@ -29,6 +31,7 @@ import io.element.android.features.home.impl.spacefilters.anUnselectedSpaceFilte
 import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
  * The WhatsApp-style chips of the chat list: "All", then one chip per [RoomListFilter], single-select,
@@ -42,13 +45,16 @@ fun RoomListFiltersView(
 ) {
     LazyRow(
         contentPadding = PaddingValues(horizontal = 16.dp),
-        modifier = modifier.fillMaxWidth(),
+        // The chips are a single choice, announced as a group of radio buttons
+        modifier = modifier
+            .fillMaxWidth()
+            .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         item("all") {
             PillFilterChip(
-                label = stringResource(R.string.screen_matcha_roomlist_filter_all),
+                label = stringResource(CommonStrings.common_matcha_all),
                 selected = !state.hasAnyFilterSelected,
                 onClick = { state.eventSink(RoomListFiltersEvent.ClearSelectedFilters) },
             )
@@ -77,6 +83,7 @@ private fun SpacesChip(spaceFiltersState: SpaceFiltersState) {
         PillFilterChip(
             label = spaceFiltersState.selectedFilter.spaceRoom.displayName,
             selected = true,
+            role = Role.Button,
             trailingIcon = CompoundIcons.ChevronDown(),
             maxLabelWidth = 160.dp,
             // Tapping the selected chip goes back to all chats, like the other chips.
@@ -87,6 +94,7 @@ private fun SpacesChip(spaceFiltersState: SpaceFiltersState) {
         PillFilterChip(
             label = stringResource(R.string.screen_home_tab_spaces),
             selected = false,
+            role = Role.Button,
             trailingIcon = CompoundIcons.ChevronDown(),
             onClick = {
                 if (spaceFiltersState is SpaceFiltersState.Unselected) {

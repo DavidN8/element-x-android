@@ -19,7 +19,6 @@ import io.element.android.features.home.impl.spaces.HomeSpacesState
 import io.element.android.features.home.impl.spaces.aHomeSpacesState
 import io.element.android.features.rageshake.api.RageshakeFeatureAvailability
 import io.element.android.libraries.architecture.Presenter
-import io.element.android.libraries.core.meta.BuildMeta
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
@@ -34,7 +33,6 @@ import io.element.android.libraries.matrix.test.AN_EXCEPTION
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.A_USER_NAME
 import io.element.android.libraries.matrix.test.FakeMatrixClient
-import io.element.android.libraries.matrix.test.core.aBuildMeta
 import io.element.android.libraries.matrix.test.sync.FakeSyncService
 import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
@@ -316,17 +314,6 @@ class HomePresenterTest {
     }
 
     @Test
-    fun `present - the application name is the Chats title`() = runTest {
-        val presenter = createHomePresenter(
-            buildMeta = aBuildMeta(applicationName = "Matcha"),
-        )
-        presenter.test {
-            assertThat(awaitItem().applicationName).isEqualTo("Matcha")
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    @Test
     fun `present - total unread count is loaded in the initial state`() = runTest {
         val presenter = createHomePresenter(
             client = FakeMatrixClient(totalUnreadCountResult = { Result.success(5) }),
@@ -347,7 +334,6 @@ internal fun TestScope.createHomePresenter(
     sessionStore: SessionStore = InMemorySessionStore(),
     announcementService: AnnouncementService = FakeAnnouncementService(),
     featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
-    buildMeta: BuildMeta = aBuildMeta(),
     appCoroutineScope: CoroutineScope = backgroundScope,
 ) = HomePresenter(
     client = client,
@@ -360,6 +346,5 @@ internal fun TestScope.createHomePresenter(
     sessionStore = sessionStore,
     announcementService = announcementService,
     featureFlagService = featureFlagService,
-    buildMeta = buildMeta,
     appCoroutineScope = appCoroutineScope,
 )
