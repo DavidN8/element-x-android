@@ -349,4 +349,10 @@ interface JoinedRoom : BaseRoom {
      * Custom state types are only stored when the sync requested them, so an empty result does not prove there is none.
      */
     suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>>
+
+    /**
+     * Returns the id of the locally stored state event of a type and state key, or null when none is stored.
+     * The room's `m.room.create` event is always stored for a joined room.
+     */
+    suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?>
 }

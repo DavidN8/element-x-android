@@ -600,6 +600,12 @@ class JoinedRustRoom(
         }
     }
 
+    override suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            innerRoom.stateEvents(eventType.map()).firstOrNull { it.stateKey == stateKey }?.eventId?.let(::EventId)
+        }
+    }
+
     override fun close() = destroy()
 
     override fun destroy() {

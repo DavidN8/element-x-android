@@ -127,4 +127,94 @@
         <item quantity="other">"Couldn't check %1$d chats"</item>
     </plurals>
     <!-- End of track B: Tasks tab. -->
+    <!-- Track C: reminders -->
+    <string name="screen_matcha_reminder_title">Remind me</string>
+    <string name="screen_matcha_reminder_helper">The reminder bot posts it in this chat, so everyone here can see it.</string>
+    <string name="screen_matcha_reminder_message_hint">What to remind you about</string>
+    <string name="screen_matcha_reminder_link_message">A link to the message is added.</string>
+    <string name="screen_matcha_reminder_link_thread">A link to the thread is added.</string>
+    <plurals name="screen_matcha_reminder_in_hours">
+        <item quantity="one">In %1$d hour</item>
+        <item quantity="other">In %1$d hours</item>
+    </plurals>
+    <string name="screen_matcha_reminder_at_deadline">At the deadline</string>
+    <string name="screen_matcha_reminder_custom">Pick date and time</string>
+    <string name="screen_matcha_reminder_date">Date</string>
+    <string name="screen_matcha_reminder_time">Time</string>
+    <string name="screen_matcha_reminder_timezone">Time zone: %1$s (%2$s)</string>
+    <string name="screen_matcha_reminder_today_at">Today %1$s</string>
+    <string name="screen_matcha_reminder_tomorrow_at">Tomorrow %1$s</string>
+    <string name="screen_matcha_reminder_confirm">Set reminder · %1$s</string>
+    <string name="screen_matcha_reminder_set">Set reminder</string>
+    <string name="screen_matcha_reminder_requested">Reminder requested</string>
+    <string name="screen_matcha_reminder_error_empty">Add a message</string>
+    <string name="screen_matcha_reminder_error_past">Pick a time in the future</string>
+    <string name="screen_matcha_reminder_error_too_far">Pick a time within the next year</string>
+    <string name="screen_matcha_reminder_error_dst">That time doesn\'t exist in your time zone</string>
+    <string name="screen_matcha_reminder_error_too_long">Use up to %1$s characters</string>
+    <string name="screen_matcha_reminder_error_send">Couldn\'t request the reminder. Check your connection and try again.</string>
+    <string name="screen_matcha_reminder_bot_invite_title">Add the reminder bot?</string>
+    <string name="screen_matcha_reminder_bot_invite_body">%1$s sends reminders. It joins this chat and can read messages sent after it joins.</string>
+    <string name="screen_matcha_reminder_bot_invite_action">Add bot</string>
+    <string name="screen_matcha_reminder_bot_invite_error">Couldn\'t add the reminder bot. Check your connection and try again.</string>
+    <string name="screen_matcha_reminder_bot_waiting">Waiting for the reminder bot to join…</string>
+    <string name="screen_matcha_reminder_bot_no_permission">Ask an admin to add the reminder bot to this chat.</string>
+    <string name="screen_matcha_reminder_bot_dm_unavailable">Reminders aren\'t available in this chat. Adding the reminder bot would turn it into a group.</string>
+    <string name="screen_matcha_reminder_cannot_send">You can\'t send messages in this chat, so reminders can\'t be posted here.</string>
+    <!-- Track C: space docs -->
+    <!-- Stand-ins for the shared common_matcha_docs, action_matcha_rename, common_matcha_error_name_empty,
+         common_matcha_error_max_chars and common_matcha_write_failed until those land in libraries/ui-strings. -->
+    <string name="screen_matcha_docs_title">Docs</string>
+    <string name="screen_matcha_docs_rename">Rename</string>
+    <string name="screen_matcha_docs_error_name_empty">Enter a name</string>
+    <string name="screen_matcha_docs_error_name_too_long">Use up to %1$s characters</string>
+    <string name="screen_matcha_docs_write_failed">Couldn\'t save. Check your connection and try again.</string>
+    <string name="screen_matcha_docs_main_name">Space notes</string>
+    <string name="screen_matcha_docs_new">New doc</string>
+    <string name="screen_matcha_docs_rename_title">Rename doc</string>
+    <string name="screen_matcha_docs_name_hint">Doc name</string>
+    <string name="screen_matcha_docs_edited">Edited %1$s</string>
+    <string name="screen_matcha_docs_list_empty">Write notes, plans and guides together.</string>
+    <string name="screen_matcha_docs_list_load_error">Couldn\'t load the docs</string>
+    <string name="screen_matcha_docs_list_decrypt_error">Some doc names can\'t be read on this device yet.</string>
+    <string name="screen_matcha_docs_doc_empty">This doc is empty. Tap the pencil to start writing.</string>
+    <string name="screen_matcha_docs_doc_empty_read_only">This doc is empty.</string>
+    <string name="screen_matcha_docs_status_saved">Saved</string>
+    <string name="screen_matcha_docs_status_offline">Offline · not saved yet</string>
+    <string name="screen_matcha_docs_status_failed">Couldn\'t save · tap to retry</string>
+    <string name="screen_matcha_docs_status_view_only">View only</string>
+    <string name="screen_matcha_docs_status_earlier">View only · from this chat</string>
+    <string name="screen_matcha_docs_share_text">Share as text</string>
+    <string name="screen_matcha_docs_offline_strip">You\'re offline. Keep this screen open and your edits will send when you reconnect.</string>
+    <string name="screen_matcha_docs_decrypt_error">Some edits can\'t be decrypted on this device yet. Editing is off until they can be.</string>
+    <string name="screen_matcha_docs_incomplete">Some edits haven\'t arrived yet. Editing is off until they do.</string>
+    <string name="screen_matcha_docs_invalid_update">Some edits couldn\'t be read. Editing is off for this doc.</string>
+    <string name="screen_matcha_docs_permission_error">You can\'t edit this doc anymore, so your latest changes can\'t be saved.</string>
+    <string name="screen_matcha_docs_too_large">This change is too big to save. Share the text to keep it.</string>
+    <string name="screen_matcha_docs_load_error_title">Couldn\'t load this doc</string>
+    <string name="screen_matcha_docs_load_error_body">Check your connection and try again.</string>
+    <string name="screen_matcha_docs_unsaved_title">Changes not saved</string>
+    <string name="screen_matcha_docs_unsaved_body">Some edits haven\'t reached the server. If you leave now, they\'ll be lost.</string>
+    <string name="screen_matcha_docs_stay">Stay</string>
+    <string name="screen_matcha_docs_tip">Write notes and plans together in this space.</string>
+    <string name="screen_matcha_docs_tip_action">Set up docs</string>
+    <string name="screen_matcha_docs_not_enabled">Docs aren\'t on for this space yet. Ask an admin to turn them on.</string>
+    <string name="screen_matcha_docs_setup_title">Docs for this space</string>
+    <string name="screen_matcha_docs_setup_together_title">Write together</string>
+    <string name="screen_matcha_docs_setup_together_body">Everyone in the space can read and edit docs.</string>
+    <string name="screen_matcha_docs_setup_encrypted_title">End-to-end encrypted</string>
+    <string name="screen_matcha_docs_setup_encrypted_body">Turning on docs also turns on encryption for this space. You can\'t turn it off later.</string>
+    <string name="screen_matcha_docs_setup_rooms_title">Rooms stay the same</string>
+    <string name="screen_matcha_docs_setup_rooms_body">Room settings and encryption don\'t change.</string>
+    <string name="screen_matcha_docs_setup_action">Turn on docs</string>
+    <string name="screen_matcha_docs_setup_progress">Turning on docs…</string>
+    <string name="screen_matcha_docs_setup_error">Couldn\'t turn on docs. Try again.</string>
+    <string name="screen_matcha_docs_encrypt_dialog_title">Turn on encryption?</string>
+    <string name="screen_matcha_docs_encrypt_dialog_body">Encryption for this space can\'t be turned off later.</string>
+    <string name="screen_matcha_docs_encrypt_dialog_action">Turn on</string>
+    <string name="a11y_matcha_format_heading">Heading</string>
+    <string name="a11y_matcha_format_checklist">Checklist</string>
+    <string name="a11y_matcha_doc_edit">Edit doc</string>
+    <string name="a11y_matcha_docs_more">More options</string>
+    <string name="screen_matcha_docs_heading_glyph" translatable="false">H</string>
 </resources>

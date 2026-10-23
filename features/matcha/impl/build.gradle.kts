@@ -34,6 +34,10 @@ dependencies {
     implementation(projects.libraries.featureflag.api)
     implementation(projects.libraries.uiStrings)
     implementation(projects.services.appnavstate.api)
+    implementation(projects.features.networkmonitor.api)
+    implementation(projects.libraries.androidutils)
+    // For the formatting buttons' rich_text_editor_* descriptions, shared with the chat composer.
+    implementation(projects.libraries.textcomposer.impl)
     implementation(libs.serialization.json)
 
     testCommonDependencies(libs, true)
@@ -42,4 +46,5 @@ dependencies {
     testImplementation(projects.libraries.dateformatter.test)
     testImplementation(projects.features.matcha.test)
     testImplementation(projects.services.appnavstate.test)
+    testImplementation(projects.features.networkmonitor.test)
 }

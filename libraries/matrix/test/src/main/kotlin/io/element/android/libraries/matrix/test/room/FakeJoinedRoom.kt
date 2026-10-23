@@ -97,6 +97,7 @@ class FakeJoinedRoom(
     private val sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> lambdaError() },
     private val sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> lambdaError() },
     private val getStateEventsJsonResult: (StateEventType) -> Result<Map<String, String>> = { Result.success(emptyMap()) },
+    private val getStateEventIdResult: (StateEventType, String) -> Result<EventId?> = { _, _ -> Result.success(null) },
 ) : JoinedRoom, BaseRoom by baseRoom {
     private val sendQueueUpdates = MutableSharedFlow<SendQueueUpdate>(extraBufferCapacity = 10)
 
@@ -274,6 +275,10 @@ class FakeJoinedRoom(
 
     override suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>> {
         return getStateEventsJsonResult(eventType)
+    }
+
+    override suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?> {
+        return getStateEventIdResult(eventType, stateKey)
     }
 
     private suspend fun simulateSendMediaProgress(progressCallback: ProgressCallback?) {
