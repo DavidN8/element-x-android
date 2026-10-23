@@ -12,5 +12,8 @@ import io.element.android.features.messages.impl.timeline.model.TimelineItem
 
 sealed interface CustomReactionEvent {
     data class ShowCustomReactionSheet(val event: TimelineItem.Event) : CustomReactionEvent
+
+    /** Opens the emoji picker to insert emoji in the composer, rather than to react. */
+    data object ShowEmojiPickerForComposer : CustomReactionEvent
     data object DismissCustomReactionSheet : CustomReactionEvent
 }

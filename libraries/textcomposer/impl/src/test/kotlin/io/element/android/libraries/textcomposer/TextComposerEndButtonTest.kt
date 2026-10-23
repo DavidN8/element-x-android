@@ -68,6 +68,8 @@ class TextComposerEndButtonTest : RobolectricTest() {
                 onSendMessage = {},
                 onResetComposerMode = {},
                 onAddAttachment = {},
+                onEmojiClick = {},
+                onCameraClick = {},
                 onDismissTextFormatting = {},
                 onVoiceRecorderEvent = {},
                 onVoicePlayerEvent = {},

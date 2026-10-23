@@ -352,6 +352,12 @@ class MessagesNode(
                         onSelectEmoji = { uniqueId, emoji ->
                             state.eventSink(MessagesEvent.ToggleReaction(emoji.unicode, uniqueId))
                         },
+                        onInsertEmoji = { emoji ->
+                            state.composerState.eventSink(MessageComposerEvent.InsertEmoji(emoji.unicode))
+                        },
+                        onComposerPickerDismiss = {
+                            state.composerState.eventSink(MessageComposerEvent.RequestFocus)
+                        },
                         emojiPickerRenderer = emojiPickerRenderer,
                     )
                 },

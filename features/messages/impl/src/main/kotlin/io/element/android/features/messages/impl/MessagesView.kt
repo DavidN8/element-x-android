@@ -14,10 +14,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -35,6 +33,8 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -58,7 +58,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -74,6 +73,7 @@ import io.element.android.features.messages.impl.crypto.identity.IdentityChangeS
 import io.element.android.features.messages.impl.link.LinkEvent
 import io.element.android.features.messages.impl.link.LinkView
 import io.element.android.features.messages.impl.messagecomposer.AttachmentsBottomSheet
+import io.element.android.features.messages.impl.messagecomposer.ComposerSlotPill
 import io.element.android.features.messages.impl.messagecomposer.DisabledComposerView
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerEvent
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerView
@@ -114,7 +114,6 @@ import io.element.android.features.messages.impl.voicemessages.composer.VoiceMes
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessageSendingFailedDialog
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.libraries.androidutils.ui.hideKeyboard
-import io.element.android.libraries.designsystem.atomic.molecules.ComposerAlertMolecule
 import io.element.android.libraries.designsystem.components.ExpandableBottomSheetLayout
 import io.element.android.libraries.designsystem.components.ExpandableBottomSheetLayoutState
 import io.element.android.libraries.designsystem.components.dialogs.ConfirmationDialog
@@ -122,13 +121,15 @@ import io.element.android.libraries.designsystem.components.dialogs.TextFieldDia
 import io.element.android.libraries.designsystem.components.rememberExpandableBottomSheetLayoutState
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.text.toAnnotatedString
 import io.element.android.libraries.designsystem.text.toDp
 import io.element.android.libraries.designsystem.theme.chatWallpaper
 import io.element.android.libraries.designsystem.theme.components.BottomSheetDragHandle
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.components.TextButton
+import io.element.android.libraries.designsystem.theme.noticePillBackground
+import io.element.android.libraries.designsystem.theme.noticePillText
 import io.element.android.libraries.designsystem.utils.HideKeyboardWhenDisposed
 import io.element.android.libraries.designsystem.utils.KeepScreenOn
 import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
@@ -402,6 +403,11 @@ fun MessagesView(
         bottomSheetContent = {
             MessagesViewComposerBottomSheetContents(
                 state = state,
+                onEmojiClick = {
+                    hidingKeyboard {
+                        state.customReactionState.eventSink(CustomReactionEvent.ShowEmojiPickerForComposer)
+                    }
+                },
                 onLinkClick = { url, customTab -> onLinkClick(url, customTab) },
                 onRoomSuccessorClick = { roomId ->
                     state.timelineState.eventSink(TimelineEvent.NavigateToPredecessorOrSuccessorRoom(roomId = roomId))
@@ -692,6 +698,7 @@ private fun MessagesViewComposerBottomSheetContents(
     state: MessagesState,
     onRoomSuccessorClick: (RoomId) -> Unit,
     onLinkClick: (String, Boolean) -> Unit,
+    onEmojiClick: () -> Unit,
 ) {
     val contentPadding = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
     when {
@@ -728,6 +735,7 @@ private fun MessagesViewComposerBottomSheetContents(
                         state = state.composerState,
                         voiceMessageState = state.voiceMessageComposerState,
                         modifier = Modifier.fillMaxWidth(),
+                        onEmojiClick = onEmojiClick,
                     )
                 }
             }
@@ -740,37 +748,43 @@ private fun MessagesViewComposerBottomSheetContents(
 
 @Composable
 private fun CantSendMessageBanner(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ElementTheme.colors.bgSubtleSecondary)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
+    ComposerSlotPill(modifier = modifier) {
         Text(
             text = stringResource(id = R.string.screen_room_timeline_no_permission_to_post),
             color = ElementTheme.colors.textSecondary,
-            style = MaterialTheme.typography.bodyMedium,
+            style = ElementTheme.typography.fontBodyMdRegular,
             textAlign = TextAlign.Center,
-            fontStyle = FontStyle.Italic,
         )
     }
 }
 
+/** The composer slot of a replaced room: an amber notice card with the way to the new room. */
 @Composable
 private fun SuccessorRoomBanner(
     roomSuccessor: SuccessorRoom,
     onRoomSuccessorClick: (RoomId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ComposerAlertMolecule(
-        avatar = null,
-        content = stringResource(R.string.screen_room_timeline_tombstoned_room_message).toAnnotatedString(),
-        onSubmitClick = { onRoomSuccessorClick(roomSuccessor.roomId) },
-        modifier = modifier,
-        submitText = stringResource(R.string.screen_room_timeline_tombstoned_room_action)
-    )
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
+            .padding(6.dp)
+            .background(ElementTheme.colors.noticePillBackground, shape)
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.screen_room_timeline_tombstoned_room_message),
+            color = ElementTheme.colors.noticePillText,
+            style = ElementTheme.typography.fontBodyMdRegular,
+        )
+        TextButton(
+            modifier = Modifier.align(Alignment.End),
+            text = stringResource(R.string.screen_room_timeline_tombstoned_room_action),
+            onClick = { onRoomSuccessorClick(roomSuccessor.roomId) },
+            // Green text fails contrast on the notice surface
+            colors = ButtonDefaults.textButtonColors(contentColor = ElementTheme.colors.textPrimary),
+        )
+    }
 }
 
 @PreviewsDayNight

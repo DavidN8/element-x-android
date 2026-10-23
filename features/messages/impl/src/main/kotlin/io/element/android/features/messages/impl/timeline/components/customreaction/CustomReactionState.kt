@@ -24,5 +24,10 @@ data class CustomReactionState(
             val event: TimelineItem.Event,
             val emojiPickerState: EmojiPickerState,
         ) : Target
+
+        /** The picker inserts emoji in the composer. */
+        data class Composer(
+            val emojiPickerState: EmojiPickerState,
+        ) : Target
     }
 }

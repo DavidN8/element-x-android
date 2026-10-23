@@ -8,7 +8,6 @@
 
 package io.element.android.libraries.textcomposer.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,12 +18,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -57,14 +55,11 @@ internal fun VoiceMessagePreview(
     modifier: Modifier = Modifier,
     playbackProgress: Float = 0f,
 ) {
+    // Drawn inside the composer pill, after the delete button: play/pause, the waveform, then the time.
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                color = ElementTheme.colors.bgSubtleSecondary,
-                shape = MaterialTheme.shapes.medium,
-            )
-            .padding(start = 8.dp, end = 20.dp, top = 6.dp, bottom = 6.dp)
+            .padding(end = 16.dp, top = 6.dp, bottom = 6.dp)
             .heightIn(26.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -74,14 +69,6 @@ internal fun VoiceMessagePreview(
             enabled = isInteractive,
         )
         Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = time.formatShort(),
-            color = ElementTheme.colors.textSecondary,
-            style = ElementTheme.typography.fontBodySmMedium,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Spacer(modifier = Modifier.width(12.dp))
         WaveformPlaybackView(
             modifier = Modifier
                 .weight(1f)
@@ -93,6 +80,16 @@ internal fun VoiceMessagePreview(
             durationMs = duration.inWholeMilliseconds,
             seekEnabled = true,
             onSeek = onSeek,
+            brush = SolidColor(ElementTheme.colors.iconSecondary),
+            progressBrush = SolidColor(ElementTheme.colors.iconPrimary),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = time.formatShort(),
+            color = ElementTheme.colors.textSecondary,
+            style = ElementTheme.typography.fontBodySmMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -110,9 +107,7 @@ private fun PlayerButton(
 ) {
     IconButton(
         onClick = onClick,
-        modifier = Modifier
-            .background(color = ElementTheme.colors.bgCanvasDefault, shape = CircleShape)
-            .size(30.dp),
+        modifier = Modifier.size(36.dp),
         enabled = enabled,
         colors = IconButtonDefaults.iconButtonColors(
             contentColor = ElementTheme.colors.iconSecondary,
@@ -130,18 +125,14 @@ private fun PlayerButton(
 private fun PauseIcon() = Icon(
     imageVector = CompoundIcons.PauseSolid(),
     contentDescription = stringResource(id = CommonStrings.a11y_pause),
-    modifier = Modifier
-        .size(20.dp)
-        .padding(2.dp),
+    modifier = Modifier.size(24.dp),
 )
 
 @Composable
 private fun PlayIcon() = Icon(
     imageVector = CompoundIcons.PlaySolid(),
     contentDescription = stringResource(id = CommonStrings.a11y_play),
-    modifier = Modifier
-        .size(20.dp)
-        .padding(2.dp),
+    modifier = Modifier.size(24.dp),
 )
 
 @PreviewsDayNight
