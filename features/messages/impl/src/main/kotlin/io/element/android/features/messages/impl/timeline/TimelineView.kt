@@ -17,7 +17,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,7 +31,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
@@ -68,6 +66,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.rememberNestedScrollInteropConnection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -80,6 +80,7 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
+import io.element.android.features.messages.impl.R
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.ResolveVerifiedUserSendFailureView
 import io.element.android.features.messages.impl.timeline.components.FloatingDateBadgeOverlay
 import io.element.android.features.messages.impl.timeline.components.TimelineItemRow
@@ -95,12 +96,12 @@ import io.element.android.features.messages.impl.timeline.model.event.TimelineIt
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
 import io.element.android.features.messages.impl.timeline.protection.TimelineProtectionState
 import io.element.android.features.messages.impl.timeline.protection.aTimelineProtectionState
-import io.element.android.libraries.designsystem.atomic.atoms.UnreadIndicatorAtom
 import io.element.android.libraries.designsystem.components.dialogs.AlertDialog
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.composerSurface
 import io.element.android.libraries.designsystem.utils.animateScrollToItemCenter
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.timeline.Timeline
@@ -274,7 +275,6 @@ fun TimelineView(
                     newEventState = state.newEventState,
                     isLive = state.isLive,
                     focusRequestState = state.focusRequestState,
-                    displayJumpToUnread = state.displayJumpToUnread,
                     jumpToUnread = state.jumpToUnread,
                     onScrollFinishAt = ::onScrollFinishAt,
                     onJumpToLive = ::onJumpToLive,
@@ -360,7 +360,6 @@ private fun BoxScope.TimelineScrollHelper(
     forceJumpToBottomVisibility: Boolean,
     forceJumpToReadMarkerVisibility: Boolean,
     focusRequestState: FocusRequestState,
-    displayJumpToUnread: Boolean,
     jumpToUnread: JumpToUnreadState,
     onScrollFinishAt: (Int) -> Unit,
     onJumpToLive: () -> Unit,
@@ -464,7 +463,7 @@ private fun BoxScope.TimelineScrollHelper(
     Column(
         modifier = Modifier
             .align(Alignment.BottomEnd)
-            .padding(end = 24.dp, bottom = 16.dp)
+            .padding(end = 12.dp, bottom = 8.dp)
     ) {
         JumpToPositionButton(
             icon = CompoundIcons.ChevronUp(),
@@ -478,21 +477,25 @@ private fun BoxScope.TimelineScrollHelper(
         )
         // Reserves space for the jump to bottom button so the jump to unread button above
         // stays in the same position regardless of whether the jump to bottom button is visible.
-        Box(modifier = Modifier.size(36.dp)) {
+        Box(modifier = Modifier.size(JUMP_BUTTON_SIZE)) {
             JumpToPositionButton(
                 icon = CompoundIcons.ChevronDown(),
                 contentDescription = stringResource(id = CommonStrings.a11y_jump_to_bottom),
                 isVisible = isJumpToBottomVisible,
-                hasUnread = displayJumpToUnread && newEventState is NewEventState.FromOther,
+                hasUnread = newEventState is NewEventState.FromOther,
                 onClick = ::jumpToBottom,
                 onMarkAsRead = onMarkAllAsRead,
                 testTag = TestTags.jumpToBottomButton,
-                dotAlignment = Alignment.BottomCenter,
             )
         }
     }
 }
 
+private val JUMP_BUTTON_SIZE = 40.dp
+
+/**
+ * A round button on the composer surface that scrolls the timeline. A green dot on its top-end edge says that new messages arrived.
+ */
 @Composable
 private fun JumpToPositionButton(
     icon: ImageVector,
@@ -503,7 +506,6 @@ private fun JumpToPositionButton(
     onMarkAsRead: () -> Unit,
     testTag: TestTag,
     modifier: Modifier = Modifier,
-    dotAlignment: Alignment = Alignment.TopCenter,
 ) {
     AnimatedVisibility(
         modifier = modifier,
@@ -512,13 +514,17 @@ private fun JumpToPositionButton(
         exit = scaleOut(animationSpec = tween(180), targetScale = 0.8f) + fadeOut(animationSpec = tween(180)),
     ) {
         var menuExpanded by remember { mutableStateOf(false) }
+        val newMessagesDescription = stringResource(R.string.a11y_matcha_new_messages)
         Box {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
-                    .background(color = ElementTheme.colors.bgCanvasDefault, shape = CircleShape)
+                    .size(JUMP_BUTTON_SIZE)
+                    .then(if (ElementTheme.colors.isLight) Modifier.shadow(1.dp, CircleShape) else Modifier)
+                    .background(color = ElementTheme.colors.composerSurface, shape = CircleShape)
                     .clip(CircleShape)
-                    .border(1.dp, ElementTheme.colors.borderDisabled, CircleShape)
+                    .semantics {
+                        if (hasUnread) stateDescription = newMessagesDescription
+                    }
                     .combinedClickable(
                         onClick = onClick,
                         onLongClick = { menuExpanded = true },
@@ -590,14 +596,12 @@ private fun JumpToPositionButton(
                     }
                 }
             }
-            val dotYOffset = if (dotAlignment == Alignment.BottomCenter) 4.dp else (-4).dp
             if (hasUnread) {
-                UnreadIndicatorAtom(
+                Box(
                     modifier = Modifier
-                        .align(dotAlignment)
-                        .offset { IntOffset(x = 0, y = dotYOffset.roundToPx()) },
-                    border = BorderStroke(2.dp, ElementTheme.colors.bgCanvasDefault),
-                    count = 0,
+                        .align(Alignment.TopEnd)
+                        .size(10.dp)
+                        .background(ElementTheme.colors.iconAccentPrimary, CircleShape)
                 )
             }
         }
