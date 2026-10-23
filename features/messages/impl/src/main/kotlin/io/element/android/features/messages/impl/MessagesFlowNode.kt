@@ -44,6 +44,7 @@ import io.element.android.features.location.api.RenderingMapsNotSupportedDialog
 import io.element.android.features.location.api.ShareLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationMode
+import io.element.android.features.matcha.api.MatchaChatBarActions
 import io.element.android.features.matcha.api.MatchaRoomEntryPoint
 import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.messages.api.MessagesEntryPoint
@@ -317,6 +318,25 @@ class MessagesFlowNode(
         }
     }
 
+    private val openSpaceDocsAction: () -> Unit = { openSpaceDocs() }
+
+    /** Where the chip bar of the chat and of its threads navigates to. */
+    private val matchaChatBarActions = object : MatchaChatBarActions {
+        override fun openGeneral() = this@MessagesFlowNode.openGeneral()
+
+        override fun openTasks() = showMatchaScreen(NavTarget.Tasks(initialThreadId = null))
+
+        override fun openThreadTask(threadId: ThreadId) = showMatchaScreen(NavTarget.Tasks(initialThreadId = threadId))
+
+        override fun openThread(threadId: ThreadId) = showMatchaScreen(NavTarget.Thread(threadId, focusedEventId = null))
+
+        override fun openAllThreads() = backstack.push(NavTarget.ThreadsList)
+
+        // Read while the bar is composed, so More offers Space docs once the parent spaces are known.
+        override val openSpaceDocs: (() -> Unit)?
+            get() = openSpaceDocsAction.takeIf { parentSpaces.isNotEmpty() }
+    }
+
     /** Opens the docs of the chat's space; with several joined parent spaces, the user chooses one first. */
     private fun openSpaceDocs() {
         val spaces = parentSpaces
@@ -468,6 +488,8 @@ class MessagesFlowNode(
                     override fun navigateToAvatarPreview(username: String, avatarUrl: String) {
                         overlay.show(NavTarget.AvatarPreview(username, avatarUrl))
                     }
+
+                    override val matchaChatBarActions = this@MessagesFlowNode.matchaChatBarActions
                 }
                 val inputs = MessagesNode.Inputs(focusedEventId = navTarget.focusedEventId)
                 createNode<MessagesNode>(buildContext, listOf(callback, inputs))
@@ -784,6 +806,12 @@ class MessagesFlowNode(
                     override fun navigateToAvatarPreview(username: String, avatarUrl: String) {
                         overlay.show(NavTarget.AvatarPreview(username, avatarUrl))
                     }
+
+                    override fun navigateToRoomDetails() {
+                        callback.navigateToRoomDetails()
+                    }
+
+                    override val matchaChatBarActions = this@MessagesFlowNode.matchaChatBarActions
                 }
                 createNode<ThreadedMessagesNode>(buildContext, listOf(inputs, callback))
             }

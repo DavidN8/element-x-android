@@ -80,13 +80,15 @@ internal fun MessagesViewTopBar(
     onRoomDetailsClick: () -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // A thread shown with the room's bar goes back to the room, also in the two-pane layout.
+    isBackAlwaysShown: Boolean = false,
     menuActions: @Composable RowScope.() -> Unit,
 ) {
     TopAppBar(
         modifier = modifier.padding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()),
         navigationIcon = {
             // In the two-pane layout the room list is already visible next to the room, so there is nothing to go back to.
-            if (!hasTwoPaneWindowSize()) {
+            if (isBackAlwaysShown || !hasTwoPaneWindowSize()) {
                 BackButton(onClick = onBackClick)
             }
         },

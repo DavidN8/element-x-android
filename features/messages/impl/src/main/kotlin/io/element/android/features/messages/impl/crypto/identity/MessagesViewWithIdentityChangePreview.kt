@@ -43,6 +43,7 @@ internal fun MessagesViewWithIdentityChangePreview(
         onJoinCallClick = {},
         onViewAllPinnedMessagesClick = {},
         knockRequestsBannerView = {},
+        matchaChatBar = {},
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )

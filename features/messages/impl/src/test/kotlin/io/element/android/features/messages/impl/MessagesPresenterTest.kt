@@ -14,6 +14,9 @@ import androidx.lifecycle.Lifecycle
 import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.PinUnpinAction
 import io.element.android.features.location.test.FakeActiveLiveLocationShareManager
+import io.element.android.features.matcha.api.MatchaRoomController
+import io.element.android.features.matcha.api.MatchaThreadInfo
+import io.element.android.features.matcha.test.FakeMatchaRoomController
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.actionlist.anActionListState
@@ -125,6 +128,7 @@ import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.testCoroutineDispatchers
 import io.element.android.tests.testutils.testWithLifecycleOwner
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -157,6 +161,36 @@ class MessagesPresenterTest {
             assertThat(initialState.inviteProgress).isEqualTo(AsyncData.Uninitialized)
             assertThat(initialState.showReinvitePrompt).isFalse()
             assertThat(initialState.showLiveLocationShareBanner).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - the Matcha state is absent while the Matcha workspaces are off`() = runTest {
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
+            matchaRoomController = object : MatchaRoomController by FakeMatchaRoomController() {
+                override val hasChatBar get() = error("The controller must not be read while the Matcha workspaces are off")
+            },
+        )
+        presenter.testWithLifecycleOwner {
+            assertThat(consumeItemsUntilTimeout().last().matcha).isNull()
+        }
+    }
+
+    @Test
+    fun `present - the Matcha state follows the room controller`() = runTest {
+        val threads = persistentMapOf(A_THREAD_ID to MatchaThreadInfo(name = "Release planning", isArchived = false))
+        val controller = FakeMatchaRoomController(hasChatBar = MutableStateFlow(false), threads = MutableStateFlow(threads))
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+            matchaRoomController = controller,
+        )
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.matcha?.hasChatBar).isFalse()
+            assertThat(state.matcha?.threads).isEqualTo(threads)
+            controller.hasChatBar.value = true
+            assertThat(consumeItemsUntilTimeout().last().matcha?.hasChatBar).isTrue()
         }
     }
 
@@ -1632,6 +1666,7 @@ class MessagesPresenterTest {
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
         liveLocationShareManager: FakeActiveLiveLocationShareManager = FakeActiveLiveLocationShareManager(),
         readReceiptBottomSheetEventSink: (ReadReceiptBottomSheetEvent) -> Unit = {},
+        matchaRoomController: MatchaRoomController = FakeMatchaRoomController(),
     ): MessagesPresenter {
         return MessagesPresenter(
             navigator = navigator,
@@ -1668,6 +1703,7 @@ class MessagesPresenterTest {
             markAsFullyRead = markAsFullyRead,
             liveLocationShareManager = liveLocationShareManager,
             sessionCoroutineScope = backgroundScope,
+            matchaRoomController = lazy { matchaRoomController },
         )
     }
 }

@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.location.api.LiveLocationSharingBanner
+import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.messages.api.timeline.voicemessages.composer.VoiceMessageComposerEvent
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListView
@@ -109,6 +110,7 @@ import io.element.android.features.messages.impl.topbars.MessagesViewTopBar
 import io.element.android.features.messages.impl.topbars.SelectionModeTopBar
 import io.element.android.features.messages.impl.topbars.ThreadTopBar
 import io.element.android.features.messages.impl.topbars.roomTopBarSubtitle
+import io.element.android.features.messages.impl.topbars.threadTopBarSubtitle
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessagePermissionRationaleDialog
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessageSendingFailedDialog
 import io.element.android.features.roomcall.api.RoomCallState
@@ -173,6 +175,7 @@ fun MessagesView(
     onViewAllPinnedMessagesClick: () -> Unit,
     onThreadsListClick: () -> Unit,
     knockRequestsBannerView: @Composable () -> Unit,
+    matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit,
     modifier: Modifier = Modifier,
     forceJumpToBottomVisibility: Boolean = false,
     customReactionBottomSheet: @Composable () -> Unit,
@@ -271,60 +274,33 @@ fun MessagesView(
                 containerColor = Color.Transparent,
                 contentColor = ElementTheme.colors.textPrimary,
                 topBar = {
-                    when {
-                        state.timelineState.isSelectionModeActive -> {
-                            val selection = state.timelineState.selectionState as SelectionState.Active
-                            SelectionModeTopBar(
-                                selectedCount = state.timelineState.selectedCount,
-                                action = selection.action,
-                                onCancelClick = {
-                                    state.timelineState.eventSink(TimelineEvent.ExitSelectionMode)
-                                },
-                                onConfirmClick = {
-                                    state.eventSink(MessagesEvent.ConfirmSelectionAction)
-                                },
-                            )
-                        }
-                        state.timelineState.timelineMode is Timeline.Mode.Thread -> {
-                            val threadRootId = state.timelineState.timelineMode.threadRootId
-                            val threadName = remember(state.timelineState.timelineItems, threadRootId) {
-                                state.timelineState.timelineItems.threadName(threadRootId)
-                            }
-                            ThreadTopBar(
-                                threadName = threadName,
-                                roomName = state.roomName,
-                                roomAvatarData = state.roomAvatar,
-                                heroes = state.heroes,
-                                isTombstoned = state.isTombstoned,
+                    if (state.timelineState.isSelectionModeActive) {
+                        val selection = state.timelineState.selectionState as SelectionState.Active
+                        SelectionModeTopBar(
+                            selectedCount = state.timelineState.selectedCount,
+                            action = selection.action,
+                            onCancelClick = {
+                                state.timelineState.eventSink(TimelineEvent.ExitSelectionMode)
+                            },
+                            onConfirmClick = {
+                                state.eventSink(MessagesEvent.ConfirmSelectionAction)
+                            },
+                        )
+                    } else {
+                        // The chip bar continues the top bar; the Scaffold padding pushes the timeline below both.
+                        Column {
+                            MessagesViewTopBars(
+                                state = state,
                                 onBackClick = onBackClick,
-                            )
-                        }
-                        else -> {
-                            MessagesViewTopBar(
-                                roomName = state.roomName,
-                                roomAvatar = state.roomAvatar,
-                                isTombstoned = state.isTombstoned,
-                                heroes = state.heroes,
-                                dmUserIdentityState = state.dmUserVerificationState,
-                                sharedHistoryIcon = state.topBarSharedHistoryIcon,
-                                dmUserStatus = state.dmUserStatus,
-                                subtitle = roomTopBarSubtitle(
-                                    isDm = state.timelineState.timelineRoomInfo.isDm,
-                                    isTombstoned = state.isTombstoned,
-                                    joinedMemberCount = state.joinedMemberCount,
-                                    typingNotificationState = state.timelineState.timelineRoomInfo.typingNotificationState,
-                                ),
-                                onBackClick = { hidingKeyboard { onBackClick() } },
                                 onRoomDetailsClick = { hidingKeyboard { onRoomDetailsClick() } },
-                                menuActions = {
-                                    MessagesMenuActions(
-                                        displayThreads = state.timelineState.timelineMode !is Timeline.Mode.Thread && state.threads.hasThreads,
-                                        roomCallState = state.roomCallState,
-                                        onJoinCallClick = onJoinCallClick,
-                                        onThreadsListClick = onThreadsListClick
-                                    )
-                                }
+                                onJoinCallClick = onJoinCallClick,
+                                onThreadsListClick = onThreadsListClick,
+                                hidingKeyboard = ::hidingKeyboard,
                             )
+                            if (state.matcha != null) {
+                                val threadMode = state.timelineState.timelineMode as? Timeline.Mode.Thread
+                                matchaChatBar(threadMode?.let { MatchaChatBarSelection.Thread(it.threadRootId) } ?: MatchaChatBarSelection.General)
+                            }
                         }
                     }
                 },
@@ -546,6 +522,75 @@ private fun List<TimelineItem>.threadName(threadRootId: ThreadId): String? {
     val root = lastOrNull { it is TimelineItem.Event && it.eventId == rootEventId } as? TimelineItem.Event ?: return null
     val content = root.content as? TimelineItemTextBasedContent ?: return null
     return content.plainText.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+}
+
+/**
+ * The bar above the timeline: the room's, or in a thread, the thread's. With the Matcha workspaces a thread keeps the room's bar,
+ * the thread's name taking the place of the member count.
+ */
+@Composable
+private fun MessagesViewTopBars(
+    state: MessagesState,
+    onBackClick: () -> Unit,
+    onRoomDetailsClick: () -> Unit,
+    onJoinCallClick: (isAudioCall: Boolean) -> Unit,
+    onThreadsListClick: () -> Unit,
+    hidingKeyboard: (() -> Unit) -> Unit,
+) {
+    val threadMode = state.timelineState.timelineMode as? Timeline.Mode.Thread
+    val rootThreadName = threadMode?.let { mode ->
+        remember(state.timelineState.timelineItems, mode.threadRootId) {
+            state.timelineState.timelineItems.threadName(mode.threadRootId)
+        }
+    }
+    if (threadMode != null && state.matcha == null) {
+        ThreadTopBar(
+            threadName = rootThreadName,
+            roomName = state.roomName,
+            roomAvatarData = state.roomAvatar,
+            heroes = state.heroes,
+            isTombstoned = state.isTombstoned,
+            onBackClick = onBackClick,
+        )
+        return
+    }
+    val roomInfo = state.timelineState.timelineRoomInfo
+    MessagesViewTopBar(
+        roomName = state.roomName,
+        roomAvatar = state.roomAvatar,
+        isTombstoned = state.isTombstoned,
+        heroes = state.heroes,
+        dmUserIdentityState = state.dmUserVerificationState,
+        sharedHistoryIcon = state.topBarSharedHistoryIcon,
+        dmUserStatus = state.dmUserStatus,
+        subtitle = if (threadMode != null) {
+            threadTopBarSubtitle(
+                // The shared name, else the root's text as the thread screen has it loaded.
+                threadName = state.matcha?.threads?.get(threadMode.threadRootId)?.name ?: rootThreadName,
+                isDm = roomInfo.isDm,
+                typingNotificationState = roomInfo.typingNotificationState,
+            )
+        } else {
+            roomTopBarSubtitle(
+                isDm = roomInfo.isDm,
+                isTombstoned = state.isTombstoned,
+                joinedMemberCount = state.joinedMemberCount,
+                typingNotificationState = roomInfo.typingNotificationState,
+            )
+        },
+        onBackClick = { hidingKeyboard { onBackClick() } },
+        onRoomDetailsClick = onRoomDetailsClick,
+        isBackAlwaysShown = threadMode != null,
+        menuActions = {
+            MessagesMenuActions(
+                // With the Matcha workspaces, All threads is a chip of the chip bar.
+                displayThreads = threadMode == null && state.matcha == null && state.threads.hasThreads,
+                roomCallState = state.roomCallState,
+                onJoinCallClick = onJoinCallClick,
+                onThreadsListClick = onThreadsListClick
+            )
+        }
+    )
 }
 
 @Composable
@@ -804,6 +849,7 @@ internal fun MessagesViewPreview(@PreviewParameter(MessagesStatePreviewParam::cl
         onViewAllPinnedMessagesClick = { },
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
+        matchaChatBar = {},
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -838,6 +884,7 @@ internal fun MessagesViewSelectionModePreview() = ElementPreview {
         onViewAllPinnedMessagesClick = { },
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
+        matchaChatBar = {},
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -896,6 +943,7 @@ internal fun MessagesViewA11yPreview() = ElementPreview {
         onThreadsListClick = {},
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
+        matchaChatBar = {},
         customReactionBottomSheet = {},
     )
 }

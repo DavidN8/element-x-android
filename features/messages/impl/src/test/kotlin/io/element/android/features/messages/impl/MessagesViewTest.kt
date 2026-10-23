@@ -11,6 +11,7 @@
 package io.element.android.features.messages.impl
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.AndroidComposeUiTest
@@ -28,14 +29,18 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import androidx.compose.ui.text.AnnotatedString
+import com.google.common.truth.Truth.assertThat
 import io.element.android.emojibasebindings.Emoji
 import io.element.android.emojibasebindings.EmojibaseCategory
+import io.element.android.features.matcha.api.MatchaChatBarSelection
+import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.actionlist.anActionListState
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.crypto.sendfailure.VerifiedUserSendFailure
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.aChangedIdentitySendFailure
+import io.element.android.features.messages.impl.matcha.aMatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.aMessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerItem
 import io.element.android.features.messages.impl.pinned.banner.aLoadedPinnedMessagesBannerState
@@ -56,8 +61,10 @@ import io.element.android.features.roomcall.api.aStandByCallState
 import io.element.android.libraries.emoji.impl.picker.DefaultEmojiPickerRenderer
 import io.element.android.libraries.emoji.impl.picker.anEmojiPickerState
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.tombstone.SuccessorRoom
+import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.getAvatarUrl
 import io.element.android.libraries.matrix.api.timeline.item.event.getDisplayName
@@ -709,6 +716,56 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `with the Matcha workspaces, the chip bar is under the room bar and replaces the threads button`() = runAndroidComposeUiTest {
+        val selections = mutableListOf<MatchaChatBarSelection>()
+        setMessagesView(
+            state = aMessagesState(
+                threads = MessagesState.Threads(hasThreads = true, hasUnreadThreads = false),
+                matcha = aMatchaChatState(),
+            ),
+            matchaChatBar = { selections += it },
+        )
+        assertThat(selections.distinct()).containsExactly(MatchaChatBarSelection.General)
+        onNodeWithContentDescription("Threads").assertDoesNotExist()
+    }
+
+    @Test
+    fun `without the Matcha workspaces, there is no chip bar`() = runAndroidComposeUiTest {
+        val selections = mutableListOf<MatchaChatBarSelection>()
+        setMessagesView(state = aMessagesState(matcha = null), matchaChatBar = { selections += it })
+        assertThat(selections).isEmpty()
+    }
+
+    @Test
+    fun `a thread keeps the room bar with the thread's name and selects its chip`() = runAndroidComposeUiTest {
+        val threadId = ThreadId("\$a-thread-id")
+        val selections = mutableListOf<MatchaChatBarSelection>()
+        setMessagesView(
+            state = aMessagesState(
+                roomName = "Design team",
+                timelineState = aTimelineState(timelineMode = Timeline.Mode.Thread(threadRootId = threadId)),
+                matcha = aMatchaChatState(threads = persistentMapOf(threadId to MatchaThreadInfo(name = "Release planning", isArchived = false))),
+            ),
+            matchaChatBar = { selections += it },
+        )
+        assertThat(selections.distinct()).containsExactly(MatchaChatBarSelection.Thread(threadId))
+        onNodeWithText("Design team").assertExists()
+        onNodeWithText("Release planning").assertExists()
+    }
+
+    @Test
+    fun `a thread without a known name is untitled`() = runAndroidComposeUiTest {
+        val threadId = ThreadId("\$a-thread-id")
+        setMessagesView(
+            state = aMessagesState(
+                timelineState = aTimelineState(timelineMode = Timeline.Mode.Thread(threadRootId = threadId)),
+                matcha = aMatchaChatState(threads = persistentMapOf(threadId to MatchaThreadInfo(name = null, isArchived = false))),
+            ),
+        )
+        onNodeWithText(activity!!.getString(CommonStrings.common_matcha_thread_untitled)).assertExists()
+    }
+
+    @Test
     fun `no banner shown when there is no successor room`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<MessagesEvent>(expectEvents = false)
         val state = aMessagesState(
@@ -772,6 +829,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
     onJoinCallClick: (Boolean) -> Unit = EnsureNeverCalledWithParam(),
     onViewAllPinnedMessagesClick: () -> Unit = EnsureNeverCalled(),
     onThreadsListClicked: () -> Unit = EnsureNeverCalled(),
+    matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit = {},
 ) {
     val emojiPickerRenderer = DefaultEmojiPickerRenderer()
     setSafeContent {
@@ -790,6 +848,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
                 onJoinCallClick = onJoinCallClick,
                 onViewAllPinnedMessagesClick = onViewAllPinnedMessagesClick,
                 knockRequestsBannerView = {},
+                matchaChatBar = matchaChatBar,
                 customReactionBottomSheet = {
                     CustomReactionBottomSheet(
                         state = state.customReactionState,

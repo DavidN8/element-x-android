@@ -28,12 +28,14 @@ import im.vector.app.features.analytics.plan.PinUnpinAction
 import io.element.android.appconfig.MessageComposerConfig
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
 import io.element.android.features.location.api.live.isCurrentlySharing
+import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.messages.api.timeline.HtmlConverterProvider
 import io.element.android.features.messages.impl.MessagesState.Threads
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.crypto.identity.IdentityChangeState
 import io.element.android.features.messages.impl.link.LinkState
+import io.element.android.features.messages.impl.matcha.MatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerEvent
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerState
@@ -139,6 +141,8 @@ class MessagesPresenter(
     private val markAsFullyRead: MarkAsFullyRead,
     private val liveLocationShareManager: ActiveLiveLocationShareManager,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
+    // Lazy: the controller reads the room's Matcha data as soon as it exists, which only the Matcha workspaces need.
+    private val matchaRoomController: Lazy<MatchaRoomController>,
 ) : Presenter<MessagesState> {
     @AssistedFactory
     interface Factory {
@@ -184,6 +188,8 @@ class MessagesPresenter(
         }
 
         val canOpenThreadList by featureFlagService.isFeatureEnabledFlow(FeatureFlags.Threads).collectAsState(initial = false)
+        val isMatchaEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
+        val matchaState = if (isMatchaEnabled) presentMatcha() else null
         val isCurrentlySharingLiveLocationInRoom by remember { liveLocationShareManager.isCurrentlySharing(room.roomId) }.collectAsState()
 
         val userEventPermissions by room.permissionsAsState(UserEventPermissions.DEFAULT) { perms ->
@@ -366,7 +372,19 @@ class MessagesPresenter(
             ),
             showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom && timelineState.timelineMode !is Timeline.Mode.Thread,
             redactEventAction = redactEventAction.value,
+            matcha = matchaState,
             eventSink = ::handleEvent,
+        )
+    }
+
+    @Composable
+    private fun presentMatcha(): MatchaChatState {
+        val controller = remember { matchaRoomController.value }
+        val hasChatBar by controller.hasChatBar.collectAsState()
+        val threads by controller.threads.collectAsState()
+        return MatchaChatState(
+            hasChatBar = hasChatBar,
+            threads = threads,
         )
     }
 
