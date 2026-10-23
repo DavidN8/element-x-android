@@ -10,7 +10,6 @@ package io.element.android.libraries.designsystem.theme.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,7 +25,6 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,7 +46,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
 /**
  * https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=1985-3223
  *
- * [onClear] is called by the clear button, which shows while the field is focused and not empty; it clears the text by default.
+ * [onClear] is called by the clear button, which shows whenever the field is not empty, even after a search hid the keyboard;
+ * it clears the text by default.
  * [onSearch] is called by the keyboard's search action, before the keyboard is hidden.
  */
 @Composable
@@ -61,7 +60,6 @@ fun SearchField(
     onSearch: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
-    val isFocused by interactionSource.collectIsFocusedAsState()
     BasicTextField(
         state = state,
         modifier = modifier,
@@ -78,7 +76,6 @@ fun SearchField(
         cursorBrush = SolidColor(ElementTheme.colors.textActionAccent),
         decorator = { innerTextField ->
             DecorationBox(
-                isFocused = isFocused,
                 placeholder = placeholder,
                 isTextEmpty = state.text.isEmpty(),
                 innerTextField = innerTextField,
@@ -90,7 +87,6 @@ fun SearchField(
 
 @Composable
 private fun DecorationBox(
-    isFocused: Boolean,
     placeholder: String?,
     isTextEmpty: Boolean,
     onClear: () -> Unit,
@@ -109,7 +105,7 @@ private fun DecorationBox(
                 innerTextField()
             }
             Spacer(modifier = Modifier.width(16.dp))
-            val showClearIcon = isFocused && !isTextEmpty
+            val showClearIcon = !isTextEmpty
             IconButton(onClick = onClear, enabled = showClearIcon) {
                 if (showClearIcon) {
                     Icon(
