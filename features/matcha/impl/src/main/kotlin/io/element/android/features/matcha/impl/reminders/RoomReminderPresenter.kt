@@ -78,6 +78,7 @@ class RoomReminderPresenter(
         var botState by remember { mutableStateOf<RoomReminderBotState>(RoomReminderBotState.Checking) }
         var step by remember { mutableStateOf(RoomReminderStep.Options) }
         var now by remember { mutableStateOf(clock.now()) }
+        var selected by remember { mutableStateOf<RoomReminderOption?>(null) }
         var sending by remember { mutableStateOf<RoomReminderOption?>(null) }
         var showEmptyMessageError by remember { mutableStateOf(false) }
         var hasSendFailed by remember { mutableStateOf(false) }
@@ -104,6 +105,8 @@ class RoomReminderPresenter(
                 target.dueAt?.takeIf { isWithinBounds(it, nowMillis) }?.let { add(RoomReminderOption.AtDeadline(it)) }
             }.toImmutableList()
         }
+        // The deadline drops out of the options once it has passed.
+        val selectedOption = selected?.takeIf { it in quickOptions }
         val messageError = when {
             message.trim().length > maxMessageLength -> RoomReminderError.MessageTooLong
             showEmptyMessageError && message.isBlank() -> RoomReminderError.EmptyMessage
@@ -182,6 +185,7 @@ class RoomReminderPresenter(
                     message = event.message
                     showEmptyMessageError = false
                 }
+                is RoomReminderEvent.Select -> selected = event.option
                 is RoomReminderEvent.Send -> send(event.option)
                 RoomReminderEvent.OpenCustom -> {
                     now = clock.now()
@@ -208,6 +212,7 @@ class RoomReminderPresenter(
             step = step,
             now = now,
             quickOptions = quickOptions,
+            selected = selectedOption,
             sending = sending,
             hasSendFailed = hasSendFailed,
             customDate = customDate,
@@ -232,13 +237,16 @@ class RoomReminderPresenter(
             ?.use { it.canOwnUserSendMessage(MessageEventType.RoomMessage) to it.canOwnUserInvite() }
         val (canSend, canInvite) = permissions ?: Pair(false, false)
         if (room.info().currentUserMembership != CurrentUserMembership.JOINED || !canSend) return RoomReminderBotState.CannotSend
-        return when (room.getUpdatedMember(botUserId).getOrNull()?.membership) {
+        val membership = room.getUpdatedMember(botUserId).getOrNull()?.membership
+        // Adding the bot to a DM would turn it into a group, so a DM only gets reminders when the bot is already in it.
+        if (membership != RoomMembershipState.JOIN && room.isDm()) return RoomReminderBotState.UnavailableInDm
+        return when (membership) {
             RoomMembershipState.JOIN -> RoomReminderBotState.Joined
             RoomMembershipState.INVITE -> RoomReminderBotState.Waiting(isChecking = false)
             // An invite would fail until someone lifts the ban.
             RoomMembershipState.BAN -> RoomReminderBotState.CannotInvite
             else -> if (canInvite) {
-                RoomReminderBotState.CanInvite(isDm = room.isDm(), isInviting = false, hasFailed = false)
+                RoomReminderBotState.CanInvite(isInviting = false, hasFailed = false)
             } else {
                 RoomReminderBotState.CannotInvite
             }

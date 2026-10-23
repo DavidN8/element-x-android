@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -47,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
@@ -80,7 +83,6 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import java.time.ZoneOffset
-import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.absoluteValue
@@ -163,6 +165,7 @@ private fun OptionsStep(state: RoomReminderState) {
     when (botState) {
         RoomReminderBotState.CannotSend -> InfoText(stringResource(R.string.screen_matcha_reminder_cannot_send))
         RoomReminderBotState.CannotInvite -> InfoText(stringResource(R.string.screen_matcha_reminder_bot_no_permission))
+        RoomReminderBotState.UnavailableInDm -> InfoText(stringResource(R.string.screen_matcha_reminder_bot_dm_unavailable))
         else -> Column {
             Text(
                 text = stringResource(R.string.screen_matcha_reminder_helper),
@@ -195,28 +198,26 @@ private fun OptionsStep(state: RoomReminderState) {
     }
 }
 
+/** A radio group with nothing chosen at first: choosing only fills in the confirm button, which posts. */
 @Composable
 private fun QuickOptions(state: RoomReminderState) {
     val formats = rememberReminderFormats()
     val today = state.now.toLocalDate()
     Column {
         if (state.hasSendFailed) ErrorLine(stringResource(R.string.screen_matcha_reminder_error_send))
-        state.quickOptions.forEach { option ->
-            val moment = when (option) {
-                is RoomReminderOption.InHours -> state.now.plusHours(option.hours.toLong())
-                is RoomReminderOption.AtDeadline -> ZonedDateTime.ofInstant(Instant.ofEpochMilli(option.at), state.now.zone)
-                RoomReminderOption.Custom -> null
+        Column(modifier = Modifier.selectableGroup()) {
+            state.quickOptions.forEach { option ->
+                OptionRow(
+                    label = when (option) {
+                        is RoomReminderOption.InHours -> pluralStringResource(R.plurals.screen_matcha_reminder_in_hours, option.hours, option.hours)
+                        else -> stringResource(R.string.screen_matcha_reminder_at_deadline)
+                    },
+                    value = formats.moment(option.moment(state), today),
+                    selected = state.selected == option,
+                    enabled = state.sending == null,
+                    onClick = { state.eventSink(RoomReminderEvent.Select(option)) },
+                )
             }
-            OptionRow(
-                label = when (option) {
-                    is RoomReminderOption.InHours -> pluralStringResource(R.plurals.screen_matcha_reminder_in_hours, option.hours, option.hours)
-                    else -> stringResource(R.string.screen_matcha_reminder_at_deadline)
-                },
-                value = moment?.let { formats.moment(it, today) },
-                isSending = state.sending == option,
-                enabled = state.sending == null,
-                onClick = { state.eventSink(RoomReminderEvent.Send(option)) },
-            )
         }
         ListItem(
             trailingContent = ListItemContent.Icon(IconSource.Vector(CompoundIcons.ChevronRight())),
@@ -225,7 +226,34 @@ private fun QuickOptions(state: RoomReminderState) {
         ) {
             Text(stringResource(R.string.screen_matcha_reminder_custom))
         }
+        ConfirmButton(state = state, option = state.selected, enabled = true)
     }
+}
+
+/** The green pill that posts the reminder, "Set reminder · Today 14:05"; disabled until a time is chosen. */
+@Composable
+private fun ConfirmButton(state: RoomReminderState, option: RoomReminderOption?, enabled: Boolean) {
+    val formats = rememberReminderFormats()
+    Button(
+        text = if (option == null) {
+            stringResource(R.string.screen_matcha_reminder_set)
+        } else {
+            stringResource(R.string.screen_matcha_reminder_confirm, formats.moment(option.moment(state), state.now.toLocalDate()))
+        },
+        onClick = { option?.let { state.eventSink(RoomReminderEvent.Send(it)) } },
+        enabled = enabled && option != null && state.sending == null,
+        showProgress = option != null && state.sending == option,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp),
+    )
+}
+
+/** When the option reminds, on the wall clock of [RoomReminderState.now]. */
+private fun RoomReminderOption.moment(state: RoomReminderState): LocalDateTime = when (this) {
+    is RoomReminderOption.InHours -> state.now.plusHours(hours.toLong()).toLocalDateTime()
+    is RoomReminderOption.AtDeadline -> Instant.ofEpochMilli(at).atZone(state.now.zone).toLocalDateTime()
+    RoomReminderOption.Custom -> LocalDateTime.of(state.customDate, state.customTime)
 }
 
 @Composable
@@ -289,7 +317,6 @@ private fun InviteBotStep(
 ) {
     Column {
         InfoText(stringResource(R.string.screen_matcha_reminder_bot_invite_body, MatchaConfig.REMINDER_BOT_USER_ID))
-        if (botState.isDm) InfoText(stringResource(R.string.screen_matcha_reminder_bot_invite_dm_note))
         if (botState.hasFailed) ErrorLine(stringResource(R.string.screen_matcha_reminder_bot_invite_error))
         Column(
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -341,15 +368,7 @@ private fun CustomStep(state: RoomReminderState) {
             state.customError != null -> ErrorLine(state.customError.text(state.maxMessageLength))
             state.hasSendFailed -> ErrorLine(stringResource(R.string.screen_matcha_reminder_error_send))
         }
-        Button(
-            text = formats.confirm(state.customDate, state.customTime, today),
-            onClick = { state.eventSink(RoomReminderEvent.Send(RoomReminderOption.Custom)) },
-            enabled = state.customError == null && state.sending == null,
-            showProgress = state.sending == RoomReminderOption.Custom,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp),
-        )
+        ConfirmButton(state = state, option = RoomReminderOption.Custom, enabled = state.customError == null)
         if (showDatePicker) {
             ReminderDatePickerDialog(
                 date = state.customDate,
@@ -374,24 +393,25 @@ private fun CustomStep(state: RoomReminderState) {
     }
 }
 
+/** A 56 dp row with its value at the end; with [selected], one choice of a radio group. */
 @Composable
 private fun OptionRow(
     label: String,
-    value: String?,
+    value: String,
     enabled: Boolean,
     onClick: () -> Unit,
-    isSending: Boolean = false,
+    selected: Boolean? = null,
 ) {
     ListItem(
-        trailingContent = ListItemContent.Custom {
-            if (isSending) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-            } else if (value != null) {
-                Text(text = value, color = ElementTheme.colors.textSecondary, maxLines = 1)
-            }
+        modifier = if (selected != null) {
+            Modifier.selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+        } else {
+            Modifier
         },
+        leadingContent = selected?.let { ListItemContent.RadioButton(selected = it) },
+        trailingContent = ListItemContent.Custom { Text(text = value, color = ElementTheme.colors.textSecondary, maxLines = 1) },
         enabled = enabled,
-        onClick = onClick,
+        onClick = onClick.takeIf { selected == null },
     ) {
         Text(label)
     }
@@ -513,7 +533,7 @@ private class ReminderFormats(locale: Locale, is24Hour: Boolean) {
     fun date(date: LocalDate, today: LocalDate): String = (if (date.year == today.year) dayMonth else dayMonthYear).format(date)
 
     @Composable
-    fun moment(moment: ZonedDateTime, today: LocalDate): String {
+    fun moment(moment: LocalDateTime, today: LocalDate): String {
         val date = moment.toLocalDate()
         return when {
             date == today -> stringResource(R.string.screen_matcha_reminder_today_at, time.format(moment))
@@ -522,13 +542,6 @@ private class ReminderFormats(locale: Locale, is24Hour: Boolean) {
             date.year == today.year -> dayMonthTime.format(moment)
             else -> dayMonthYearTime.format(moment)
         }
-    }
-
-    @Composable
-    fun confirm(date: LocalDate, time: LocalTime, today: LocalDate): String = when (date) {
-        today -> stringResource(R.string.screen_matcha_reminder_confirm_today, this.time.format(time))
-        today.plusDays(1) -> stringResource(R.string.screen_matcha_reminder_confirm_tomorrow, this.time.format(time))
-        else -> stringResource(R.string.screen_matcha_reminder_confirm, date(date, today), this.time.format(time))
     }
 }
 

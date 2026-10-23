@@ -185,13 +185,19 @@ class RoomReminderPresenterTest {
     }
 
     @Test
-    fun `present - a quick option sends the relative command once, with the link appended once, and closes`() = runTest {
+    fun `present - choosing a quick option sends nothing, confirming sends the relative command once with the link once, and closes`() = runTest {
         val snackbarDispatcher = SnackbarDispatcher()
         createRoomReminderPresenter(
             target = MatchaReminderTarget(message = "Call the venue\n$link", eventId = messageId),
             snackbarDispatcher = snackbarDispatcher,
         ).test {
-            awaitJoined().eventSink(RoomReminderEvent.Send(RoomReminderOption.InHours(2)))
+            val joined = awaitJoined()
+            assertThat(joined.selected).isNull()
+            joined.eventSink(RoomReminderEvent.Select(RoomReminderOption.InHours(8)))
+            joined.eventSink(RoomReminderEvent.Select(RoomReminderOption.InHours(2)))
+            val chosen = consumeItemsUntilPredicate { it.selected == RoomReminderOption.InHours(2) }.last()
+            assertThat(sent).isEmpty()
+            chosen.eventSink(RoomReminderEvent.Send(chosen.selected!!))
             val state = consumeItemsUntilPredicate { it.isRequested }.last()
             assertThat(state.sending).isEqualTo(RoomReminderOption.InHours(2))
             assertThat(sent.map { it.type }).containsExactly("m.room.message")
@@ -204,10 +210,30 @@ class RoomReminderPresenterTest {
     fun `present - the deadline option sends the absolute command`() = runTest {
         val deadline = ZonedDateTime.of(2026, 4, 1, 17, 0, 0, 0, zone).toInstant().toEpochMilli()
         createRoomReminderPresenter(target = MatchaReminderTarget(message = "Task", dueAt = deadline)).test {
-            awaitBotState { it == RoomReminderBotState.Joined }.eventSink(RoomReminderEvent.Send(RoomReminderOption.AtDeadline(deadline)))
+            awaitBotState { it == RoomReminderBotState.Joined }.eventSink(RoomReminderEvent.Select(RoomReminderOption.AtDeadline(deadline)))
+            val chosen = consumeItemsUntilPredicate { it.selected != null }.last()
+            chosen.eventSink(RoomReminderEvent.Send(chosen.selected!!))
             consumeItemsUntilPredicate { it.isRequested }
             assertThat(sent.single().body).isEqualTo("!remind at 2026-04-01T15:00:00.000Z Task")
         }
+    }
+
+    @Test
+    fun `present - a chosen deadline that has passed is no longer chosen`() = runTest {
+        var clockNow = now
+        val deadline = now.plusHours(1).toInstant().toEpochMilli()
+        createRoomReminderPresenter(target = MatchaReminderTarget(message = "Task", dueAt = deadline), clock = { clockNow }).test {
+            val joined = awaitBotState { it == RoomReminderBotState.Joined }
+            joined.eventSink(RoomReminderEvent.Select(RoomReminderOption.AtDeadline(deadline)))
+            consumeItemsUntilPredicate { it.selected == RoomReminderOption.AtDeadline(deadline) }
+            clockNow = now.plusHours(2)
+            // Opening the custom step reads the clock again.
+            joined.eventSink(RoomReminderEvent.OpenCustom)
+            val state = consumeItemsUntilPredicate { it.step == RoomReminderStep.Custom }.last()
+            assertThat(state.quickOptions.filterIsInstance<RoomReminderOption.AtDeadline>()).isEmpty()
+            assertThat(state.selected).isNull()
+        }
+        assertThat(sent).isEmpty()
     }
 
     @Test
@@ -364,10 +390,10 @@ class RoomReminderPresenterTest {
         botMembership = null
         createRoomReminderPresenter(room = aRoom(canInvite = true)).test {
             val invite = awaitBotState { it is RoomReminderBotState.CanInvite }
-            assertThat(invite.botState).isEqualTo(RoomReminderBotState.CanInvite(isDm = false, isInviting = false, hasFailed = false))
+            assertThat(invite.botState).isEqualTo(RoomReminderBotState.CanInvite(isInviting = false, hasFailed = false))
             assertThat(invited).isEmpty()
             invite.eventSink(RoomReminderEvent.InviteBot)
-            awaitBotState { it == RoomReminderBotState.CanInvite(isDm = false, isInviting = true, hasFailed = false) }
+            awaitBotState { it == RoomReminderBotState.CanInvite(isInviting = true, hasFailed = false) }
             awaitBotState { it == RoomReminderBotState.Waiting(isChecking = false) }
         }
         assertThat(invited).containsExactly(botId)
@@ -375,14 +401,32 @@ class RoomReminderPresenterTest {
     }
 
     @Test
-    fun `present - in a DM the invite step warns that a third member joins, and a failed invite says so`() = runTest {
+    fun `present - a failed invite says so`() = runTest {
         botMembership = RoomMembershipState.LEAVE
-        createRoomReminderPresenter(room = aRoom(canInvite = true, isDm = true, inviteResult = Result.failure(IllegalStateException("offline")))).test {
-            val invite = awaitBotState { it is RoomReminderBotState.CanInvite }
-            assertThat((invite.botState as RoomReminderBotState.CanInvite).isDm).isTrue()
-            invite.eventSink(RoomReminderEvent.InviteBot)
-            awaitBotState { it == RoomReminderBotState.CanInvite(isDm = true, isInviting = false, hasFailed = true) }
+        createRoomReminderPresenter(room = aRoom(canInvite = true, inviteResult = Result.failure(IllegalStateException("offline")))).test {
+            awaitBotState { it is RoomReminderBotState.CanInvite }.eventSink(RoomReminderEvent.InviteBot)
+            awaitBotState { it == RoomReminderBotState.CanInvite(isInviting = false, hasFailed = true) }
         }
+    }
+
+    @Test
+    fun `present - a DM gets reminders only when the bot is already in it, and the bot is never invited there`() = runTest {
+        listOf(null, RoomMembershipState.LEAVE, RoomMembershipState.INVITE, RoomMembershipState.BAN).forEach { membership ->
+            botMembership = membership
+            createRoomReminderPresenter(room = aRoom(canInvite = true, isDm = true)).test {
+                val state = awaitBotState { it != RoomReminderBotState.Checking }
+                assertThat(state.botState).isEqualTo(RoomReminderBotState.UnavailableInDm)
+                state.eventSink(RoomReminderEvent.InviteBot)
+                state.eventSink(RoomReminderEvent.Send(RoomReminderOption.InHours(2)))
+                cancelAndIgnoreRemainingEvents()
+            }
+        }
+        botMembership = RoomMembershipState.JOIN
+        createRoomReminderPresenter(room = aRoom(isDm = true)).test {
+            awaitBotState { it == RoomReminderBotState.Joined }
+        }
+        assertThat(invited).isEmpty()
+        assertThat(sent).isEmpty()
     }
 
     @Test

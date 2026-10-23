@@ -13,7 +13,10 @@ import java.time.LocalTime
 sealed interface RoomReminderEvent {
     data class UpdateMessage(val message: String) : RoomReminderEvent
 
-    /** Requests the reminder: a quick option sends straight away, [RoomReminderOption.Custom] sends the picked date and time. */
+    /** Chooses a quick option for the confirm button; nothing is sent yet. */
+    data class Select(val option: RoomReminderOption) : RoomReminderEvent
+
+    /** Requests the reminder, from the confirm button: the chosen quick option, or [RoomReminderOption.Custom] for the picked date and time. */
     data class Send(val option: RoomReminderOption) : RoomReminderEvent
 
     data object OpenCustom : RoomReminderEvent

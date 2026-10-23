@@ -25,6 +25,8 @@ data class RoomReminderState(
     /** When the sheet last read the clock; the quick options are shown relative to it. */
     val now: ZonedDateTime,
     val quickOptions: ImmutableList<RoomReminderOption>,
+    /** The quick option the confirm button sends; nothing is chosen at first, so a single tap never posts. */
+    val selected: RoomReminderOption?,
     /** The option being sent, if any; the other options are disabled meanwhile. */
     val sending: RoomReminderOption?,
     val hasSendFailed: Boolean,
@@ -78,11 +80,14 @@ sealed interface RoomReminderBotState {
     data class Waiting(val isChecking: Boolean) : RoomReminderBotState
 
     /** The bot is not in the chat and the user may invite it, after confirming. */
-    data class CanInvite(val isDm: Boolean, val isInviting: Boolean, val hasFailed: Boolean) : RoomReminderBotState
+    data class CanInvite(val isInviting: Boolean, val hasFailed: Boolean) : RoomReminderBotState
 
     /** The bot is not in the chat and the user may not invite it. */
     data object CannotInvite : RoomReminderBotState
 
     /** The user cannot post in this chat, so the bot command cannot be sent. */
     data object CannotSend : RoomReminderBotState
+
+    /** A DM without the bot: adding it would make the DM a group, so reminders are off. */
+    data object UnavailableInDm : RoomReminderBotState
 }

@@ -23,9 +23,8 @@
     <string name="screen_matcha_reminder_timezone">Time zone: %1$s (%2$s)</string>
     <string name="screen_matcha_reminder_today_at">Today %1$s</string>
     <string name="screen_matcha_reminder_tomorrow_at">Tomorrow %1$s</string>
-    <string name="screen_matcha_reminder_confirm">Remind me %1$s at %2$s</string>
-    <string name="screen_matcha_reminder_confirm_today">Remind me today at %1$s</string>
-    <string name="screen_matcha_reminder_confirm_tomorrow">Remind me tomorrow at %1$s</string>
+    <string name="screen_matcha_reminder_confirm">Set reminder · %1$s</string>
+    <string name="screen_matcha_reminder_set">Set reminder</string>
     <string name="screen_matcha_reminder_requested">Reminder requested</string>
     <string name="screen_matcha_reminder_error_empty">Add a message</string>
     <string name="screen_matcha_reminder_error_past">Pick a time in the future</string>
@@ -35,11 +34,11 @@
     <string name="screen_matcha_reminder_error_send">Couldn\'t request the reminder. Check your connection and try again.</string>
     <string name="screen_matcha_reminder_bot_invite_title">Add the reminder bot?</string>
     <string name="screen_matcha_reminder_bot_invite_body">%1$s sends reminders. It joins this chat and can read messages sent after it joins.</string>
-    <string name="screen_matcha_reminder_bot_invite_dm_note">This makes it a 3-person chat.</string>
     <string name="screen_matcha_reminder_bot_invite_action">Add bot</string>
     <string name="screen_matcha_reminder_bot_invite_error">Couldn\'t add the reminder bot. Check your connection and try again.</string>
     <string name="screen_matcha_reminder_bot_waiting">Waiting for the reminder bot to join…</string>
     <string name="screen_matcha_reminder_bot_no_permission">Ask an admin to add the reminder bot to this chat.</string>
+    <string name="screen_matcha_reminder_bot_dm_unavailable">Reminders aren\'t available in this chat. Adding the reminder bot would turn it into a group.</string>
     <string name="screen_matcha_reminder_cannot_send">You can\'t send messages in this chat, so reminders can\'t be posted here.</string>
     <!-- Track C: space docs -->
     <!-- Stand-ins for the shared common_matcha_docs, action_matcha_rename, common_matcha_error_name_empty,
