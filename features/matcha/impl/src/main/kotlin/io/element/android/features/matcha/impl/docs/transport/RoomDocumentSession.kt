@@ -108,8 +108,8 @@ class RoomDocumentSession(
     private var document: YjsDocument? = null
     private var anchor: String? = null
     private var isLoading = true
+    /** The whole history has been replayed; [publish] also checks that no update is missing. */
     private var isReady = false
-    private var isHistoryComplete = false
     private var error: DocumentError? = null
     private var text = ""
     private var entries = JsonObject(emptyMap())
@@ -239,9 +239,7 @@ class RoomDocumentSession(
                 this.anchor = anchor
                 val document = document ?: openDocument()
                 events.forEach { ingest(document, anchor, it) }
-                isHistoryComplete = true
                 refresh(document)
-                if (hasMissingUpdates()) throw DocumentException(DocumentError.IncompleteUpdate)
                 isReady = true
             }
         } catch (e: CancellationException) {
@@ -275,14 +273,6 @@ class RoomDocumentSession(
             try {
                 events.asReversed().forEach { ingest(document, anchor, it) }
                 refresh(document)
-                val isMissing = hasMissingUpdates()
-                if (isMissing && (error == null || error == DocumentError.IncompleteUpdate)) {
-                    error = DocumentError.IncompleteUpdate
-                    isReady = false
-                } else if (!isMissing && error == DocumentError.IncompleteUpdate && isHistoryComplete) {
-                    error = null
-                    isReady = true
-                }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -445,7 +435,11 @@ class RoomDocumentSession(
 
     private fun publish() {
         val pending = buffered.size + packets.size
-        val error = error
+        // The causal guard: while an update misses its predecessors the document is incomplete and read-only, even when a send
+        // failed meanwhile. Unsent edits are still sent; they only build on what this device has.
+        val isMissing = !isLoading && hasMissingUpdates()
+        val error = if (isMissing && (error == null || error in SEND_ERRORS)) DocumentError.IncompleteUpdate else error
+        val isReady = isReady && !isMissing
         val isOffline = networkMonitor.connectivity.value == NetworkStatus.Disconnected
         _state.value = DocumentSessionState(
             isReady = isReady,

@@ -101,6 +101,36 @@ class RoomDocumentSessionTest {
     }
 
     @Test
+    fun `an update missing its predecessor turns editing off even after a failed send, and unsent edits still go out`() = runTest {
+        val fixture = DocsRoomFixture(listOf(aCreateItem()))
+        fixture.sendResult = { _, _ -> Result.failure(IllegalStateException("server error")) }
+        val session = fixture.session(backgroundScope)
+        settle()
+        backgroundScope.launch { session.edit("", "Draft") }
+        settle()
+        assertThat(session.state.value.error).isEqualTo(DocumentError.SendError)
+        assertThat(session.state.value.canEdit).isTrue()
+        val second = update(operation("second", text = "After", deps = listOf("first")))
+        fixture.timelineItems.value += aFrameItem("\$second", DocsProtocol.frames(second, ANCHOR, "u-second", "main").single())
+        settle()
+        assertThat(session.state.value.error).isEqualTo(DocumentError.IncompleteUpdate)
+        assertThat(session.state.value.canEdit).isFalse()
+        fixture.sendResult = { _, _ -> Result.success(EventId("\$ok")) }
+        backgroundScope.launch { session.flush() }
+        settle()
+        // Saving cleared the send error, not the missing update.
+        assertThat(fixture.sent).hasSize(1)
+        assertThat(session.state.value.pendingUpdates).isEqualTo(0)
+        assertThat(session.state.value.error).isEqualTo(DocumentError.IncompleteUpdate)
+        assertThat(session.state.value.isReady).isFalse()
+        assertThat(session.state.value.canEdit).isFalse()
+        fixture.timelineItems.value += aFrameItem("\$first", DocsProtocol.frames(update(operation("first")), ANCHOR, "u-first", "main").single())
+        settle()
+        assertThat(session.state.value.error).isNull()
+        assertThat(session.state.value.canEdit).isTrue()
+    }
+
+    @Test
     fun `frames that break the protocol make the document invalid`() = runTest {
         val garbage = Base64.encode("garbage".toByteArray())
         val malformed = listOf(
