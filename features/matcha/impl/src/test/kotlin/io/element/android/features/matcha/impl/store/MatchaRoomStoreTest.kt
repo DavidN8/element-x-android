@@ -153,6 +153,15 @@ class MatchaRoomStoreTest {
     }
 
     @Test
+    fun `a sent message of a type the store does not read is not echoed`() = runTest {
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList())
+        settle()
+        assertThat(store.send("m.room.message", """{"msgtype": "m.text", "body": "!remind 7200s Call"}""").isSuccess).isTrue()
+        settle()
+        assertThat(store.snapshot.value.events).isEmpty()
+    }
+
+    @Test
     fun `a failed send leaves nothing behind`() = runTest {
         val (store, _) = aStore(scope = backgroundScope, items = emptyList(), sendRawEventResult = { _, _ -> Result.failure(IllegalStateException("offline")) })
         settle()

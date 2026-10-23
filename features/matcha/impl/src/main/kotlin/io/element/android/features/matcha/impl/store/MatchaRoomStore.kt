@@ -311,6 +311,8 @@ class MatchaRoomStore(
     /** Sends a Matcha timeline event and shows it straight away, before its remote echo. */
     suspend fun send(eventType: String, contentJson: String): Result<EventId> = writeMutex.withLock {
         room.sendRawEvent(eventType, contentJson).onSuccess { eventId ->
+            // Only the Matcha types come back through the filtered timeline, so an echo of any other type would never be replaced.
+            if (eventType !in MatchaConfig.MESSAGE_LIKE_EVENT_TYPES) return@onSuccess
             val content = runCatching { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
             val echo = RawEvent(
                 type = eventType,
