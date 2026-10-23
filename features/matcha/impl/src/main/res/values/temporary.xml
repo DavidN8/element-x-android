@@ -40,4 +40,60 @@
         <item quantity="other">"%1$d open tasks"</item>
     </plurals>
     <!-- End of track B: chip bar. -->
+    <!-- Track B: task board. -->
+    <string name="common_matcha_archived">"Archived"</string>
+    <string name="action_matcha_keep_editing">"Keep editing"</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: joins a relative day and a time, e.g. "Tomorrow 09:00". -->
+    <string name="common_matcha_day_and_time">"%1$s %2$s"</string>
+    <string name="screen_matcha_tasks_status_todo">"To do"</string>
+    <string name="screen_matcha_tasks_status_doing">"In progress"</string>
+    <string name="screen_matcha_tasks_status_done">"Done"</string>
+    <string name="screen_matcha_tasks_new">"New task"</string>
+    <string name="screen_matcha_tasks_edit">"Edit task"</string>
+    <string name="screen_matcha_tasks_add">"Add task"</string>
+    <string name="screen_matcha_tasks_name_hint">"Task name"</string>
+    <string name="screen_matcha_tasks_description_hint">"Add a description"</string>
+    <string name="screen_matcha_tasks_status_label">"Status"</string>
+    <string name="screen_matcha_tasks_deadline_label">"Deadline"</string>
+    <string name="screen_matcha_tasks_deadline_add">"Add deadline"</string>
+    <string name="screen_matcha_tasks_deadline_past">"This time has already passed"</string>
+    <string name="screen_matcha_tasks_deadline_range">"Pick a date before the year 10,000"</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: a deadline inside a clock change is refused rather than moved. -->
+    <string name="screen_matcha_tasks_deadline_skipped">"This time doesn't exist here because the clocks change. Pick another time."</string>
+    <string name="screen_matcha_tasks_reminder_requested">"Reminder requested for %1$s"</string>
+    <string name="screen_matcha_tasks_thread_note_new">"A thread with this name will be created in this chat."</string>
+    <string name="screen_matcha_tasks_thread_note_linked">"Renaming the task also renames its thread."</string>
+    <string name="screen_matcha_tasks_rename_not_allowed">"You can't rename threads in this chat, so this name can't change."</string>
+    <string name="screen_matcha_tasks_open_thread">"Open thread"</string>
+    <string name="screen_matcha_tasks_move_to">"Move to"</string>
+    <string name="screen_matcha_tasks_overdue">"Overdue"</string>
+    <string name="screen_matcha_tasks_no_replies">"No replies yet"</string>
+    <string name="screen_matcha_tasks_archived_title">"Archived tasks"</string>
+    <string name="screen_matcha_tasks_archived_empty">"No archived tasks"</string>
+    <string name="screen_matcha_tasks_archived_snackbar">"Task archived"</string>
+    <string name="screen_matcha_tasks_unarchived_snackbar">"Task unarchived"</string>
+    <string name="screen_matcha_tasks_load_older">"Load older tasks"</string>
+    <plurals name="screen_matcha_tasks_earlier_cards">
+        <item quantity="one">"%1$d earlier card for this thread"</item>
+        <item quantity="other">"%1$d earlier cards for this thread"</item>
+    </plurals>
+    <string name="screen_matcha_tasks_looking">"Looking for this chat's task board…"</string>
+    <string name="screen_matcha_tasks_setup_title">"Track work in this chat"</string>
+    <string name="screen_matcha_tasks_setup_body">"Every thread in this chat becomes a task, and each new task gets its own thread."</string>
+    <string name="screen_matcha_tasks_setup_action">"Create task board"</string>
+    <string name="screen_matcha_tasks_setup_failed">"Couldn't create the task board. Try again."</string>
+    <string name="screen_matcha_tasks_setup_no_permission">"Ask an admin to create the task board."</string>
+    <string name="screen_matcha_tasks_already_has_board">"This chat already has a task board."</string>
+    <string name="screen_matcha_tasks_board_changed">"The task board changed. Try again."</string>
+    <string name="screen_matcha_tasks_thread_has_task">"This thread already has a task."</string>
+    <string name="screen_matcha_tasks_board_empty_title">"No tasks yet"</string>
+    <string name="screen_matcha_tasks_board_empty_body">"Tap + to add the first one."</string>
+    <string name="screen_matcha_tasks_read_only">"You can see these tasks but can't change them."</string>
+    <string name="screen_matcha_tasks_unreadable">"Some task updates can't be decrypted. This list may be out of date."</string>
+    <string name="screen_matcha_tasks_discard_title">"Discard changes?"</string>
+    <string name="a11y_matcha_task_status">"Status: %1$s"</string>
+    <string name="a11y_matcha_task_due">"Due %1$s"</string>
+    <string name="a11y_matcha_task_reminder">"Reminder requested"</string>
+    <string name="a11y_matcha_clear_deadline">"Clear deadline"</string>
+    <!-- End of track B: task board. -->
 </resources>

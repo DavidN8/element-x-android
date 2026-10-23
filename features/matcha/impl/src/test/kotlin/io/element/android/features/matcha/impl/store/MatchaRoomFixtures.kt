@@ -40,6 +40,10 @@ internal fun aMatchaRoomStore(
     threadsPaginationStatus: ThreadListPaginationStatus = ThreadListPaginationStatus.Idle(hasMoreToLoad = false),
     canSendMessage: (MessageEventType) -> Boolean = { true },
     boardRoot: String? = null,
+    canSendState: Boolean = true,
+    sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> Result.success(EventId("\$state")) },
+    /** Overrides how the board pointer is read; by default it points at [boardRoot]. */
+    boardPointerResult: (() -> Result<Map<String, String>>)? = null,
     sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
 ): MatchaRoomStore {
     val timeline = FakeTimeline(
@@ -47,18 +51,20 @@ internal fun aMatchaRoomStore(
         backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = false)),
     )
     val room = FakeJoinedRoom(
-        baseRoom = FakeBaseRoom(roomPermissions = FakeRoomPermissions(canSendMessage = canSendMessage, canSendState = { true }, canInvite = true)),
+        baseRoom = FakeBaseRoom(roomPermissions = FakeRoomPermissions(canSendMessage = canSendMessage, canSendState = { canSendState }, canInvite = true)),
         threadsListService = FakeThreadsListService(
             items = MutableStateFlow(threads),
             paginationStatus = MutableStateFlow(threadsPaginationStatus),
         ),
         createTimelineResult = { Result.success(timeline) },
         sendRawEventResult = sendRawEventResult,
+        sendRawStateEventResult = sendRawStateEventResult,
         getStateEventsJsonResult = { type ->
-            if (type == StateEventType.Custom(MatchaConfig.STATE_KANBAN) && boardRoot != null) {
-                Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
-            } else {
-                Result.success(emptyMap())
+            when {
+                type != StateEventType.Custom(MatchaConfig.STATE_KANBAN) -> Result.success(emptyMap())
+                boardPointerResult != null -> boardPointerResult()
+                boardRoot != null -> Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
+                else -> Result.success(emptyMap())
             }
         },
     )

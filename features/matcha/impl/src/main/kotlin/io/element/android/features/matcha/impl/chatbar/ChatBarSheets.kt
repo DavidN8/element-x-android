@@ -8,8 +8,10 @@
 package io.element.android.features.matcha.impl.chatbar
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -17,6 +19,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -41,6 +44,8 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.matcha.impl.R
 import io.element.android.libraries.designsystem.components.list.ListItemContent
 import io.element.android.libraries.designsystem.theme.components.Button
+import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.IconSource
 import io.element.android.libraries.designsystem.theme.components.ListItem
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
@@ -82,13 +87,13 @@ internal fun ThreadNameSheet(
         if (!LocalInspectionMode.current) {
             LaunchedEffect(Unit) { focusRequester.requestFocus() }
         }
+        SheetHeader(title = title, onClose = { eventSink(ChatBarEvent.DismissSheet) })
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            SheetTitle(title)
             TextField(
                 value = sheet.name,
                 onValueChange = { eventSink(ChatBarEvent.UpdateThreadName(it)) },
@@ -150,10 +155,7 @@ internal fun ThreadActionsSheet(
         modifier = Modifier.semantics { paneTitle = title },
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            SheetTitle(
-                text = title,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
-            )
+            SheetHeader(title = title, modifier = Modifier.padding(bottom = 8.dp))
             if (canManage) {
                 ActionRow(
                     text = stringResource(R.string.screen_matcha_threads_rename_title),
@@ -182,19 +184,54 @@ internal fun ThreadActionsSheet(
     }
 }
 
+/**
+ * A sheet's 56dp header: an optional ✕ at the start, the centred title, and an optional line under it.
+ *
+ * ponytail: stands in for DS/components/SheetHeader.kt (WHATSAPP_DESIGN.md §2.5) until the design system has it.
+ */
 @Composable
-internal fun SheetTitle(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text,
-        style = ElementTheme.typography.fontHeadingMdRegular,
-        color = ElementTheme.colors.textPrimary,
-        textAlign = TextAlign.Center,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
+internal fun SheetHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    onClose: (() -> Unit)? = null,
+    subtitle: String? = null,
+) {
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .semantics { heading() },
-    )
+            .heightIn(min = 56.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (onClose != null) {
+            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp)) {
+                Icon(imageVector = CompoundIcons.Close(), contentDescription = stringResource(CommonStrings.action_close))
+            }
+        }
+        Column(
+            modifier = Modifier.padding(horizontal = 56.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = title,
+                style = ElementTheme.typography.fontHeadingMdRegular,
+                color = ElementTheme.colors.textPrimary,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = ElementTheme.typography.fontBodyMdRegular,
+                    color = ElementTheme.colors.textSecondary,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
 }
 
 @Composable
