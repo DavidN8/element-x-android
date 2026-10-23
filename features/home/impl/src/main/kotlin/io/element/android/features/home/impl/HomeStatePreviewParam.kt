@@ -53,6 +53,12 @@ open class HomeStatePreviewParam : PreviewParameterProvider<HomeState> {
         ) + aHomeState(
             // The unread count badge on the Chats tab
             totalUnreadCount = 5,
+        ) + aHomeState(
+            // The Tasks tab between Chats and Spaces
+            isTasksTabEnabled = true,
+        ) + aHomeState(
+            isTasksTabEnabled = true,
+            currentHomeNavigationBarItem = HomeNavigationBarItem.Tasks,
         )
 }
 
@@ -68,6 +74,7 @@ internal fun aHomeState(
     canReportBug: Boolean = true,
     showMultiAccountAnnouncement: Boolean = false,
     totalUnreadCount: Int = 0,
+    isTasksTabEnabled: Boolean = false,
     eventSink: (HomeEvent) -> Unit = {}
 ) = HomeState(
     currentUserAndNeighbors = currentUserAndNeighbors.toImmutableList(),
@@ -80,5 +87,6 @@ internal fun aHomeState(
     roomListState = roomListState,
     homeSpacesState = homeSpacesState,
     totalUnreadCount = totalUnreadCount,
+    isTasksTabEnabled = isTasksTabEnabled,
     eventSink = eventSink,
 )

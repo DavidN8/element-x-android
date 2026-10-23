@@ -41,6 +41,7 @@ import io.element.android.features.invite.api.InviteData
 import io.element.android.features.invite.api.acceptdecline.AcceptDeclineInviteView
 import io.element.android.features.invite.api.declineandblock.DeclineInviteAndBlockEntryPoint
 import io.element.android.features.leaveroom.api.LeaveRoomRenderer
+import io.element.android.features.matcha.api.MatchaTasksTabRenderer
 import io.element.android.features.reportroom.api.ReportRoomEntryPoint
 import io.element.android.features.rolesandpermissions.api.ChangeRoomMemberRolesEntryPoint
 import io.element.android.features.rolesandpermissions.api.ChangeRoomMemberRolesListType
@@ -90,6 +91,7 @@ class HomeFlowNode(
     private val changeRoomMemberRolesEntryPoint: ChangeRoomMemberRolesEntryPoint,
     private val leaveRoomRenderer: LeaveRoomRenderer,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
+    private val matchaTasksTabRenderer: MatchaTasksTabRenderer,
 ) : BaseFlowNode<HomeFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = NavTarget.Root,
@@ -258,7 +260,15 @@ class HomeFlowNode(
                         onSelectNewOwners = ::navigateToSelectNewOwnersWhenLeavingRoom,
                         modifier = Modifier
                     )
-                }
+                },
+                tasksTab = { padding ->
+                    matchaTasksTabRenderer.Render(
+                        contentPadding = padding,
+                        onOpenRoom = { roomId -> navigateToRoom(roomId = roomId, eventId = null) },
+                        onOpenThread = callback::navigateToThread,
+                        modifier = Modifier,
+                    )
+                },
             )
         }
     }

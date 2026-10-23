@@ -100,10 +100,14 @@ class HomePresenter(
         }
         val roomListState = roomListPresenter.present()
         val homeSpacesState = homeSpacesPresenter.present()
+        val isTasksTabEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
         var currentHomeNavigationBarItemOrdinal by rememberSaveable { mutableIntStateOf(HomeNavigationBarItem.Chats.ordinal) }
         val currentHomeNavigationBarItem by remember {
             derivedStateOf {
                 HomeNavigationBarItem.from(currentHomeNavigationBarItemOrdinal)
+                    // A saved Tasks tab falls back to Chats once the Matcha workspaces are off.
+                    .takeIf { it in HomeNavigationBarItem.barOrder(isTasksTabEnabled) }
+                    ?: HomeNavigationBarItem.Chats
             }
         }
         LaunchedEffect(Unit) {
@@ -140,6 +144,7 @@ class HomePresenter(
             canReportBug = canReportBug,
             showMultiAccountAnnouncement = showMultiAccountAnnouncement,
             totalUnreadCount = totalUnreadCount,
+            isTasksTabEnabled = isTasksTabEnabled,
             eventSink = ::handleEvent,
         )
     }

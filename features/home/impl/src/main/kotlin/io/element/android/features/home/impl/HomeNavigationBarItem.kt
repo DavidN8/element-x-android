@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.vectorResource
 import io.element.android.features.home.api.HomeTab
 import io.element.android.libraries.designsystem.icons.CompoundDrawables
+import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
  * The tabs of the bottom navigation bar. A tab's label is also its top bar title (except on Chats, which shows the product
@@ -43,6 +44,14 @@ enum class HomeNavigationBarItem(
         iconRes = CompoundDrawables.ic_compound_space,
         selectedIconRes = CompoundDrawables.ic_compound_space_solid,
         homeTab = HomeTab.Spaces,
+    ),
+
+    /** The Matcha tasks of all the user's chats, shown while the Matcha workspaces are on. */
+    Tasks(
+        labelRes = CommonStrings.common_matcha_tasks,
+        iconRes = CompoundDrawables.ic_compound_check_circle,
+        selectedIconRes = CompoundDrawables.ic_compound_check_circle_solid,
+        homeTab = HomeTab.Tasks,
     );
 
     /** The outlined icon, or the solid one when the tab is selected. */
@@ -50,8 +59,8 @@ enum class HomeNavigationBarItem(
     fun icon(isSelected: Boolean): ImageVector = ImageVector.vectorResource(if (isSelected) selectedIconRes else iconRes)
 
     companion object {
-        /** The tabs in the order of the bar, which is not the order of the entries. */
-        val barOrder = listOf(Chats, Spaces)
+        /** The tabs in the order of the bar, which is not the order of the entries; Tasks only exists with the Matcha workspaces. */
+        fun barOrder(isTasksTabEnabled: Boolean): List<HomeNavigationBarItem> = listOfNotNull(Chats, Tasks.takeIf { isTasksTabEnabled }, Spaces)
 
         fun from(index: Int): HomeNavigationBarItem {
             return entries.getOrElse(index) { Chats }

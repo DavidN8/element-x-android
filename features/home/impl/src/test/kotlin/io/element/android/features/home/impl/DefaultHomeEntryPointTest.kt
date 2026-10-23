@@ -8,14 +8,19 @@
 
 package io.element.android.features.home.impl
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import com.bumble.appyx.core.modality.BuildContext
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.home.api.HomeEntryPoint
 import io.element.android.features.home.api.HomeTab
 import io.element.android.features.invite.test.declineandblock.FakeDeclineInviteAndBlockEntryPoint
+import io.element.android.features.matcha.api.MatchaTasksTabRenderer
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.services.analytics.test.FakeAnalyticsService
@@ -43,6 +48,15 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
                 changeRoomMemberRolesEntryPoint = { _, _, _, _ -> lambdaError() },
                 leaveRoomRenderer = { _, _, _ -> lambdaError() },
                 sessionCoroutineScope = backgroundScope,
+                matchaTasksTabRenderer = object : MatchaTasksTabRenderer {
+                    @Composable
+                    override fun Render(
+                        contentPadding: PaddingValues,
+                        onOpenRoom: (RoomId) -> Unit,
+                        onOpenThread: (RoomId, ThreadId) -> Unit,
+                        modifier: Modifier,
+                    ) = lambdaError()
+                },
             )
         }
         val callback = object : HomeEntryPoint.Callback {
@@ -57,6 +71,7 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
             override fun navigateToAddAccount() = lambdaError()
             override fun navigateToSession(sessionId: SessionId) = lambdaError()
             override fun onTabSelected(tab: HomeTab) = lambdaError()
+            override fun navigateToThread(roomId: RoomId, threadId: ThreadId) = lambdaError()
         }
         val result = entryPoint.createNode(
             parentNode = parentNode,

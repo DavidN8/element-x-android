@@ -94,6 +94,7 @@ fun HomeView(
     onReportRoomClick: (roomId: RoomId) -> Unit,
     onDeclineInviteAndBlockUser: (roomSummary: RoomListRoomSummary) -> Unit,
     acceptDeclineInviteView: @Composable () -> Unit,
+    tasksTab: @Composable (PaddingValues) -> Unit,
     modifier: Modifier = Modifier,
     leaveRoomView: @Composable () -> Unit,
 ) {
@@ -138,6 +139,7 @@ fun HomeView(
             onCreateSpaceClick = { if (firstThrottler.canHandle()) onCreateSpaceClick() },
             onMenuActionClick = onMenuActionClick,
             onSwitchToAccount = onSwitchToAccount,
+            tasksTab = tasksTab,
         )
 
         if (state.globalSearchState.isEnabled) {
@@ -176,6 +178,7 @@ private fun HomeScaffold(
     onCreateSpaceClick: () -> Unit,
     onMenuActionClick: (RoomListMenuAction) -> Unit,
     onSwitchToAccount: (SessionId) -> Unit,
+    tasksTab: @Composable (PaddingValues) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     fun onRoomClick(room: RoomListRoomSummary) {
@@ -253,6 +256,13 @@ private fun HomeScaffold(
                 onExploreClick = {},
             )
         }
+        // The Matcha renderer draws its own list and its New task button, within the bars' padding.
+        HomeNavigationBarItem.Tasks -> HomeTabContent(
+            lazyListState = null,
+            floatingActionButton = null,
+        ) { padding ->
+            tasksTab(padding)
+        }
     }
 
     Scaffold(
@@ -291,6 +301,7 @@ private fun HomeScaffold(
         bottomBar = {
             val coroutineScope = rememberCoroutineScope()
             HomeBottomBar(
+                items = state.navigationBarItems,
                 currentHomeNavigationBarItem = state.currentHomeNavigationBarItem,
                 totalUnreadCount = state.totalUnreadCount,
                 onItemClick = { item ->
@@ -366,13 +377,14 @@ private fun HomeFloatingActionButton(
 
 @Composable
 private fun HomeBottomBar(
+    items: List<HomeNavigationBarItem>,
     totalUnreadCount: Int,
     currentHomeNavigationBarItem: HomeNavigationBarItem,
     onItemClick: (HomeNavigationBarItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     NavigationBar(modifier = modifier) {
-        HomeNavigationBarItem.barOrder.forEach { item ->
+        items.forEach { item ->
             val isSelected = currentHomeNavigationBarItem == item
             // Only Chats has a badge: the unread count
             val count = if (item == HomeNavigationBarItem.Chats) totalUnreadCount else 0
@@ -406,6 +418,7 @@ internal fun HomeViewPreview(@PreviewParameter(HomeStatePreviewParam::class) sta
         onMenuActionClick = {},
         onDeclineInviteAndBlockUser = {},
         acceptDeclineInviteView = {},
+        tasksTab = {},
         leaveRoomView = {}
     )
 }
@@ -428,6 +441,7 @@ internal fun HomeViewA11yPreview() = ElementPreview {
         onMenuActionClick = {},
         onDeclineInviteAndBlockUser = {},
         acceptDeclineInviteView = {},
+        tasksTab = {},
         leaveRoomView = {}
     )
 }

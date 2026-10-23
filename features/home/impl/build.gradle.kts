@@ -50,6 +50,7 @@ dependencies {
     implementation(projects.libraries.sessionStorage.api)
     implementation(projects.features.announcement.api)
     implementation(projects.features.invite.api)
+    implementation(projects.features.matcha.api)
     implementation(projects.features.leaveroom.api)
     implementation(projects.features.rageshake.api)
     implementation(projects.services.analytics.api)

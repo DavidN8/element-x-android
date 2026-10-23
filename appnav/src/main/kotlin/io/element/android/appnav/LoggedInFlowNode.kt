@@ -92,6 +92,7 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.RoomIdOrAlias
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.core.toRoomIdOrAlias
 import io.element.android.libraries.matrix.api.permalink.PermalinkData
@@ -383,6 +384,14 @@ class LoggedInFlowNode(
 
                     override fun onTabSelected(tab: HomeTab) {
                         homeTab = tab
+                    }
+
+                    override fun navigateToThread(roomId: RoomId, threadId: ThreadId) {
+                        lifecycleScope.launch {
+                            // The chat opens first, so back from the thread leads to the chat (spec §4.0).
+                            attachRoom(roomIdOrAlias = roomId.toRoomIdOrAlias(), clearBackstack = false)
+                                .attachThread(threadId, focusedEventId = null)
+                        }
                     }
                 }
                 homeEntryPoint.createNode(
