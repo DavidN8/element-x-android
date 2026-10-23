@@ -185,7 +185,7 @@ class WebViewYjsEngine(
                 }
 
                 override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                    Timber.w("The Matcha docs engine stopped (crashed: ${detail.didCrash()})")
+                    Timber.w("The Matcha docs engine stopped")
                     destroy()
                     return true
                 }

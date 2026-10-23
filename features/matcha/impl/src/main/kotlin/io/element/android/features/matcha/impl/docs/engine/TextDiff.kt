@@ -65,4 +65,19 @@ object TextDiff {
             change.copy(index = index)
         }
     }
+
+    /** Where [offset] of the old text ends up after [changes]: a cursor at a remote insertion stays before it. */
+    fun mapOffset(offset: Int, changes: List<TextChange>): Int {
+        var shift = 0
+        for (change in changes.sortedBy { it.index }) {
+            val isAtInsertion = change.remove == 0 && offset == change.index
+            val isBefore = offset < change.index || isAtInsertion
+            when {
+                isBefore -> return offset + shift
+                offset >= change.index + change.remove -> shift += change.insert.length - change.remove
+                else -> return change.index + shift + change.insert.length
+            }
+        }
+        return offset + shift
+    }
 }

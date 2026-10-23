@@ -50,4 +50,15 @@ class TextDiffTest {
         val atStart = TextDiff.changes("world", "Hi world")
         assertThat(TextDiff.apply("world!", TextDiff.rebase(atStart, "world", "world!"))).isEqualTo("Hi world!")
     }
+
+    @Test
+    fun `a cursor keeps its place around remote edits`() {
+        val inserted = TextDiff.changes("Hello", "Oh Hello")
+        assertThat(TextDiff.mapOffset(5, inserted)).isEqualTo(8)
+        assertThat(TextDiff.mapOffset(0, inserted)).isEqualTo(0)
+        val replaced = TextDiff.changes("a cat sat", "a dog sat")
+        assertThat(TextDiff.mapOffset(3, replaced)).isEqualTo(5)
+        assertThat(TextDiff.mapOffset(9, replaced)).isEqualTo(9)
+        assertThat(TextDiff.mapOffset(1, replaced)).isEqualTo(1)
+    }
 }
