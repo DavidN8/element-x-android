@@ -15,4 +15,12 @@
     <string name="search_no_results_title">No results</string>
     <string name="search_no_results_subtitle">There are no results for “%1$s”. Try a new search term.</string>
     <string name="screen_search_recent_searches_section_title">Recent searches</string>
+    <string name="screen_matcha_roomlist_filter_all">All</string>
+    <string name="screen_matcha_roomlist_view_all_chats">View all chats</string>
+    <plurals name="a11y_matcha_unread_messages">
+        <item quantity="one">%1$d unread message</item>
+        <item quantity="other">%1$d unread messages</item>
+    </plurals>
+    <string name="a11y_matcha_mentioned">You were mentioned</string>
+    <string name="a11y_matcha_home_more_options">More options</string>
 </resources>

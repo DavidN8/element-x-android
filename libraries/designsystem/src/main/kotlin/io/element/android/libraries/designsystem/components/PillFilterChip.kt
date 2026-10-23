@@ -52,6 +52,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
  * @param modifier the [Modifier] to apply to the chip.
  * @param leadingIcon an optional 18dp icon before the label.
  * @param trailingText optional trailing text, e.g. a count.
+ * @param trailingIcon an optional 18dp icon after the label, e.g. a chevron for a chip that opens a picker.
  * @param contentDescription the accessibility label, required for an icon-only chip.
  * @param maxLabelWidth caps long labels (thread names) with an ellipsis.
  * @param onLongClick optional long-press action, e.g. a thread's actions.
@@ -65,6 +66,7 @@ fun PillFilterChip(
     modifier: Modifier = Modifier,
     leadingIcon: ImageVector? = null,
     trailingText: String? = null,
+    trailingIcon: ImageVector? = null,
     contentDescription: String? = null,
     maxLabelWidth: Dp = Dp.Unspecified,
     onLongClick: (() -> Unit)? = null,
@@ -126,6 +128,14 @@ fun PillFilterChip(
                     maxLines = 1,
                 )
             }
+            if (trailingIcon != null) {
+                Icon(
+                    imageVector = trailingIcon,
+                    contentDescription = null,
+                    tint = content.value,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }
@@ -138,5 +148,6 @@ internal fun PillFilterChipPreview() = ElementPreview {
         PillFilterChip(label = "Tasks", selected = false, trailingText = "3", onClick = {})
         PillFilterChip(label = "New thread", selected = false, leadingIcon = CompoundIcons.Plus(), onClick = {})
         PillFilterChip(label = null, selected = false, leadingIcon = CompoundIcons.OverflowHorizontal(), contentDescription = "More", onClick = {})
+        PillFilterChip(label = "Spaces", selected = false, trailingIcon = CompoundIcons.ChevronDown(), onClick = {})
     }
 }
