@@ -53,10 +53,16 @@ fun RoomListFiltersView(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         item("all") {
+            // All means every chat: it is not selected inside a space, and tapping it also leaves the space.
             PillFilterChip(
                 label = stringResource(CommonStrings.common_matcha_all),
-                selected = !state.hasAnyFilterSelected,
-                onClick = { state.eventSink(RoomListFiltersEvent.ClearSelectedFilters) },
+                selected = !state.hasAnyFilterSelected && spaceFiltersState !is SpaceFiltersState.Selected,
+                onClick = {
+                    state.eventSink(RoomListFiltersEvent.ClearSelectedFilters)
+                    if (spaceFiltersState is SpaceFiltersState.Selected) {
+                        spaceFiltersState.eventSink(SpaceFiltersEvent.Selected.ClearSelection)
+                    }
+                },
             )
         }
         items(

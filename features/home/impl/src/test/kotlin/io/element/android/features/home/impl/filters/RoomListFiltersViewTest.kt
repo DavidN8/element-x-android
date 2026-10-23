@@ -12,6 +12,8 @@ package io.element.android.features.home.impl.filters
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
@@ -64,6 +66,34 @@ class RoomListFiltersViewTest : RobolectricTest() {
                 RoomListFiltersEvent.ClearSelectedFilters,
             )
         )
+    }
+
+    @Test
+    fun `All is not selected inside a space, and clicking it also clears the space filter`() = runAndroidComposeUiTest<ComponentActivity> {
+        val filtersEventsRecorder = EventsRecorder<RoomListFiltersEvent>()
+        val spaceEventsRecorder = EventsRecorder<SpaceFiltersEvent.Selected>()
+        setContent {
+            RoomListFiltersView(
+                state = aRoomListFiltersState(eventSink = filtersEventsRecorder),
+                spaceFiltersState = aSelectedSpaceFiltersState(eventSink = spaceEventsRecorder),
+            )
+        }
+        val all = onNodeWithText(activity!!.getString(CommonStrings.common_matcha_all))
+        all.assertIsNotSelected()
+        all.performClick()
+        filtersEventsRecorder.assertSingle(RoomListFiltersEvent.ClearSelectedFilters)
+        spaceEventsRecorder.assertSingle(SpaceFiltersEvent.Selected.ClearSelection)
+    }
+
+    @Test
+    fun `All is selected when no filter and no space is selected`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            RoomListFiltersView(
+                state = aRoomListFiltersState(),
+                spaceFiltersState = anUnselectedSpaceFiltersState(),
+            )
+        }
+        onNodeWithText(activity!!.getString(CommonStrings.common_matcha_all)).assertIsSelected()
     }
 
     // The Spaces chip is the last one: make the row wide enough for it to be composed.
