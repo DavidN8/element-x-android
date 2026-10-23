@@ -7,7 +7,6 @@
 
 package io.element.android.features.matcha.impl.tasks
 
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,7 +40,6 @@ import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.spaces.SpaceService
-import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -74,6 +72,7 @@ class TaskBoardPresenter(
     }
 
     private val writer = TaskWriter(store)
+    private val listActions = TaskListActions(store, snackbarDispatcher, roomCoroutineScope)
     private val editorPresenter = editorPresenterFactory.create(room, store, roomCoroutineScope)
 
     // Outlives the composition, so the editor opens once rather than every time the user comes back to the board.
@@ -156,12 +155,12 @@ class TaskBoardPresenter(
                 TaskBoardEvent.DismissActions -> actionsTaskId = null
                 is TaskBoardEvent.Move -> {
                     actionsTaskId = null
-                    if (board?.canEdit == true) roomCoroutineScope.launch { move(event.taskId, event.status) }
+                    if (board?.canEdit == true) listActions.move(event.taskId, event.status)
                 }
                 is TaskBoardEvent.SetArchived -> {
                     actionsTaskId = null
                     val task = tasks.firstOrNull { it.id == event.taskId } ?: return
-                    if (board?.canArchive(task) == true) roomCoroutineScope.launch { setArchived(event.taskId, event.archived, announce = true) }
+                    if (board?.canArchive(task) == true) listActions.setArchived(event.taskId, event.archived)
                 }
                 is TaskBoardEvent.RemindMe -> {
                     actionsTaskId = null
@@ -232,41 +231,5 @@ class TaskBoardPresenter(
             !snapshot.isLoaded || !snapshot.boardPointerRead -> TaskBoardContent.LookingForBoard
             else -> TaskBoardContent.Setup(canCreate = permissions.canCreateBoard, isCreating = isCreatingBoard, createFailed = createFailed)
         }
-    }
-
-    private suspend fun move(taskId: String, status: TaskStatus) {
-        val board = store.snapshot.value.board ?: return
-        val card = board.cards.firstOrNull { it.id == taskId }?.takeIf { it.status != status } ?: return
-        writer.write(board.rootId, card.toRevision().copy(status = status))
-            ?.let { postWriteError(it) { roomCoroutineScope.launch { move(taskId, status) } } }
-    }
-
-    /** Archives or restores a task and, for a thread's task, the thread too. */
-    private suspend fun setArchived(taskId: String, archived: Boolean, announce: Boolean) {
-        val board = store.snapshot.value.board ?: return
-        val card = board.cards.firstOrNull { it.id == taskId }?.takeIf { it.archived != archived } ?: return
-        val error = writer.write(board.rootId, card.toRevision().copy(archived = archived), archiveThread = card.threadId != null)
-        when {
-            error != null -> postWriteError(error) { roomCoroutineScope.launch { setArchived(taskId, archived, announce) } }
-            announce -> snackbarDispatcher.post(
-                SnackbarMessage(
-                    messageResId = if (archived) R.string.screen_matcha_tasks_archived_snackbar else R.string.screen_matcha_tasks_unarchived_snackbar,
-                    duration = SnackbarDuration.Long,
-                    actionResId = R.string.action_matcha_undo,
-                    action = { roomCoroutineScope.launch { setArchived(taskId, !archived, announce = false) } },
-                )
-            )
-        }
-    }
-
-    private fun postWriteError(error: TaskWriteError, retry: () -> Unit) {
-        snackbarDispatcher.post(
-            SnackbarMessage(
-                messageResId = error.messageResId(),
-                duration = SnackbarDuration.Long,
-                actionResId = CommonStrings.action_retry,
-                action = retry,
-            )
-        )
     }
 }

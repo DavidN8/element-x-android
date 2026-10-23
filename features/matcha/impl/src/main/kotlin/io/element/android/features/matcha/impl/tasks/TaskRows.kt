@@ -33,6 +33,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
@@ -43,17 +44,24 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.libraries.designsystem.atomic.atoms.PlaceholderAtom
+import io.element.android.libraries.designsystem.components.avatar.Avatar
+import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
+import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.placeholderBackground
+import io.element.android.libraries.designsystem.theme.rowSelected
 import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.designsystem.R as DesignSystemR
 
-/** A task as a chat-style row: status tile, name and deadline, then the description or the replies. Shared with the Tasks tab. */
+/**
+ * A task as a chat-style row: status tile, name and deadline, then the description or the replies. Across chats (the Tasks tab),
+ * the tile is the chat's avatar with a status badge and the second line starts with [chatName].
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun TaskRow(
@@ -61,18 +69,27 @@ internal fun TaskRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    chatName: String? = null,
+    chatAvatar: AvatarData? = null,
+    /** The task's thread is open next to the list (two-pane). */
+    isSelected: Boolean = false,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 76.dp)
+            .background(if (isSelected) ElementTheme.colors.rowSelected else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = 16.dp, vertical = 12.dp)
-            .semantics(mergeDescendants = true) {},
+            .semantics(mergeDescendants = true) { if (isSelected) selected = true },
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        TaskStatusTile(task.status)
+        if (chatAvatar != null) {
+            ChatAvatarWithStatus(chatAvatar, task.status)
+        } else {
+            TaskStatusTile(task.status)
+        }
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -90,8 +107,13 @@ internal fun TaskRow(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
+                val secondLine = task.secondLine()
                 Text(
-                    text = task.secondLine(),
+                    text = when {
+                        chatName == null -> secondLine
+                        secondLine.isEmpty() -> chatName
+                        else -> stringResource(R.string.screen_matcha_tasks_chat_and_summary, chatName, secondLine)
+                    },
                     style = ElementTheme.typography.fontBodyMdRegular,
                     color = ElementTheme.colors.textSecondary,
                     maxLines = 1,
@@ -103,6 +125,28 @@ internal fun TaskRow(
                     ReminderIcon(size = 16.dp)
                 }
             }
+        }
+    }
+}
+
+/** The source chat's 52dp avatar with an 18dp status badge at its bottom end, on a ring of the canvas colour. */
+@Composable
+private fun ChatAvatarWithStatus(avatar: AvatarData, status: TaskStatus) {
+    Box(modifier = Modifier.size(AvatarSize.RoomListItem.dp)) {
+        Avatar(avatarData = avatar, avatarType = AvatarType.Room(), forcedAvatarSize = AvatarSize.RoomListItem.dp)
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .size(18.dp)
+                .background(color = ElementTheme.colors.bgCanvasDefault, shape = CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = status.icon(),
+                contentDescription = stringResource(R.string.a11y_matcha_task_status, status.label()),
+                tint = status.tint(),
+                modifier = Modifier.size(14.dp),
+            )
         }
     }
 }
@@ -253,7 +297,7 @@ internal fun TaskPlaceholderRow(modifier: Modifier = Modifier) {
 internal fun TaskStatusTile(status: TaskStatus, modifier: Modifier = Modifier) {
     IconTile(
         icon = status.icon(),
-        tint = if (status == TaskStatus.Todo) ElementTheme.colors.iconSecondary else ElementTheme.colors.iconAccentPrimary,
+        tint = status.tint(),
         contentDescription = stringResource(R.string.a11y_matcha_task_status, status.label()),
         modifier = modifier,
     )
@@ -322,6 +366,9 @@ internal fun TaskStatus.label(): String = stringResource(
         TaskStatus.Done -> R.string.screen_matcha_tasks_status_done
     }
 )
+
+@Composable
+private fun TaskStatus.tint(): Color = if (this == TaskStatus.Todo) ElementTheme.colors.iconSecondary else ElementTheme.colors.iconAccentPrimary
 
 @Composable
 internal fun TaskStatus.icon(): ImageVector = when (this) {

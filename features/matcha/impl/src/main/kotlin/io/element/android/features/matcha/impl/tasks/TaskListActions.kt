@@ -1,0 +1,70 @@
+/*
+ * Copyright (c) 2026 Element Creations Ltd.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+package io.element.android.features.matcha.impl.tasks
+
+import androidx.compose.material3.SnackbarDuration
+import io.element.android.features.matcha.impl.R
+import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
+import io.element.android.libraries.ui.strings.CommonStrings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+
+/**
+ * Moves, archives and restores the tasks of one chat from a list of tasks, for the board and the Tasks tab: archiving offers Undo
+ * and a failed write offers Retry. Writes run in [scope], so they finish when the list is gone.
+ */
+internal class TaskListActions(
+    private val store: MatchaRoomStore,
+    private val snackbarDispatcher: SnackbarDispatcher,
+    private val scope: CoroutineScope,
+) {
+    private val writer = TaskWriter(store)
+
+    fun move(taskId: String, status: TaskStatus) {
+        scope.launch {
+            val board = store.snapshot.value.board ?: return@launch
+            val card = board.cards.firstOrNull { it.id == taskId }?.takeIf { it.status != status } ?: return@launch
+            writer.write(board.rootId, card.toRevision().copy(status = status))
+                ?.let { postWriteError(it) { move(taskId, status) } }
+        }
+    }
+
+    /** Archives or restores a task and, for a thread's task, the thread too. */
+    fun setArchived(taskId: String, archived: Boolean, announce: Boolean = true) {
+        scope.launch {
+            val board = store.snapshot.value.board ?: return@launch
+            val card = board.cards.firstOrNull { it.id == taskId }?.takeIf { it.archived != archived } ?: return@launch
+            val error = writer.write(board.rootId, card.toRevision().copy(archived = archived), archiveThread = card.threadId != null)
+            when {
+                error != null -> postWriteError(error) { setArchived(taskId, archived, announce) }
+                announce -> snackbarDispatcher.post(
+                    SnackbarMessage(
+                        messageResId = if (archived) R.string.screen_matcha_tasks_archived_snackbar else R.string.screen_matcha_tasks_unarchived_snackbar,
+                        duration = SnackbarDuration.Long,
+                        actionResId = R.string.action_matcha_undo,
+                        action = { setArchived(taskId, !archived, announce = false) },
+                    )
+                )
+            }
+        }
+    }
+
+    private fun postWriteError(error: TaskWriteError, retry: () -> Unit) {
+        snackbarDispatcher.post(
+            SnackbarMessage(
+                messageResId = error.messageResId(),
+                duration = SnackbarDuration.Long,
+                actionResId = CommonStrings.action_retry,
+                action = retry,
+            )
+        )
+    }
+}

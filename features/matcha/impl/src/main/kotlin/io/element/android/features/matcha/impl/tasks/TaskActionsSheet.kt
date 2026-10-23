@@ -37,7 +37,8 @@ import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
  * A task's long-press actions. An active task can be moved, opened, reminded about, edited and archived; an archived one can be
- * unarchived, opened and edited. Without [canEdit] only Open thread and Remind me are offered.
+ * unarchived, opened and edited. Without [canEdit] only Open thread and Remind me are offered. Across chats (the Tasks tab),
+ * [chatName] names the task's chat under the title and [onOpenChat] adds Open chat.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,16 +47,28 @@ internal fun TaskActionsSheet(
     canEdit: Boolean,
     canArchive: Boolean,
     canRemind: Boolean,
-    eventSink: (TaskBoardEvent) -> Unit,
+    onDismiss: () -> Unit,
+    onMove: (TaskStatus) -> Unit,
+    onArchive: () -> Unit,
+    onUnarchive: () -> Unit,
+    onOpenThread: () -> Unit,
+    onRemind: () -> Unit,
+    onEdit: () -> Unit,
+    chatName: String? = null,
+    onOpenChat: (() -> Unit)? = null,
 ) {
     val title = task.title ?: stringResource(R.string.common_matcha_thread_untitled)
     ModalBottomSheet(
-        onDismissRequest = { eventSink(TaskBoardEvent.DismissActions) },
+        onDismissRequest = onDismiss,
         scrollable = true,
         modifier = Modifier.semantics { paneTitle = title },
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-            SheetHeader(title = title, modifier = Modifier.padding(bottom = 8.dp))
+            SheetHeader(
+                title = title,
+                subtitle = chatName?.let { stringResource(R.string.screen_matcha_tasks_in_chat, it) },
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
             if (canEdit && !task.isArchived) {
                 Text(
                     text = stringResource(R.string.screen_matcha_tasks_move_to),
@@ -69,7 +82,7 @@ internal fun TaskActionsSheet(
                     TaskStatus.entries.forEach { status ->
                         ListItem(
                             leadingContent = ListItemContent.RadioButton(selected = task.status == status),
-                            onClick = { eventSink(TaskBoardEvent.Move(task.id, status)) },
+                            onClick = { onMove(status) },
                         ) {
                             Text(text = status.label())
                         }
@@ -80,55 +93,80 @@ internal fun TaskActionsSheet(
                 ActionRow(
                     text = stringResource(R.string.action_matcha_unarchive),
                     icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive),
-                    onClick = { eventSink(TaskBoardEvent.SetArchived(task.id, archived = false)) },
+                    onClick = onUnarchive,
                 )
             }
             if (task.threadId != null) {
                 ActionRow(
                     text = stringResource(R.string.screen_matcha_tasks_open_thread),
                     icon = CompoundIcons.Threads(),
-                    onClick = { eventSink(TaskBoardEvent.OpenTask(task.id)) },
+                    onClick = onOpenThread,
+                )
+            }
+            if (onOpenChat != null) {
+                ActionRow(
+                    text = stringResource(R.string.screen_matcha_tasks_open_chat),
+                    icon = CompoundIcons.Chat(),
+                    onClick = onOpenChat,
                 )
             }
             if (canRemind && !task.isArchived) {
                 ActionRow(
                     text = stringResource(R.string.action_matcha_remind_me),
                     icon = CompoundIcons.Notifications(),
-                    onClick = { eventSink(TaskBoardEvent.RemindMe(task.id)) },
+                    onClick = onRemind,
                 )
             }
             if (canEdit) {
                 ActionRow(
                     text = stringResource(R.string.screen_matcha_tasks_edit),
                     icon = CompoundIcons.Edit(),
-                    onClick = { eventSink(TaskBoardEvent.EditTask(task.id)) },
+                    onClick = onEdit,
                 )
             }
             if (canArchive && !task.isArchived) {
                 ActionRow(
                     text = stringResource(R.string.action_matcha_archive),
                     icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive),
-                    onClick = { eventSink(TaskBoardEvent.SetArchived(task.id, archived = true)) },
+                    onClick = onArchive,
                 )
             }
         }
     }
 }
 
+/** The actions sheet of a task on its chat's board. */
+@Composable
+internal fun TaskActionsSheet(task: TaskItem, board: TaskBoardContent.Board, eventSink: (TaskBoardEvent) -> Unit) {
+    TaskActionsSheet(
+        task = task,
+        canEdit = board.canEdit,
+        canArchive = board.canArchive(task),
+        canRemind = board.canRemind,
+        onDismiss = { eventSink(TaskBoardEvent.DismissActions) },
+        onMove = { eventSink(TaskBoardEvent.Move(task.id, it)) },
+        onArchive = { eventSink(TaskBoardEvent.SetArchived(task.id, archived = true)) },
+        onUnarchive = { eventSink(TaskBoardEvent.SetArchived(task.id, archived = false)) },
+        onOpenThread = { eventSink(TaskBoardEvent.OpenTask(task.id)) },
+        onRemind = { eventSink(TaskBoardEvent.RemindMe(task.id)) },
+        onEdit = { eventSink(TaskBoardEvent.EditTask(task.id)) },
+    )
+}
+
 @PreviewsDayNight
 @Composable
 internal fun TaskActionsSheetPreview() = ElementPreview {
-    TaskActionsSheet(task = aTaskItemList().first(), canEdit = true, canArchive = true, canRemind = true, eventSink = {})
+    TaskActionsSheet(task = aTaskItemList().first(), board = aBoardContent(), eventSink = {})
 }
 
 @PreviewsDayNight
 @Composable
 internal fun TaskActionsSheetReadOnlyPreview() = ElementPreview {
-    TaskActionsSheet(task = aTaskItemList().first(), canEdit = false, canArchive = false, canRemind = true, eventSink = {})
+    TaskActionsSheet(task = aTaskItemList().first(), board = aBoardContent(canEdit = false), eventSink = {})
 }
 
 @PreviewsDayNight
 @Composable
 internal fun TaskActionsSheetArchivedPreview() = ElementPreview {
-    TaskActionsSheet(task = aTaskItemList().first().copy(isArchived = true), canEdit = true, canArchive = true, canRemind = true, eventSink = {})
+    TaskActionsSheet(task = aTaskItemList().first().copy(isArchived = true), board = aBoardContent(), eventSink = {})
 }

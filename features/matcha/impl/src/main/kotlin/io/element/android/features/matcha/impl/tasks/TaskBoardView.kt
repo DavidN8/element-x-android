@@ -109,13 +109,7 @@ fun TasksView(
     val board = state.content as? TaskBoardContent.Board
     val actionsTask = state.actionsSheet
     if (actionsTask != null && board != null) {
-        TaskActionsSheet(
-            task = actionsTask,
-            canEdit = board.canEdit,
-            canArchive = board.canArchive(actionsTask),
-            canRemind = board.canRemind,
-            eventSink = state.eventSink,
-        )
+        TaskActionsSheet(task = actionsTask, board = board, eventSink = state.eventSink)
     }
     state.editor?.let { TaskEditorSheet(it) }
 }

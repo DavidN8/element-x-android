@@ -67,14 +67,14 @@ class TaskEditorPresenter(
     /**
      * @param target the task to edit, or a new task.
      * @param onClose the sheet is done: saved, discarded, or the task is gone.
-     * @param onRemind shows the reminder sheet for the task.
+     * @param onRemind shows the reminder sheet for the task, or null where reminders can't be shown (the Tasks tab).
      * @param onOpenThread shows the task's thread; the sheet is closed first.
      */
     @Composable
     fun present(
         target: TaskEditorTarget,
         onClose: () -> Unit,
-        onRemind: (MatchaReminderTarget) -> Unit,
+        onRemind: ((MatchaReminderTarget) -> Unit)?,
         onOpenThread: (ThreadId) -> Unit,
     ): TaskEditorState {
         val snapshot by store.snapshot.collectAsState()
@@ -105,7 +105,7 @@ class TaskEditorPresenter(
         val isLinked = target is TaskEditorTarget.New || threadId != null
         val titleMaxLength = if (isLinked) MatchaConfig.THREAD_NAME_MAX_LENGTH else MatchaConfig.CARD_TITLE_MAX_LENGTH
         val canRename = threadId == null || permissions.canManageThreads
-        val canRemind = rememberCanRemind(room, permissions.canSendMessages) && initial != null && !initial.archived
+        val canRemind = rememberCanRemind(room, permissions.canSendMessages) && onRemind != null && initial != null && !initial.archived
         val hasChanges = title != initial?.title.orEmpty() || description != initial?.description.orEmpty() ||
             dueAt != initial?.dueAt || initial != null && status != initial.status
         val titleError = titleError(title.trim(), titleMaxLength, includeEmpty = showErrors)
@@ -184,7 +184,7 @@ class TaskEditorPresenter(
                     }
                 }
                 TaskEditorEvent.RemindMe -> if (canRemind && initial != null) {
-                    onRemind(MatchaReminderTarget(message = title.trim(), threadId = threadId?.let(::ThreadId), dueAt = dueAt, cardId = initial.id))
+                    onRemind?.invoke(MatchaReminderTarget(message = title.trim(), threadId = threadId?.let(::ThreadId), dueAt = dueAt, cardId = initial.id))
                 }
                 TaskEditorEvent.OpenThread -> if (threadId != null) {
                     if (hasChanges) exit = Exit.ToThread else onOpenThread(ThreadId(threadId))

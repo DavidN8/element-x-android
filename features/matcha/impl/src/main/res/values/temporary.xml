@@ -96,4 +96,10 @@
     <string name="a11y_matcha_task_reminder">"Reminder requested"</string>
     <string name="a11y_matcha_clear_deadline">"Clear deadline"</string>
     <!-- End of track B: task board. -->
+    <!-- Track B: Tasks tab. -->
+    <string name="screen_matcha_tasks_open_chat">"Open chat"</string>
+    <string name="screen_matcha_tasks_in_chat">"In %1$s"</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: a Tasks-tab row's second line, the chat name then the description. -->
+    <string name="screen_matcha_tasks_chat_and_summary">"%1$s · %2$s"</string>
+    <!-- End of track B: Tasks tab. -->
 </resources>
