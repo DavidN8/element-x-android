@@ -95,9 +95,9 @@ fun SpaceRoomItemView(
             Text(
                 style = ElementTheme.typography.fontBodyMdRegular,
                 text = spaceRoom.topic?.takeIf { it.isNotBlank() } ?: if (spaceRoom.isSpace) {
-                    pluralStringResource(CommonPlurals.common_rooms, spaceRoom.childrenCount, spaceRoom.childrenCount)
+                    pluralStringResource(CommonPlurals.common_matcha_room_count, spaceRoom.childrenCount, spaceRoom.childrenCount)
                 } else {
-                    pluralStringResource(CommonPlurals.common_member_count, spaceRoom.numJoinedMembers, spaceRoom.numJoinedMembers)
+                    pluralStringResource(CommonPlurals.common_matcha_member_count, spaceRoom.numJoinedMembers, spaceRoom.numJoinedMembers)
                 },
                 color = ElementTheme.colors.textSecondary,
                 maxLines = 1,

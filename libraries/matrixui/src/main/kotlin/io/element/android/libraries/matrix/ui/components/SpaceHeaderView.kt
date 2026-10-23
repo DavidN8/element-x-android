@@ -81,12 +81,11 @@ fun SpaceHeaderView(
             }
         },
         subtitle = {
-            val space = stringResource(CommonStrings.common_space)
             Text(
                 text = if (numberOfRooms == null) {
-                    space
+                    stringResource(CommonStrings.common_space)
                 } else {
-                    space + " · " + pluralStringResource(CommonPlurals.common_rooms, numberOfRooms, numberOfRooms)
+                    pluralStringResource(CommonPlurals.common_matcha_space_rooms, numberOfRooms, numberOfRooms)
                 },
                 style = ElementTheme.typography.fontBodyMdRegular,
                 color = ElementTheme.colors.textSecondary,
