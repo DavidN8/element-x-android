@@ -66,6 +66,7 @@ class DocEditorPresenter(
         var showLeaveDialog by remember { mutableStateOf(false) }
         var nameSheet by remember { mutableStateOf<DocNameSheetState?>(null) }
         var applyingEdits by remember { mutableIntStateOf(0) }
+        var isLeaving by remember { mutableStateOf(false) }
 
         val isEarlier = context.isEarlierChatDocument
         val catalog = catalogState
@@ -124,9 +125,12 @@ class DocEditorPresenter(
                 DocEditorEvent.Back -> when {
                     isEditing -> isEditing = false
                     !hasUnsaved -> onDone()
+                    isLeaving -> Unit
                     // Edits still waiting for the debounce go now; only what the server refused is at risk.
                     else -> coroutineScope.launch {
+                        isLeaving = true
                         session.flush()
+                        isLeaving = false
                         if (session.state.value.pendingUpdates > 0) showLeaveDialog = true else onDone()
                     }
                 }

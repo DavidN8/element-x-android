@@ -52,6 +52,7 @@ import io.element.android.libraries.featureflag.api.FeatureFlags
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * The docs of a space, or a chat's earlier document: the list, the editor and the one-time setup. It opens the space and its
@@ -128,17 +129,25 @@ class MatchaSpaceDocsFlowNode(
                         override fun openSetup() = backstack.push(NavTarget.Setup)
                     },
                 )
-                node(buildContext) { modifier -> SpaceDocsListView(state = presenter.present(), onBackClick = ::close, modifier = modifier) }
+                val onBack = once(::close)
+                node(buildContext) { modifier -> SpaceDocsListView(state = presenter.present(), onBackClick = onBack, modifier = modifier) }
             }
             NavTarget.Setup -> {
-                val presenter = SpaceDocsSetupPresenter(SpaceDocsSetup(context.room), onDone = ::closeScreen)
-                node(buildContext) { modifier -> SpaceDocsSetupView(state = presenter.present(), onCloseClick = ::closeScreen, modifier = modifier) }
+                val onDone = once(::closeScreen)
+                val presenter = SpaceDocsSetupPresenter(SpaceDocsSetup(context.room), onDone = onDone)
+                node(buildContext) { modifier -> SpaceDocsSetupView(state = presenter.present(), onCloseClick = onDone, modifier = modifier) }
             }
             is NavTarget.Editor -> {
-                val presenter = editorPresenterFactory.create(context, navTarget.documentId, onDone = ::closeScreen)
+                val presenter = editorPresenterFactory.create(context, navTarget.documentId, onDone = once(::closeScreen))
                 node(buildContext) { modifier -> DocEditorView(state = presenter.present(), modifier = modifier) }
             }
         }
+    }
+
+    /** A screen leaves once, however often its back button is tapped. */
+    private fun once(action: () -> Unit): () -> Unit {
+        val isDone = AtomicBoolean(false)
+        return { if (isDone.compareAndSet(false, true)) action() }
     }
 
     /** Back from a screen: to the one below it, or out of docs. */
