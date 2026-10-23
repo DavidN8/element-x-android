@@ -14,6 +14,8 @@
     <string name="common_no_room_selected">Select a chat to start messaging</string>
     <string name="common_no_chat_selected">No chat selected</string>
     <string name="common_matcha_all">All</string>
+    <string name="common_matcha_all_threads">All threads</string>
+    <string name="common_matcha_thread_untitled">Untitled thread</string>
     <plurals name="common_matcha_member_count">
         <item quantity="one">%1$d member</item>
         <item quantity="other">%1$d members</item>

@@ -14,6 +14,7 @@ import io.element.android.features.messages.impl.threads.list.ThreadsListEvent
 import io.element.android.features.messages.impl.threads.list.ThreadsListPresenter
 import io.element.android.features.messages.impl.threads.list.aThreadListItem
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
+import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.test.AN_AVATAR_URL
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.A_ROOM_NAME
@@ -21,6 +22,7 @@ import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.threads.FakeThreadsListService
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.test
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -58,6 +60,41 @@ class ThreadsListPresenterTest {
 
             // And we receive the new items
             assertThat(awaitItem().threads).isNotEmpty()
+        }
+    }
+
+    @Test
+    fun `present - a failed first page shows the error, and retry loads again`() = runTest {
+        var result = Result.failure<Unit>(IllegalStateException("Network error"))
+        val paginateRecorder = lambdaRecorder<Result<Unit>> { result }
+        val threadsListService = FakeThreadsListService(paginate = paginateRecorder)
+        createThreadsListPresenter(FakeJoinedRoom(threadsListService = threadsListService)).test {
+            val failedState = awaitItem().let { state -> if (state.loadFailed) state else awaitItem() }
+            assertThat(failedState.loadFailed).isTrue()
+            assertThat(failedState.isLoadingFirstPage).isFalse()
+
+            result = Result.success(Unit)
+            failedState.eventSink(ThreadsListEvent.Retry)
+            val retryingState = awaitItem()
+            assertThat(retryingState.loadFailed).isFalse()
+            assertThat(retryingState.isLoadingFirstPage).isTrue()
+            paginateRecorder.assertions().isCalledExactly(2)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - hasMoreToLoad follows the pagination status`() = runTest {
+        val paginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
+        val threadsListService = FakeThreadsListService(paginationStatus = paginationStatus)
+        createThreadsListPresenter(FakeJoinedRoom(threadsListService = threadsListService)).test {
+            assertThat(awaitItem().hasMoreToLoad).isTrue()
+            paginationStatus.value = ThreadListPaginationStatus.Idle(hasMoreToLoad = false)
+            val endState = awaitItem()
+            assertThat(endState.hasMoreToLoad).isFalse()
+            // Nothing to load and nothing loaded: the empty state, not the loading one
+            assertThat(endState.isLoadingFirstPage).isFalse()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

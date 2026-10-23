@@ -18,5 +18,12 @@ data class ThreadsListState(
     val isRoomTombstoned: Boolean,
     val heroes: ImmutableList<AvatarData>,
     val threads: ImmutableList<ThreadListRowItem>,
+    /** Whether older threads can still be loaded. */
+    val hasMoreToLoad: Boolean,
+    /** Whether the last attempt to load threads failed. */
+    val loadFailed: Boolean,
     val eventSink: (ThreadsListEvent) -> Unit,
-)
+) {
+    /** Nothing is shown yet, and the first page is on its way. */
+    val isLoadingFirstPage = threads.isEmpty() && hasMoreToLoad && !loadFailed
+}

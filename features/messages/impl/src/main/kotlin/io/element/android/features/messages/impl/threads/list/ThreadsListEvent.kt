@@ -9,4 +9,7 @@ package io.element.android.features.messages.impl.threads.list
 
 sealed interface ThreadsListEvent {
     data object Paginate : ThreadsListEvent
+
+    /** Tries loading again after a failure. */
+    data object Retry : ThreadsListEvent
 }

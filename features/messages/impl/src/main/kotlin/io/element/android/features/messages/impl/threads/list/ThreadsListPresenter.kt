@@ -11,9 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Inject
 import io.element.android.features.messages.impl.timeline.factories.event.TimelineItemContentFactory
 import io.element.android.features.messages.impl.utils.messagesummary.MessageSummaryFormatter
@@ -26,6 +28,7 @@ import io.element.android.libraries.matrix.api.room.threads.ThreadListPagination
 import io.element.android.libraries.matrix.ui.model.getAvatarData
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -41,10 +44,20 @@ class ThreadsListPresenter(
     override fun present(): ThreadsListState {
         val coroutineScope = rememberCoroutineScope()
         val threadsListService = room.threadsListService
+        var loadFailed by remember { mutableStateOf(false) }
+
+        fun CoroutineScope.paginate() = launch {
+            threadsListService.paginate()
+                .onSuccess { loadFailed = false }
+                .onFailure {
+                    Timber.w(it, "Failed to paginate thread list")
+                    loadFailed = true
+                }
+        }
 
         val threads by produceState(initialValue = persistentListOf(), key1 = threadsListService) {
             threadsListService.subscribeToItemUpdates()
-                .onStart { threadsListService.paginate() }
+                .onStart { paginate() }
                 .collect { items ->
                     Timber.d("Received thread list update with ${items.size} items")
                     value = items.map { item ->
@@ -104,13 +117,14 @@ class ThreadsListPresenter(
         fun handleEvent(event: ThreadsListEvent) {
             when (event) {
                 ThreadsListEvent.Paginate -> if ((paginationStatus as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) {
-                    coroutineScope.launch {
-                        Timber.d("Paginating thread list: $paginationStatus")
-                        threadsListService.paginate()
-                            .onFailure { Timber.w(it, "Failed to paginate thread list") }
-                    }
+                    Timber.d("Paginating thread list: $paginationStatus")
+                    coroutineScope.paginate()
                 } else {
                     Timber.d("Not paginating, current status: $paginationStatus")
+                }
+                ThreadsListEvent.Retry -> {
+                    loadFailed = false
+                    coroutineScope.paginate()
                 }
             }
         }
@@ -122,6 +136,9 @@ class ThreadsListPresenter(
             roomAvatarUrl = roomInfo.avatarUrl,
             isRoomTombstoned = roomInfo.successorRoom != null,
             heroes = heroes,
+            // While a page is loading there may be more
+            hasMoreToLoad = (paginationStatus as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad ?: true,
+            loadFailed = loadFailed,
             eventSink = ::handleEvent,
         )
     }
