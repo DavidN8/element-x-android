@@ -62,11 +62,10 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
             if (homeElement.targetState == BackStack.State.ACTIVE) {
                 NoRoomSelectedView()
             }
+            // No transition: the phone slide animation would sweep across the whole pane on every room switch.
             SafeChildren(
                 navModel = backstack,
-                // Give the pane its bounds up front, so the first pushed room gets a real slide-in transition.
                 modifier = Modifier.fillMaxSize(),
-                transitionHandler = rememberLoggedInFlowTransitionHandler(backstack),
             ) {
                 children<LoggedInFlowNode.NavTarget> { child, descriptor ->
                     // Home is drawn in the start pane.
