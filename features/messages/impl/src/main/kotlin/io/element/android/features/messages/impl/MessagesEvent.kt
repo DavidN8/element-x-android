@@ -28,6 +28,9 @@ sealed interface MessagesEvent {
     /** The Matcha "Remind me" sheet was closed. */
     data object DismissMatchaReminder : MessagesEvent
 
+    /** The attach sheet asked for a new task in this chat. */
+    data object MatchaNewTask : MessagesEvent
+
     /** The chat's ⋮ asked for a new named thread. */
     data object MatchaNewThread : MessagesEvent
 

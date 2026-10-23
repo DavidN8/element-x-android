@@ -693,6 +693,8 @@ private fun MessagesViewContent(
             onSendLocationClick = onSendLocationClick,
             onCreatePollClick = onCreatePollClick,
             enableTextFormatting = state.enableTextFormatting,
+            // Adding a task posts its thread's root message.
+            onCreateTaskClick = { state.eventSink(MessagesEvent.MatchaNewTask) }.takeIf { state.matcha != null && state.userEventPermissions.canSendMessage },
         )
 
         if (state.voiceMessageComposerState.showPermissionRationaleDialog) {

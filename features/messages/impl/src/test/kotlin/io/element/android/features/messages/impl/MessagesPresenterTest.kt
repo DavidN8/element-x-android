@@ -228,16 +228,19 @@ class MessagesPresenterTest {
     }
 
     @Test
-    fun `present - the Matcha menu opens the New thread sheet and the reminder sheet`() = runTest {
+    fun `present - the Matcha menu and the attach sheet open the New thread, new task and reminder sheets`() = runTest {
         val openNewThread = lambdaRecorder<Unit> {}
+        val openNewTask = lambdaRecorder<Unit> {}
         val presenter = createMessagesPresenter(
             featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
-            matchaRoomController = FakeMatchaRoomController(openNewThreadLambda = openNewThread),
+            matchaRoomController = FakeMatchaRoomController(openNewThreadLambda = openNewThread, openNewTaskLambda = openNewTask),
         )
         presenter.testWithLifecycleOwner {
             val state = consumeItemsUntilPredicate { it.matcha?.canRemind == true }.last()
             state.eventSink(MessagesEvent.MatchaNewThread)
             openNewThread.assertions().isCalledOnce()
+            state.eventSink(MessagesEvent.MatchaNewTask)
+            openNewTask.assertions().isCalledOnce()
             state.eventSink(MessagesEvent.MatchaRemindMe)
             val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
             assertThat(target).isEqualTo(MatchaReminderTarget())

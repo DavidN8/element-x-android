@@ -325,6 +325,7 @@ class MessagesPresenter(
                 }
                 MessagesEvent.DismissMatchaReminder -> matchaReminderTarget = null
                 MessagesEvent.MatchaNewThread -> if (matchaState != null) matchaRoomController.value.openNewThread()
+                MessagesEvent.MatchaNewTask -> if (matchaState != null) matchaRoomController.value.openNewTask()
                 MessagesEvent.MatchaRemindMe -> if (matchaState?.canRemind == true) {
                     matchaReminderTarget = MatchaReminderTarget(threadId = (timelineState.timelineMode as? Timeline.Mode.Thread)?.threadRootId)
                 }

@@ -360,6 +360,30 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `with the Matcha workspaces, the attach sheet's Task tile asks for a new task`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<MessagesEvent>()
+        val state = aMessagesState(
+            composerState = aMessageComposerState(showAttachmentSourcePicker = true),
+            matcha = aMatchaChatState(),
+            eventSink = eventsRecorder,
+        )
+        setMessagesView(state = state)
+        clickOn(R.string.screen_matcha_room_attach_task)
+        eventsRecorder.assertSingle(MessagesEvent.MatchaNewTask)
+    }
+
+    @Test
+    fun `without the Matcha workspaces, the attach sheet has no Task tile`() = runAndroidComposeUiTest {
+        val state = aMessagesState(
+            composerState = aMessageComposerState(showAttachmentSourcePicker = true),
+            matcha = null,
+            eventSink = EventsRecorder(expectEvents = false),
+        )
+        setMessagesView(state = state)
+        assertNoNodeWithText(R.string.screen_matcha_room_attach_task)
+    }
+
+    @Test
     @Config(qualifiers = "h1024dp")
     fun `clicking on the avatar of the sender of an Event emits the expected event`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<MessagesEvent>()

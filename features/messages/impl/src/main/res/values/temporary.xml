@@ -12,6 +12,7 @@
         <item quantity="other">%1$d unread messages</item>
     </plurals>
     <string name="screen_matcha_room_unread_band_many">%1$d+ unread messages</string>
+    <string name="screen_matcha_room_attach_task">Task</string>
     <string name="screen_matcha_threads_list_empty_title">No threads yet</string>
     <string name="screen_matcha_threads_list_empty_body">Start one with New thread.</string>
     <string name="screen_matcha_threads_list_archived_empty">No archived threads</string>

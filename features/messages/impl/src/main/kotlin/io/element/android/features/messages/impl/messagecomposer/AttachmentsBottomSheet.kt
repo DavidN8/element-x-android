@@ -64,6 +64,8 @@ internal fun AttachmentsBottomSheet(
     onCreatePollClick: () -> Unit,
     enableTextFormatting: Boolean,
     modifier: Modifier = Modifier,
+    // Null hides the Matcha Task tile.
+    onCreateTaskClick: (() -> Unit)? = null,
 ) {
     val localView = LocalView.current
     var isVisible by rememberSaveable { mutableStateOf(state.showAttachmentSourcePicker) }
@@ -103,6 +105,7 @@ internal fun AttachmentsBottomSheet(
                 enableTextFormatting = enableTextFormatting,
                 onSendLocationClick = onSendLocationClick,
                 onCreatePollClick = onCreatePollClick,
+                onCreateTaskClick = onCreateTaskClick,
             )
         }
     }
@@ -123,6 +126,7 @@ private fun AttachmentSourcePickerMenu(
     onSendLocationClick: () -> Unit,
     onCreatePollClick: () -> Unit,
     enableTextFormatting: Boolean,
+    onCreateTaskClick: (() -> Unit)?,
 ) {
     val colors = ElementTheme.colors
     // No tile is green: green means an action or a selection, never decoration.
@@ -149,6 +153,12 @@ private fun AttachmentSourcePickerMenu(
             state.eventSink(MessageComposerEvent.PickAttachmentSource.Poll)
             onCreatePollClick()
         })
+        if (onCreateTaskClick != null) {
+            add(AttachmentTile(CompoundIcons.CheckCircle(), R.string.screen_matcha_room_attach_task, colors.bgDecorative4, colors.textDecorative4) {
+                state.eventSink(MessageComposerEvent.DismissAttachmentMenu)
+                onCreateTaskClick()
+            })
+        }
         if (enableTextFormatting) {
             add(AttachmentTile(
                 CompoundIcons.TextFormatting(),
@@ -231,5 +241,6 @@ internal fun AttachmentsBottomSheetPreview() = ElementPreview(fillMaxSize = true
         onSendLocationClick = {},
         onCreatePollClick = {},
         enableTextFormatting = true,
+        onCreateTaskClick = {},
     )
 }
