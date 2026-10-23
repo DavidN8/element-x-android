@@ -45,8 +45,10 @@ import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionState
 import io.element.android.features.messages.impl.timeline.components.reactionsummary.ReactionSummaryState
+import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetEvent
 import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetState
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
+import io.element.android.features.messages.impl.timeline.model.TimelineItemReadReceipts
 import io.element.android.features.messages.impl.timeline.model.TimelineItemThreadInfo
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemPollContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStateContent
@@ -258,6 +260,7 @@ class MessagesPresenter(
                         enableTextFormatting = composerState.showTextFormatting,
                         timelineState = timelineState,
                         timelineProtectionState = timelineProtectionState,
+                        readReceiptBottomSheetState = readReceiptBottomSheetState,
                         redactEventAction = redactEventAction,
                     )
                 }
@@ -367,6 +370,34 @@ class MessagesPresenter(
         )
     }
 
+    /**
+     * Opens "Seen by" for one of your messages. A read receipt sits on the newest event its user has read, so everyone with a receipt on this
+     * message or a newer one has seen it.
+     */
+    private fun handleReadByAction(
+        targetEvent: TimelineItem.Event,
+        timelineState: TimelineState,
+        readReceiptBottomSheetState: ReadReceiptBottomSheetState,
+    ) {
+        val index = timelineState.timelineItems.indexOfFirst { it.identifier() == targetEvent.id }
+        if (index == -1) return
+        val receipts = timelineState.timelineItems
+            .subList(0, index + 1)
+            .flatMap { item ->
+                when (item) {
+                    is TimelineItem.Event -> item.readReceiptState.receipts
+                    is TimelineItem.GroupedEvents -> item.aggregatedReadReceipts
+                    is TimelineItem.Virtual -> emptyList()
+                }
+            }
+            .distinctBy { it.avatarData.id }
+        readReceiptBottomSheetState.eventSink(
+            ReadReceiptBottomSheetEvent.EventSelected(
+                targetEvent.copy(readReceiptState = TimelineItemReadReceipts(receipts.toImmutableList()))
+            )
+        )
+    }
+
     private fun RoomInfo.sharedHistoryIcon(): SharedHistoryIcon {
         if (isEncrypted == true) {
             if (historyVisibility == RoomHistoryVisibility.Shared) {
@@ -401,6 +432,7 @@ class MessagesPresenter(
         timelineProtectionState: TimelineProtectionState,
         enableTextFormatting: Boolean,
         timelineState: TimelineState,
+        readReceiptBottomSheetState: ReadReceiptBottomSheetState,
         redactEventAction: MutableState<AsyncAction<Unit>>,
     ) = launch {
         when (action) {
@@ -443,6 +475,7 @@ class MessagesPresenter(
             TimelineItemAction.ViewInTimeline -> Unit
             TimelineItemAction.RetrySending -> handleRetrySending(targetEvent)
             TimelineItemAction.AbortSending -> handleActionAbortSend(targetEvent)
+            TimelineItemAction.ReadBy -> handleReadByAction(targetEvent, timelineState, readReceiptBottomSheetState)
         }
     }
 

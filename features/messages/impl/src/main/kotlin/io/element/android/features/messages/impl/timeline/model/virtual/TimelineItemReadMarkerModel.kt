@@ -8,6 +8,14 @@
 
 package io.element.android.features.messages.impl.timeline.model.virtual
 
-data object TimelineItemReadMarkerModel : TimelineItemVirtualModel {
+/**
+ * The unread band.
+ *
+ * @property unreadCount the number of messages from others newer than the read marker, filled in by
+ * [io.element.android.features.messages.impl.timeline.factories.withReadStates].
+ */
+data class TimelineItemReadMarkerModel(
+    val unreadCount: Int = 0,
+) : TimelineItemVirtualModel {
     override val type: String = "TimelineItemReadMarkerModel"
 }

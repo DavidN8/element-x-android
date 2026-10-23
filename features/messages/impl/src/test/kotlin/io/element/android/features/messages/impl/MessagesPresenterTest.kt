@@ -34,7 +34,10 @@ import io.element.android.features.messages.impl.timeline.TimelineController
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineState
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
+import io.element.android.features.messages.impl.timeline.aTimelineItemReadReceipts
 import io.element.android.features.messages.impl.timeline.aTimelineState
+import io.element.android.features.messages.impl.timeline.components.receipt.aReadReceiptData
+import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetEvent
 import io.element.android.features.messages.impl.timeline.model.TimelineItemThreadInfo
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemFileContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemImageContent
@@ -1221,6 +1224,29 @@ class MessagesPresenterTest {
     }
 
     @Test
+    fun `present - handle action seen by shows everyone with a receipt on the message or a newer one`() = runTest {
+        val newer = aTimelineItemEvent(readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(1))))
+        val target = aTimelineItemEvent(isMine = true, readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(2), aReadReceiptData(1))))
+        val older = aTimelineItemEvent(readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(3))))
+        val eventsRecorder = EventsRecorder<ReadReceiptBottomSheetEvent>()
+        val presenter = createMessagesPresenter(
+            timelineState = aTimelineState(timelineItems = persistentListOf(newer, target, older)),
+            readReceiptBottomSheetEventSink = eventsRecorder,
+        )
+        presenter.testWithLifecycleOwner {
+            skipItems(1)
+            val initialState = awaitItem()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.ReadBy, target))
+            advanceUntilIdle()
+            eventsRecorder.assertSingle(
+                ReadReceiptBottomSheetEvent.EventSelected(
+                    target.copy(readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(1), aReadReceiptData(2))))
+                )
+            )
+        }
+    }
+
+    @Test
     fun `present - handle action view in timeline, it should have no effect`() = runTest {
         val messageEvent = aMessageEvent(
             content = aTimelineItemTextContent()
@@ -1605,6 +1631,7 @@ class MessagesPresenterTest {
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
         liveLocationShareManager: FakeActiveLiveLocationShareManager = FakeActiveLiveLocationShareManager(),
+        readReceiptBottomSheetEventSink: (ReadReceiptBottomSheetEvent) -> Unit = {},
     ): MessagesPresenter {
         return MessagesPresenter(
             navigator = navigator,
@@ -1618,7 +1645,7 @@ class MessagesPresenterTest {
             actionListPresenter = { anActionListState(eventSink = actionListEventSink) },
             customReactionPresenter = { aCustomReactionState() },
             reactionSummaryPresenter = { aReactionSummaryState() },
-            readReceiptBottomSheetPresenter = { aReadReceiptBottomSheetState() },
+            readReceiptBottomSheetPresenter = { aReadReceiptBottomSheetState(eventSink = readReceiptBottomSheetEventSink) },
             pinnedMessagesBannerPresenter = { aLoadedPinnedMessagesBannerState() },
             roomCallStatePresenter = { aStandByCallState() },
             roomMemberModerationPresenter = roomMemberModerationPresenter,

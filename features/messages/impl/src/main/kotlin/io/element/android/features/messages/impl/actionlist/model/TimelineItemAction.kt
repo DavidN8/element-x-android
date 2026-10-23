@@ -12,6 +12,7 @@ import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 enum class TimelineItemAction(
     @StringRes val titleRes: Int,
@@ -36,6 +37,7 @@ enum class TimelineItemAction(
     EndPoll(CommonStrings.action_end_poll, CompoundDrawables.ic_compound_polls_end),
     Pin(CommonStrings.action_pin, CompoundDrawables.ic_compound_pin),
     Unpin(CommonStrings.action_unpin, CompoundDrawables.ic_compound_unpin),
+    ReadBy(CommonStrings.common_seen_by, DesignSystemR.drawable.ic_matcha_done_all),
 
     // Note: these actions are not used in UI for now
     RetrySending(CommonStrings.action_retry, CompoundDrawables.ic_compound_send_solid),

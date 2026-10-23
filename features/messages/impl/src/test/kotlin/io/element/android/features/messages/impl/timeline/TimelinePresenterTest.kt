@@ -391,7 +391,7 @@ class TimelinePresenterTest {
         val timeline = FakeTimeline(timelineItems = timelineItems)
         val presenter = createTimelinePresenter(
             timeline = timeline,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -420,7 +420,7 @@ class TimelinePresenterTest {
         val timeline = FakeTimeline(timelineItems = timelineItems)
         val presenter = createTimelinePresenter(
             timeline = timeline,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -445,7 +445,7 @@ class TimelinePresenterTest {
         val timeline = FakeTimeline(timelineItems = timelineItems)
         val presenter = createTimelinePresenter(
             timeline = timeline,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to false)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to false)),
         )
         presenter.test {
             awaitFirstItem()
@@ -599,7 +599,7 @@ class TimelinePresenterTest {
         val timeline = FakeTimeline(timelineItems = timelineItems)
         val presenter = createTimelinePresenter(
             timeline = timeline,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -630,7 +630,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -666,7 +666,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -702,7 +702,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -735,7 +735,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -766,7 +766,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             val initialState = awaitFirstItem()
@@ -793,7 +793,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to false)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to false)),
         )
         presenter.test {
             awaitFirstItem()
@@ -823,7 +823,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -859,7 +859,7 @@ class TimelinePresenterTest {
         val presenter = createTimelinePresenter(
             timeline = timeline,
             room = room,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.JumpToUnread.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.JumpToUnread.key to true)),
         )
         presenter.test {
             awaitFirstItem()
@@ -1870,7 +1870,7 @@ class TimelinePresenterTest {
         )
         val presenter = createTimelinePresenter(
             timeline = FakeTimeline(timelineItems = timelineItems),
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to true)),
         )
         presenter.test {
             val initialState = consumeItemsUntilPredicate { it.hasAnyEvent }.last()
@@ -1885,7 +1885,7 @@ class TimelinePresenterTest {
 
     @Test
     fun `present - entering selection mode is ignored when the flag is off`() = runTest {
-        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to false))
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to false))
         val presenter = createTimelinePresenter(featureFlagService = featureFlagService)
         presenter.test {
             val initialState = awaitFirstItem()
@@ -1903,7 +1903,7 @@ class TimelinePresenterTest {
         )
         val presenter = createTimelinePresenter(
             timeline = FakeTimeline(timelineItems = timelineItems),
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to true)),
         )
         presenter.test {
             val initialState = consumeItemsUntilPredicate { it.hasAnyEvent }.last()
@@ -1925,7 +1925,7 @@ class TimelinePresenterTest {
         )
         val presenter = createTimelinePresenter(
             timeline = FakeTimeline(timelineItems = timelineItems),
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to true)),
         )
         presenter.test {
             val initialState = consumeItemsUntilPredicate { it.hasAnyEvent }.last()
@@ -1943,7 +1943,7 @@ class TimelinePresenterTest {
         val timelineItems = MutableStateFlow(
             listOf(MatrixTimelineItem.Event(UniqueId("1"), anEventTimelineItem(eventId = AN_EVENT_ID, content = aMessageContent())))
         )
-        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to true))
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to true))
         val presenter = createTimelinePresenter(
             timeline = FakeTimeline(timelineItems = timelineItems),
             featureFlagService = featureFlagService,
@@ -1969,7 +1969,7 @@ class TimelinePresenterTest {
         )
         val presenter = createTimelinePresenter(
             timeline = FakeTimeline(timelineItems = timelineItems),
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to true)),
         )
         presenter.test {
             val initialState = consumeItemsUntilPredicate { it.hasAnyEvent }.last()
@@ -1994,7 +1994,7 @@ class TimelinePresenterTest {
         )
         val presenter = createTimelinePresenter(
             timeline = FakeTimeline(timelineItems = timelineItems),
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MessageMultiSelect.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MessageMultiSelect.key to true)),
         )
         presenter.test {
             val initialState = consumeItemsUntilPredicate { it.hasAnyEvent }.last()
@@ -2077,7 +2077,7 @@ class TimelinePresenterTest {
         sendPollResponseAction: SendPollResponseAction = FakeSendPollResponseAction(),
         sessionPreferencesStore: InMemorySessionPreferencesStore = InMemorySessionPreferencesStore(),
         timelineItemIndexer: TimelineItemIndexer = TimelineItemIndexer(),
-        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false)),
         liveLocationShareManager: FakeActiveLiveLocationShareManager = FakeActiveLiveLocationShareManager(),
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead { _, _ -> },
         timelineProtectionPresenter: Presenter<TimelineProtectionState> = { aTimelineProtectionState() },

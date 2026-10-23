@@ -29,7 +29,7 @@ class TimelineItemIndexerTest {
             },
             TimelineItem.Virtual(
                 id = UniqueId("dummy"),
-                model = TimelineItemReadMarkerModel
+                model = TimelineItemReadMarkerModel()
             ),
         )
         assertThat(eventIds.size).isEqualTo(4)

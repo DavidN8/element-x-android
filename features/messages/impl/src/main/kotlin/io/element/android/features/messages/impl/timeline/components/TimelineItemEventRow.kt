@@ -43,6 +43,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -74,8 +75,6 @@ import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineRoomInfo
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.components.event.TimelineItemEventContentView
-import io.element.android.features.messages.impl.timeline.components.receipt.ReadReceiptViewState
-import io.element.android.features.messages.impl.timeline.components.receipt.TimelineItemReadReceiptView
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.TimelineItemGroupPosition
 import io.element.android.features.messages.impl.timeline.model.TimelineItemReactions
@@ -113,6 +112,7 @@ import io.element.android.libraries.designsystem.swipe.rememberSwipeableActionsS
 import io.element.android.libraries.designsystem.text.toPx
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.systemPillBackground
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.core.toThreadId
@@ -152,14 +152,17 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-// The bubble has a negative margin to be placed a bit upper regarding the sender
-// information and overlap the avatar.
-val NEGATIVE_MARGIN_FOR_BUBBLE = (-8).dp
+// The bubble body sits 16 dp from the screen edge; the bubble itself starts 8 dp closer, where the tail of the first bubble of a run is drawn.
+private val BUBBLE_EDGE_MARGIN = 16.dp - BUBBLE_TAIL_WIDTH
 
-// Width of the transparent border around the sender avatar
-val SENDER_AVATAR_BORDER_WIDTH = 3.dp
+// In a group, the sender avatar sits 8 dp from the start, and the bubble bodies start at 48 dp.
+private val SENDER_AVATAR_START_MARGIN = 8.dp
 
-private val BUBBLE_INCOMING_OFFSET = 16.dp
+// Media fills the bubble with a small inset and rounded corners, and carries the time on a dark scrim.
+private val MEDIA_INSET = 3.dp
+private val MEDIA_RADIUS = 6.dp
+private val MEDIA_SCRIM_COLOR = Color(0x66000000)
+private val GROUP_BUBBLE_START_MARGIN = 48.dp - BUBBLE_TAIL_WIDTH
 
 /** Shared instance so that rows which never slide keep comparing equal, and keep skipping. */
 internal val NoSelectionOffset: Density.() -> IntOffset = { IntOffset.Zero }
@@ -182,7 +185,6 @@ fun TimelineItemEventRow(
     onReactionClick: (emoji: String, eventId: TimelineItem.Event) -> Unit,
     onReactionLongClick: (emoji: String, eventId: TimelineItem.Event) -> Unit,
     onMoreReactionsClick: (eventId: TimelineItem.Event) -> Unit,
-    onReadReceiptClick: (event: TimelineItem.Event) -> Unit,
     onSwipeToReply: () -> Unit,
     eventSink: (TimelineEvent.TimelineItemEvent) -> Unit,
     modifier: Modifier = Modifier,
@@ -258,7 +260,7 @@ fun TimelineItemEventRow(
             .semantics { customActions = accessibilityActions }
     ) {
         if (event.groupPosition.isNew()) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         } else {
             Spacer(modifier = Modifier.height(2.dp))
         }
@@ -356,20 +358,7 @@ fun TimelineItemEventRow(
             )
         }
 
-        // Read receipts / Send state
-        val sendState = event.pendingSend()?.second
-        TimelineItemReadReceiptView(
-            state = ReadReceiptViewState(
-                sendState = sendState,
-                isLastOutgoingMessage = isLastOutgoingMessage,
-                receipts = event.readReceiptState.receipts,
-            ),
-            onReadReceiptsClick = { onReadReceiptClick(event) },
-            // Not slid: the read receipts sit outside the slid content, so they stay pinned to the end edge in selection mode.
-            modifier = Modifier
-                .padding(top = 4.dp)
-                .hiddenFromAccessibilityWhile(isSelectionToggle)
-        )
+        // The send state and the read state are shown by the ticks inside the bubble; who read it is behind the "Seen by" action.
     }
 }
 
@@ -554,7 +543,6 @@ private fun TimelineItemEventRowContent(
             sender,
             message,
             reactions,
-            pinIcon,
             selectionIndicator,
         ) = createRefs()
 
@@ -573,21 +561,18 @@ private fun TimelineItemEventRowContent(
             )
         }
 
-        // Sender
-        if (event.showSenderInformation && !timelineRoomInfo.isDm) {
-            MessageSenderInformation(
-                event.senderId,
-                event.senderProfile,
-                event.senderAvatar,
-                onUserDataClick,
-                Modifier
+        // Sender avatar, outside the first bubble of each run in a group. The name is drawn inside the bubble.
+        val showSenderInformation = event.showSenderInformation && !timelineRoomInfo.isDm
+        if (showSenderInformation) {
+            MessageSenderAvatar(
+                senderAvatar = event.senderAvatar,
+                onClick = onUserDataClick,
+                modifier = Modifier
                     .constrainAs(sender) {
-                        top.linkTo(parent.top)
+                        top.linkTo(message.top)
                         // Required for correct RTL layout
-                        start.linkTo(parent.start)
-                    }
-                    .padding(horizontal = 16.dp)
-                    .zIndex(1f),
+                        start.linkTo(parent.start, margin = SENDER_AVATAR_START_MARGIN)
+                    },
             )
         }
 
@@ -617,16 +602,11 @@ private fun TimelineItemEventRowContent(
         MessageEventBubble(
             modifier = Modifier
                 .constrainAs(message) {
-                    val topMargin = if (bubbleState.cutTopStart) {
-                        NEGATIVE_MARGIN_FOR_BUBBLE
-                    } else {
-                        0.dp
-                    }
-                    top.linkTo(sender.bottom, margin = topMargin)
+                    top.linkTo(parent.top)
                     if (event.isMine) {
-                        end.linkTo(parent.end, margin = 16.dp)
+                        end.linkTo(parent.end, margin = BUBBLE_EDGE_MARGIN)
                     } else {
-                        val startMargin = if (timelineRoomInfo.isDm) 16.dp else 16.dp + BUBBLE_INCOMING_OFFSET
+                        val startMargin = if (timelineRoomInfo.isDm) BUBBLE_EDGE_MARGIN else GROUP_BUBBLE_START_MARGIN
                         start.linkTo(parent.start, margin = startMargin)
                     }
                 },
@@ -639,33 +619,15 @@ private fun TimelineItemEventRowContent(
         ) {
             MessageEventBubbleContent(
                 event = event,
+                showSenderName = showSenderInformation,
+                isPinned = timelineRoomInfo.pinnedEventIds.contains(event.eventId),
+                onSenderNameClick = onUserDataClick,
                 timelineMode = timelineMode,
                 timelineProtectionState = timelineProtectionState,
                 onMessageLongClick = onLongClick,
                 inReplyToClick = inReplyToClick,
                 eventSink = eventSink,
                 eventContentView = eventContentView,
-            )
-        }
-
-        // Pin icon
-        val isEventPinned = timelineRoomInfo.pinnedEventIds.contains(event.eventId)
-        if (isEventPinned) {
-            Icon(
-                imageVector = CompoundIcons.PinSolid(),
-                contentDescription = stringResource(CommonStrings.common_pinned),
-                tint = ElementTheme.colors.iconTertiary,
-                modifier = Modifier
-                    .padding(1.dp)
-                    .size(16.dp)
-                    .constrainAs(pinIcon) {
-                        top.linkTo(message.top)
-                        if (event.isMine) {
-                            end.linkTo(message.start, margin = 8.dp)
-                        } else {
-                            start.linkTo(message.end, margin = 8.dp)
-                        }
-                    }
             )
         }
 
@@ -690,7 +652,7 @@ private fun TimelineItemEventRowContent(
                         start = when {
                             event.isMine -> 22.dp
                             timelineRoomInfo.isDm -> 22.dp
-                            else -> 22.dp + BUBBLE_INCOMING_OFFSET
+                            else -> 22.dp + 16.dp
                         },
                         end = 16.dp
                     )
@@ -700,7 +662,28 @@ private fun TimelineItemEventRowContent(
 }
 
 @Composable
-private fun MessageSenderInformation(
+private fun MessageSenderAvatar(
+    senderAvatar: AvatarData,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Avatar(
+        modifier = modifier
+            .testTag(TestTags.timelineItemSenderAvatar)
+            .clip(CircleShape)
+            .clickable(onClick = onClick)
+            // The row already announces the sender name
+            .clearAndSetSemantics {
+                hideFromAccessibility()
+            },
+        avatarData = senderAvatar,
+        avatarType = AvatarType.User,
+    )
+}
+
+/** The sender name at the top of the first incoming bubble of a run in a group, in the sender's colour. */
+@Composable
+private fun MessageSenderName(
     senderId: UserId,
     senderProfile: ProfileDetails,
     senderAvatar: AvatarData,
@@ -708,39 +691,26 @@ private fun MessageSenderInformation(
     modifier: Modifier = Modifier
 ) {
     val avatarColors = AvatarColorsProvider.provide(senderAvatar.id)
-    Row(
+    SenderName(
         modifier = modifier
-            // Add external clickable modifier with no indicator so the touch target is larger than just the display name
-            .clickable(onClick = onClick, enabled = true, interactionSource = remember { MutableInteractionSource() }, indication = null)
+            .testTag(TestTags.timelineItemSenderName)
+            .clickable(onClick = onClick, interactionSource = remember { MutableInteractionSource() }, indication = null)
             .clearAndSetSemantics {
                 hideFromAccessibility()
-            }
-    ) {
-        Avatar(
-            modifier = Modifier
-                .testTag(TestTags.timelineItemSenderAvatar)
-                .clip(CircleShape)
-                .clickable(onClick = onClick),
-            avatarData = senderAvatar,
-            avatarType = AvatarType.User,
-        )
-        SenderName(
-            modifier = Modifier
-                .testTag(TestTags.timelineItemSenderName)
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(onClick = onClick)
-                .padding(horizontal = 4.dp),
-            senderId = senderId,
-            senderProfile = senderProfile,
-            senderNameMode = SenderNameMode.Timeline(avatarColors.foreground),
-        )
-    }
+            },
+        senderId = senderId,
+        senderProfile = senderProfile,
+        senderNameMode = SenderNameMode.Timeline(avatarColors.foreground),
+    )
 }
 
 @Suppress("MultipleEmitters") // False positive
 @Composable
 private fun MessageEventBubbleContent(
     event: TimelineItem.Event,
+    showSenderName: Boolean,
+    isPinned: Boolean,
+    onSenderNameClick: () -> Unit,
     timelineMode: Timeline.Mode,
     timelineProtectionState: TimelineProtectionState,
     onMessageLongClick: () -> Unit,
@@ -794,17 +764,42 @@ private fun MessageEventBubbleContent(
             TimestampPosition.Overlay ->
                 Box(modifier, contentAlignment = Alignment.Center) {
                     content {}
-                    TimelineEventTimestampView(
-                        event = event,
-                        eventSink = eventSink,
-                        modifier = Modifier
-                            // Outer padding
-                            .padding(horizontal = 4.dp, vertical = 4.dp)
-                            .background(ElementTheme.colors.bgSubtleSecondary, RoundedCornerShape(10.0.dp))
-                            .align(Alignment.BottomEnd)
-                            // Inner padding
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
+                    if (event.isSticker) {
+                        // Stickers have no bubble: the time sits in a small system pill.
+                        TimelineEventTimestampView(
+                            event = event,
+                            eventSink = eventSink,
+                            isPinned = isPinned,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .background(ElementTheme.colors.systemPillBackground, RoundedCornerShape(8.dp))
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    } else {
+                        // White time and ticks on a dark scrim at the bottom of the media.
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .padding(MEDIA_INSET)
+                                .clip(RoundedCornerShape(MEDIA_RADIUS)),
+                            contentAlignment = Alignment.BottomEnd,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(32.dp)
+                                    .background(Brush.verticalGradient(listOf(Color.Transparent, MEDIA_SCRIM_COLOR)))
+                            )
+                            TimelineEventTimestampView(
+                                event = event,
+                                eventSink = eventSink,
+                                isPinned = isPinned,
+                                onMedia = true,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                 }
             TimestampPosition.Aligned -> @Composable {
                 val originalLayoutDirection = LocalLayoutDirection.current
@@ -835,6 +830,7 @@ private fun MessageEventBubbleContent(
                                 TimelineEventTimestampView(
                                     event = event,
                                     eventSink = eventSink,
+                                    isPinned = isPinned,
                                     isLayoutDirectionMismatched = originalLayoutDirection != contentDirection,
                                     modifier = Modifier
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -850,6 +846,7 @@ private fun MessageEventBubbleContent(
                     TimelineEventTimestampView(
                         event = event,
                         eventSink = eventSink,
+                        isPinned = isPinned,
                         modifier = Modifier
                             .align(Alignment.End)
                             .padding(horizontal = 8.dp, vertical = 4.dp)
@@ -876,25 +873,35 @@ private fun MessageEventBubbleContent(
                 Modifier
             }
 
-        val topPadding = if (inReplyToDetails != null) 0.dp else 8.dp
+        // The sender name or the reply quote above the content already provides the top spacing.
+        val hasBlockAbove = inReplyToDetails != null || showSenderName
+        val topPadding = if (hasBlockAbove) 0.dp else 6.dp
         val contentModifier = when (paddingBehaviour) {
             ContentPadding.Textual ->
-                Modifier.padding(start = 12.dp, end = 12.dp, top = topPadding, bottom = 8.dp)
-            ContentPadding.Media -> {
-                if (inReplyToDetails == null) {
-                    Modifier
-                } else {
-                    Modifier.clip(RoundedCornerShape(10.dp))
-                }
-            }
+                Modifier.padding(start = 8.dp, end = 8.dp, top = topPadding, bottom = 6.dp)
+            ContentPadding.Media -> Modifier
+                .padding(MEDIA_INSET)
+                .clip(RoundedCornerShape(MEDIA_RADIUS))
             ContentPadding.CaptionedMedia ->
-                Modifier.padding(start = 8.dp, end = 8.dp, top = topPadding, bottom = 8.dp)
-            ContentPadding.InvalidContent -> Modifier.padding(top = topPadding, bottom = 8.dp)
+                Modifier.padding(start = MEDIA_INSET, end = MEDIA_INSET, top = if (hasBlockAbove) 0.dp else MEDIA_INSET, bottom = 6.dp)
+            ContentPadding.InvalidContent -> Modifier.padding(top = topPadding, bottom = 6.dp)
+        }
+
+        val senderName = @Composable {
+            if (showSenderName) {
+                MessageSenderName(
+                    senderId = event.senderId,
+                    senderProfile = event.senderProfile,
+                    senderAvatar = event.senderAvatar,
+                    onClick = onSenderNameClick,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 6.dp),
+                )
+            }
         }
 
         val threadDecoration = @Composable {
             if (showThreadDecoration) {
-                ThreadDecoration(modifier = Modifier.padding(top = 8.dp, start = 12.dp, end = 12.dp))
+                ThreadDecoration(modifier = Modifier.padding(top = if (showSenderName) 0.dp else 6.dp, start = 8.dp, end = 8.dp))
             }
         }
         val contentWithTimestamp = @Composable {
@@ -915,10 +922,10 @@ private fun MessageEventBubbleContent(
         val inReplyTo = @Composable { inReplyTo: InReplyToDetails ->
             val currentContentValidationState by rememberEventContentValidationState(eventId = inReplyTo.eventId(), eventContent = inReplyTo.content())
                 .collectOverallState()
-            val topPadding = if (showThreadDecoration) 0.dp else 8.dp
+            val topPadding = if (showThreadDecoration || showSenderName) 0.dp else 4.dp
             val shape = RoundedCornerShape(6.dp)
             val inReplyToModifier = Modifier
-                .padding(top = topPadding, start = 8.dp, end = 8.dp)
+                .padding(top = topPadding, start = 4.dp, end = 4.dp)
                 .clip(shape)
 
             val talkbackCompatModifier = when {
@@ -953,13 +960,15 @@ private fun MessageEventBubbleContent(
         }
         if (inReplyToDetails != null) {
             // Use SubComposeLayout only if necessary as it can have consequences on the performance.
-            EqualWidthColumn(spacing = 8.dp) {
+            EqualWidthColumn(spacing = 4.dp) {
+                senderName()
                 threadDecoration()
                 inReplyTo(inReplyToDetails)
                 contentWithTimestamp()
             }
         } else {
-            Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                senderName()
                 threadDecoration()
                 contentWithTimestamp()
             }

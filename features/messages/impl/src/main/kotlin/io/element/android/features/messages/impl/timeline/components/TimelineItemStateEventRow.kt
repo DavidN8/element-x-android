@@ -24,8 +24,6 @@ import androidx.compose.ui.zIndex
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.components.event.TimelineItemEventContentView
-import io.element.android.features.messages.impl.timeline.components.receipt.ReadReceiptViewState
-import io.element.android.features.messages.impl.timeline.components.receipt.TimelineItemReadReceiptView
 import io.element.android.features.messages.impl.timeline.components.receipt.aReadReceiptData
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.TimelineItemGroupPosition
@@ -44,7 +42,6 @@ fun TimelineItemStateEventRow(
     isLastOutgoingMessage: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onReadReceiptsClick: (event: TimelineItem.Event) -> Unit,
     timelineProtectionState: TimelineProtectionState,
     eventSink: (TimelineEvent.TimelineItemEvent) -> Unit,
     modifier: Modifier = Modifier
@@ -83,14 +80,6 @@ fun TimelineItemStateEventRow(
                 )
             }
         }
-        TimelineItemReadReceiptView(
-            state = ReadReceiptViewState(
-                sendState = event.localSendState,
-                isLastOutgoingMessage = isLastOutgoingMessage,
-                receipts = event.readReceiptState.receipts,
-            ),
-            onReadReceiptsClick = { onReadReceiptsClick(event) },
-        )
     }
 }
 
@@ -109,7 +98,6 @@ internal fun TimelineItemStateEventRowPreview() = ElementPreview {
         isLastOutgoingMessage = false,
         onClick = {},
         onLongClick = {},
-        onReadReceiptsClick = {},
         timelineProtectionState = aTimelineProtectionState(),
         eventSink = {}
     )

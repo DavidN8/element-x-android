@@ -101,7 +101,9 @@ class TimelineItemsFactory(
                 newTimelineItemStates.add(updatedItem)
             }
         }
-        val result = timelineItemGrouper.group(newTimelineItemStates).toImmutableList()
+        val result = timelineItemGrouper.group(newTimelineItemStates)
+            .withReadStates(roomMembers)
+            .toImmutableList()
         this._timelineItems.emit(result)
     }
 

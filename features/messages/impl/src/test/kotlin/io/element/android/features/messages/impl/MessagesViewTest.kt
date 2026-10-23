@@ -44,15 +44,12 @@ import io.element.android.features.messages.impl.timeline.FOCUS_ON_PINNED_EVENT_
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemList
-import io.element.android.features.messages.impl.timeline.aTimelineItemReadReceipts
 import io.element.android.features.messages.impl.timeline.aTimelineRoomInfo
 import io.element.android.features.messages.impl.timeline.aTimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionBottomSheet
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionEvent
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionState
 import io.element.android.features.messages.impl.timeline.components.reactionsummary.ReactionSummaryEvent
-import io.element.android.features.messages.impl.timeline.components.receipt.aReadReceiptData
-import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetEvent
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
 import io.element.android.features.messages.impl.timeline.sendfailure.SendFailureDialogState
@@ -264,30 +261,19 @@ class MessagesViewTest : RobolectricTest() {
 
     @Test
     @Config(qualifiers = "h1024dp")
-    fun `clicking on a read receipt list emits the expected Event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<ReadReceiptBottomSheetEvent>()
+    fun `an own message read by everyone shows the read tick`() = runAndroidComposeUiTest {
         val state = aMessagesState(
             timelineState = aTimelineState(
                 timelineItems = persistentListOf(
-                    aTimelineItemEvent(
-                        readReceiptState = aTimelineItemReadReceipts(
-                            receipts = listOf(
-                                aReadReceiptData(0),
-                            ),
-                        ),
-                    ),
+                    aTimelineItemEvent(isMine = true).copy(isReadByOthers = true),
                 ),
             ),
-            readReceiptBottomSheetState = aReadReceiptBottomSheetState(
-                eventSink = eventsRecorder
-            ),
         )
-        val timelineItem = state.timelineState.timelineItems.first() as TimelineItem.Event
         setMessagesView(
             state = state,
         )
-        onNodeWithTag(TestTags.messageReadReceipts.value, useUnmergedTree = true).performClick()
-        eventsRecorder.assertSingle(ReadReceiptBottomSheetEvent.EventSelected(timelineItem))
+        val readDescription = activity!!.getString(R.string.a11y_matcha_message_read)
+        onNodeWithContentDescription(readDescription, useUnmergedTree = true).assertExists()
     }
 
     @Test

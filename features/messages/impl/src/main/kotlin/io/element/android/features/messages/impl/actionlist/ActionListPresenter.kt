@@ -237,6 +237,9 @@ class DefaultActionListPresenter(
             if (timelineItem.isRemote) {
                 add(TimelineItemAction.CopyLink)
             }
+            if (timelineItem.isMine && timelineItem.isRemote) {
+                add(TimelineItemAction.ReadBy)
+            }
             if (isDeveloperModeEnabled) {
                 add(TimelineItemAction.ViewSource)
             }

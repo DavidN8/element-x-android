@@ -108,6 +108,11 @@ sealed interface TimelineItem {
         val forwarder: UserId?,
         /** If [forwarder] is set, the profile of the forwarding user, if it was cached at the time the `EventTimelineItem` was created. */
         val forwarderProfile: ProfileDetails?,
+        /**
+         * For your own messages: whether everyone it is for has read it, which shows the read tick.
+         * Computed over the whole timeline by [io.element.android.features.messages.impl.timeline.factories.TimelineItemsFactory].
+         */
+        val isReadByOthers: Boolean = false,
     ) : TimelineItem {
         val showSenderInformation = groupPosition.isNew() && !isMine
 

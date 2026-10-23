@@ -42,7 +42,6 @@ internal fun ATimelineItemEventRow(
     onReactionClick = { _, _ -> },
     onReactionLongClick = { _, _ -> },
     onMoreReactionsClick = {},
-    onReadReceiptClick = {},
     onSwipeToReply = {},
     eventSink = {},
 )

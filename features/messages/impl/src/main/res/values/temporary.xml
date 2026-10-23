@@ -11,6 +11,7 @@
         <item quantity="one">%1$d unread message</item>
         <item quantity="other">%1$d unread messages</item>
     </plurals>
+    <string name="screen_matcha_room_unread_band_many">%1$d+ unread messages</string>
     <string name="a11y_matcha_emoji">Emoji</string>
     <string name="a11y_matcha_message_read">Read</string>
     <string name="a11y_matcha_new_messages">New messages</string>
