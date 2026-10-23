@@ -17,6 +17,7 @@ import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.protocol.booleanOrNull
 import io.element.android.features.matcha.impl.protocol.referenceTarget
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UniqueId
@@ -149,7 +150,7 @@ class MatchaRoomStore(
         room.threadsListService.subscribeToPaginationUpdates()
             .onEach { threadsPaginationStatus.value = it }
             .launchIn(coroutineScope)
-        coroutineScope.launch { room.threadsListService.paginate() }
+        coroutineScope.launch { room.threadsListService.paginate().onFailure { Timber.w(it, "Could not read threads") } }
         // Stored state changes arrive with syncs; re-read it whenever something new arrives.
         combine(room.roomInfoFlow, scanEvents) { _, _ -> }
             .debounce(200.milliseconds)
@@ -192,8 +193,12 @@ class MatchaRoomStore(
 
     private suspend fun readInitialHistory(timeline: Timeline) {
         repeat(INITIAL_HISTORY_PAGES) {
-            if (!pagination.value.hasMoreToLoad) return
-            timeline.paginate(Timeline.PaginationDirection.BACKWARDS).onFailure { return }
+            if (!timeline.backwardPaginationStatus.value.hasMoreToLoad) return
+            val result = runCatchingExceptions { timeline.paginate(Timeline.PaginationDirection.BACKWARDS).getOrThrow() }
+            if (result.isFailure) {
+                Timber.w(result.exceptionOrNull(), "Could not read Matcha history")
+                return
+            }
             historyPagesRead.update { it + 1 }
         }
     }
@@ -293,8 +298,11 @@ class MatchaRoomStore(
         if (loadingMore.value) return
         loadingMore.value = true
         try {
-            if (pagination.value.hasMoreToLoad) timeline?.paginate(Timeline.PaginationDirection.BACKWARDS)
-            if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) room.threadsListService.paginate()
+            timeline?.takeIf { it.backwardPaginationStatus.value.hasMoreToLoad }?.paginate(Timeline.PaginationDirection.BACKWARDS)
+                ?.onFailure { Timber.w(it, "Could not read older Matcha history") }
+            if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) {
+                room.threadsListService.paginate().onFailure { Timber.w(it, "Could not read older threads") }
+            }
         } finally {
             loadingMore.value = false
         }
