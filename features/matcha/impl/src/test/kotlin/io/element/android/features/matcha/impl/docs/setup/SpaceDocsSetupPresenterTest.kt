@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.impl.docs.setup
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.features.matcha.impl.docs.CONFIGURED_STATE
 import io.element.android.features.matcha.impl.docs.DocsRoomFixture
 import io.element.android.features.matcha.impl.docs.aCreateItem
 import io.element.android.libraries.matrix.api.core.EventId
@@ -113,6 +114,20 @@ class SpaceDocsSetupPresenterTest {
             assertThat(fixture.sentState).isEmpty()
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `a chat is never set up as a space`() = runTest {
+        val fixture = DocsRoomFixture(
+            listOf(aCreateItem()),
+            roomInfo = aRoomInfo(isEncrypted = true, isSpace = false),
+            canSendState = true,
+            stateEvents = CONFIGURED_STATE,
+        )
+        val setup = SpaceDocsSetup(fixture.room)
+        assertThat(setup.status()).isEqualTo(SpaceDocsSetupStatus(isConfigured = false, canSetup = false, isEncrypted = true))
+        assertThat(setup.turnOn().isFailure).isTrue()
+        assertThat(fixture.sentState).isEmpty()
     }
 
     @Test

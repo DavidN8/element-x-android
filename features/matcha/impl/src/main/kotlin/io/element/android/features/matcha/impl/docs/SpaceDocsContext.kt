@@ -54,9 +54,14 @@ class SpaceDocsContextFactory(
     private val networkMonitor: NetworkMonitor,
     private val dispatchers: CoroutineDispatchers,
 ) {
-    /** Null when the room is not joined. */
+    /** Null when the room is not joined, or is not a space while a space's docs are asked for. */
     suspend fun create(roomId: RoomId, isEarlierChatDocument: Boolean, parentScope: CoroutineScope): SpaceDocsContext? {
         val room = client.getJoinedRoom(roomId) ?: return null
+        // Like the web client: a chat never gets a catalog, editable docs or the docs power levels.
+        if (!isEarlierChatDocument && !room.info().isSpace) {
+            room.destroy()
+            return null
+        }
         val scope = CoroutineScope(parentScope.coroutineContext + dispatchers.main + SupervisorJob(parentScope.coroutineContext.job))
         // Undecryptable frames must be noticed rather than skipped.
         val store = MatchaRoomStore(room, scope, extraEventTypes = setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))

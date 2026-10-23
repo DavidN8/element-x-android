@@ -100,7 +100,7 @@ class MatchaSpaceDocsFlowNode(
             val isEarlier = params.legacyChatId != null
             val context = contextFactory.create(roomId = params.legacyChatId ?: params.spaceId, isEarlierChatDocument = isEarlier, parentScope = lifecycleScope)
             if (context == null) {
-                Timber.w("Docs opened for a room that is not joined")
+                Timber.w("Docs opened for a room that is not joined, or for a chat as a space")
                 callback.close()
                 return@launch
             }

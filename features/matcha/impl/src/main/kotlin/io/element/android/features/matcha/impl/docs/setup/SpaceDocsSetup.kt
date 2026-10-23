@@ -44,11 +44,12 @@ class SpaceDocsSetup(private val room: JoinedRoom) {
         val algorithm = stateContent(StateEventType.RoomEncryption)?.stringOrNull("algorithm")
         val events = stateContent(StateEventType.RoomPowerLevels)?.objectOrNull("events")
         val info = room.info()
-        val isJoined = info.currentUserMembership == CurrentUserMembership.JOINED
+        // Only a space: in a chat, these power levels would let every member post anything encrypted.
+        val isJoinedSpace = info.isSpace && info.currentUserMembership == CurrentUserMembership.JOINED
         return SpaceDocsSetupStatus(
-            isConfigured = isJoined && algorithm == DocsProtocol.ENCRYPTION_ALGORITHM &&
+            isConfigured = isJoinedSpace && algorithm == DocsProtocol.ENCRYPTION_ALGORITHM &&
                 events?.longOrNull(MatchaConfig.EVENT_DOCS_UPDATE) == 0L && events.longOrNull(DocsProtocol.EVENT_ROOM_ENCRYPTED) == 0L,
-            canSetup = isJoined && room.roomPermissions().use(false) {
+            canSetup = isJoinedSpace && room.roomPermissions().use(false) {
                 it.canOwnUserSendState(StateEventType.RoomEncryption) && it.canOwnUserSendState(StateEventType.RoomPowerLevels)
             },
             isEncrypted = algorithm != null || info.isEncrypted == true,
