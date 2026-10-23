@@ -436,7 +436,7 @@ class TasksTabPresenterTest {
             snackbarDispatcher = snackbarDispatcher,
             deadlineFormatter = aDeadlineFormatter,
             clock = aFixedClock,
-            editorPresenterFactory = aTaskEditorPresenterFactory(snackbarDispatcher),
+            editorPresenterFactory = aTaskEditorPresenterFactory(),
         )
         return PresenterUnderTest(presenter, onOpenRoom, onOpenThread)
     }

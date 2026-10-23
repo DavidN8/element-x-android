@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -101,7 +102,7 @@ enum class MatchaWarning {
 
 /** Everything the Matcha features know about one room, rebuilt from its timeline, thread list and state. */
 data class MatchaRoomSnapshot(
-    /** False until the thread list and the first history pages have been read. */
+    /** False until the thread list, the first history pages and the stored room state have been read. */
     val isLoaded: Boolean = false,
     /** All threads, active and archived, most recently active first. */
     val threads: List<MatchaThread> = emptyList(),
@@ -118,8 +119,11 @@ data class MatchaRoomSnapshot(
     /** The room holds a board card or thread patch that can't be decrypted, so the board or names may be out of date. */
     val unreadable: Boolean = false,
     val warning: MatchaWarning? = null,
-    /** True once the board pointer has been read from the room state, so a missing board is really missing. */
-    val boardPointerRead: Boolean = false,
+    /**
+     * True once a missing [board] is really missing: the board is known, or the Matcha history was read back to the start of
+     * the room. The stored room state alone proves nothing, since the sync only stores the custom state it asked for.
+     */
+    val isBoardResolved: Boolean = false,
     /** The Matcha timeline could not be opened; [MatchaRoomStore.retryLoad] tries again. */
     val loadFailed: Boolean = false,
 )
@@ -142,7 +146,7 @@ class MatchaRoomStore(
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
-    private val storedState = MutableStateFlow(StoredState(boardPointer = null, legacyArchive = emptyMap(), boardPointerRead = false))
+    private val storedState = MutableStateFlow(StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false))
     private val utdCauses = MutableStateFlow<Map<String, UtdCause>>(emptyMap())
     private val loadFailed = MutableStateFlow(false)
     private val readFailed = MutableStateFlow(false)
@@ -150,15 +154,23 @@ class MatchaRoomStore(
     private val historyPagesRead = MutableStateFlow(0)
     private val loadingMore = MutableStateFlow(false)
     private val writeMutex = Mutex()
+    private val historyMutex = Mutex()
     private var timeline: Timeline? = null
+
+    /** A board root this client sent without managing to point the room at it; creating the board again points at this one. */
+    internal var unpointedBoardRoot: String? = null
 
     private val _snapshot = MutableStateFlow(MatchaRoomSnapshot())
     val snapshot: StateFlow<MatchaRoomSnapshot> = _snapshot.asStateFlow()
 
     private data class StoredState(
+        /** The board pointer of the stored room state; only a hint, see [MatchaRoomSnapshot.isBoardResolved]. */
         val boardPointer: String?,
         val legacyArchive: Map<String, Boolean>,
-        val boardPointerRead: Boolean,
+        /** The board this client created, until its pointer is read back. */
+        val createdBoardRoot: String?,
+        /** The stored state was read at least once, successfully or not. */
+        val isRead: Boolean,
     )
 
     init {
@@ -268,7 +280,9 @@ class MatchaRoomStore(
     private suspend fun readInitialHistory(timeline: Timeline) {
         repeat(INITIAL_HISTORY_PAGES) {
             if (!timeline.backwardPaginationStatus.value.hasMoreToLoad) return
-            val result = runCatchingExceptions { timeline.paginate(Timeline.PaginationDirection.BACKWARDS).getOrThrow() }
+            val result = historyMutex.withLock {
+                runCatchingExceptions { timeline.paginate(Timeline.PaginationDirection.BACKWARDS).getOrThrow() }
+            }
             readFailed.value = result.isFailure
             if (result.isFailure) {
                 Timber.w(result.exceptionOrNull(), "Could not read Matcha history")
@@ -288,13 +302,15 @@ class MatchaRoomStore(
         return event
     }
 
-    private suspend fun readStoredState() {
+    /** Reads the stored room state; returns the board pointer read, or the failure to read it. */
+    private suspend fun readStoredState(): Result<String?> {
         val pointerRead = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
             .onFailure { Timber.w(it, "Could not read the board pointer") }
-        val pointer = pointerRead.getOrNull()
-            ?.get("")
-            ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-            ?.let(KanbanProtocol::parseBoardPointer)
+            .map { states ->
+                states[""]
+                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                    ?.let(KanbanProtocol::parseBoardPointer)
+            }
         val legacy = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_THREAD_ARCHIVE)).getOrNull()
             .orEmpty()
             .mapNotNull { (key, content) ->
@@ -303,24 +319,18 @@ class MatchaRoomStore(
             }
             .toMap()
         storedState.update { previous ->
-            StoredState(
-                // A failed read keeps what was known; only a successful read proves the pointer absent.
-                boardPointer = if (pointerRead.isSuccess) pointer else previous.boardPointer,
-                legacyArchive = legacy,
-                boardPointerRead = previous.boardPointerRead || pointerRead.isSuccess,
-            )
+            // A failed read keeps what was known.
+            previous.copy(boardPointer = pointerRead.getOrElse { previous.boardPointer }, legacyArchive = legacy, isRead = true)
         }
+        return pointerRead
     }
 
     /**
-     * Reads the board pointer from the room state again, right before creating a board, so a board created elsewhere
-     * is never replaced. Returns the root id, or null when the room has no board.
+     * Reads the board pointer from the stored room state again, right before creating a board. Returns the root id, null when the
+     * stored state holds none (which doesn't prove the room has no board, see [MatchaRoomSnapshot.isBoardResolved]), or the
+     * failure of this read.
      */
-    suspend fun readBoardPointer(): Result<String?> {
-        readStoredState()
-        val state = storedState.value
-        return if (state.boardPointerRead) Result.success(state.boardPointer) else Result.failure(IllegalStateException("Board pointer not read"))
-    }
+    suspend fun readBoardPointer(): Result<String?> = readStoredState()
 
     private fun merge(scan: List<RawEvent>, optimistic: List<RawEvent>): List<RawEvent> {
         if (optimistic.isEmpty()) return scan
@@ -338,10 +348,13 @@ class MatchaRoomStore(
         status: Status,
     ): MatchaRoomSnapshot {
         val health = status.health
+        // Only a pointer makes a board, as on the web client. A root without one is never a board: it is left behind by a create
+        // whose pointer failed, and the pointer of a real board is newer than its root, so the scan holds it whenever it holds the
+        // root. Cards are newer than the pointer, so the board they refer to stands in for a pointer older than the scan.
         val boardRootId = state.boardPointer
             ?: events.firstOrNull { it.type == MatchaConfig.STATE_KANBAN && it.stateKey == "" }
                 ?.let { KanbanProtocol.parseBoardPointer(it.content) }
-            ?: events.firstOrNull { it.type == MatchaConfig.EVENT_KANBAN_BOARD && !it.isRedacted }?.eventId
+            ?: state.createdBoardRoot
             ?: events.firstOrNull { it.type == MatchaConfig.EVENT_KANBAN_CARD }?.content?.referenceTarget()
         val revisions = boardRootId?.let { root -> events.mapNotNull { KanbanProtocol.parseCard(it, root) } }.orEmpty()
         val latestCards = KanbanProtocol.latestRevisions(revisions)
@@ -389,7 +402,7 @@ class MatchaRoomStore(
         val warning = (unreadableCauses + unreadableRootCauses).map(::warningFor).minOrNull()
             ?: MatchaWarning.Network.takeIf { health.readFailed }
         return MatchaRoomSnapshot(
-            isLoaded = historyRead && threadsRead,
+            isLoaded = historyRead && threadsRead && state.isRead,
             threads = threads,
             board = board,
             permissions = permissions,
@@ -399,7 +412,8 @@ class MatchaRoomStore(
             events = events,
             unreadable = unreadableCauses.isNotEmpty(),
             warning = warning,
-            boardPointerRead = state.boardPointerRead,
+            // ponytail: history hidden from a member who joined later may hide an older pointer too; Path B reads it from the server.
+            isBoardResolved = boardRootId != null || !status.pagination.hasMoreToLoad,
             loadFailed = health.loadFailed,
         )
     }
@@ -409,18 +423,44 @@ class MatchaRoomStore(
         readFailed.value = result.isFailure
     }
 
-    /** Loads one more page of history and of the thread list. */
-    suspend fun loadMore() {
-        if (loadingMore.value) return
+    /**
+     * Loads one more page of history and of the thread list. Calls are serialized.
+     *
+     * @return whether older history remains, or the failure to read the history page; a failure to read more threads is only logged.
+     */
+    suspend fun loadMore(): Result<Boolean> = historyMutex.withLock {
+        val timeline = timeline ?: return@withLock Result.failure(IllegalStateException("The Matcha timeline is not open"))
         loadingMore.value = true
         try {
-            timeline?.takeIf { it.backwardPaginationStatus.value.hasMoreToLoad }?.paginate(Timeline.PaginationDirection.BACKWARDS)
-                ?.also { readFailed.value = it.isFailure }
-                ?.onFailure { Timber.w(it, "Could not read older Matcha history") }
+            val history = if (timeline.backwardPaginationStatus.value.hasMoreToLoad) {
+                timeline.paginate(Timeline.PaginationDirection.BACKWARDS)
+                    .also { readFailed.value = it.isFailure }
+                    .onFailure { Timber.w(it, "Could not read older Matcha history") }
+            } else {
+                Result.success(true)
+            }
             if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) paginateThreads()
+            history.map { timeline.backwardPaginationStatus.value.hasMoreToLoad }
         } finally {
             loadingMore.value = false
         }
+    }
+
+    /**
+     * Loads older history until [isFound] holds for the snapshot or the start of the room is reached, then returns once the
+     * snapshot shows what was read. Returns the failure to read a page.
+     *
+     * ponytail: reads page by page, so reaching the start of a long room takes many requests; Path B replaces the scan.
+     */
+    suspend fun loadHistoryUntil(isFound: (MatchaRoomSnapshot) -> Boolean): Result<Unit> {
+        while (!isFound(_snapshot.value)) {
+            val hasMore = loadMore().getOrElse { return Result.failure(it) }
+            if (!hasMore) {
+                _snapshot.first { !it.hasMoreHistory }
+                break
+            }
+        }
+        return Result.success(Unit)
     }
 
     /** Sends a Matcha timeline event and shows it straight away, before its remote echo. */
@@ -445,9 +485,9 @@ class MatchaRoomStore(
         room.sendRawStateEvent(eventType, stateKey, contentJson).onSuccess { readStoredState() }
     }
 
-    /** Overrides the board root until the state pointer is synced, after this client created the board. */
+    /** Shows the board this client created until its pointer is read back from the room. */
     fun rememberCreatedBoard(rootId: String) {
-        if (storedState.value.boardPointer == null) storedState.update { it.copy(boardPointer = rootId) }
+        storedState.update { it.copy(createdBoardRoot = rootId) }
     }
 
     /** The newest card revision currently known for [cardId], for read-modify-write edits. */

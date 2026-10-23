@@ -31,8 +31,8 @@ internal class TaskListActions(
     fun move(taskId: String, status: TaskStatus) {
         scope.launch {
             val board = store.snapshot.value.board ?: return@launch
-            val card = board.cards.firstOrNull { it.id == taskId }?.takeIf { it.status != status } ?: return@launch
-            writer.write(board.rootId, card.toRevision().copy(status = status))
+            board.cards.firstOrNull { it.id == taskId }?.takeIf { it.status != status } ?: return@launch
+            writer.update(board.rootId, taskId) { it.copy(status = status) }
                 ?.let { postWriteError(it) { move(taskId, status) } }
         }
     }
@@ -42,7 +42,7 @@ internal class TaskListActions(
         scope.launch {
             val board = store.snapshot.value.board ?: return@launch
             val card = board.cards.firstOrNull { it.id == taskId }?.takeIf { it.archived != archived } ?: return@launch
-            val error = writer.write(board.rootId, card.toRevision().copy(archived = archived), archiveThread = card.threadId != null)
+            val error = writer.update(board.rootId, taskId, archiveThread = card.threadId != null) { it.copy(archived = archived) }
             when {
                 error != null -> postWriteError(error) { setArchived(taskId, archived, announce) }
                 announce -> snackbarDispatcher.post(

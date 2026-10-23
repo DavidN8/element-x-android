@@ -18,6 +18,7 @@ import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.store.aBoardPointerItem
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
@@ -63,16 +64,39 @@ class TaskBoardPresenterTest {
     }
 
     @Test
-    fun `the board is looked for until the history and the pointer are read`() = runTest {
+    fun `the board is looked for until the threads and the history are read`() = runTest {
         val store = aMatchaRoomStore(backgroundScope, threadsPaginationStatus = ThreadListPaginationStatus.Loading)
         aPresenter(store).test {
             assertThat(awaitUntil { it.isVisible }.content).isEqualTo(TaskBoardContent.LookingForBoard)
         }
-        val unread = aMatchaRoomStore(backgroundScope, boardPointerResult = { Result.failure(IllegalStateException("offline")) })
-        aPresenter(unread).test {
-            settle()
-            assertThat(awaitUntil { it.isVisible }.content).isEqualTo(TaskBoardContent.LookingForBoard)
-            cancelAndIgnoreRemainingEvents()
+    }
+
+    @Test
+    fun `a board further back than the first pages is found before setup is offered`() = runTest {
+        // Ten pages are read up front; the board's pointer and a card are in the twelfth.
+        val olderPages = List(11) { emptyList<MatrixTimelineItem>() } +
+            listOf(listOf(aBoardPointerItem(1, boardRoot), card(2, "c-old", "Old task", TaskStatus.Todo)))
+        aPresenter(aMatchaRoomStore(backgroundScope, olderPages = olderPages)).test {
+            val states = consumeItemsUntilPredicate { it.board()?.todo?.isNotEmpty() == true }
+            assertThat(states.none { it.content is TaskBoardContent.Setup }).isTrue()
+            assertThat(states.last().board()!!.todo.single().title).isEqualTo("Old task")
+        }
+    }
+
+    @Test
+    fun `history that can't be read to look for the board offers to try again`() = runTest {
+        var fail = false
+        val store = aMatchaRoomStore(backgroundScope, olderPages = List(12) { emptyList() }, paginateResult = {
+            if (fail) Result.failure(IllegalStateException("offline")) else Result.success(Unit)
+        })
+        settle()
+        fail = true
+        aPresenter(store).test {
+            val failed = awaitUntil { it.content == TaskBoardContent.LoadFailed }
+            fail = false
+            failed.eventSink(TaskBoardEvent.RetryLoad)
+            assertThat(awaitUntil { it.content is TaskBoardContent.Setup }.content)
+                .isEqualTo(TaskBoardContent.Setup(canCreate = true, isCreating = false, createFailed = false))
         }
     }
 
@@ -94,7 +118,7 @@ class TaskBoardPresenterTest {
             val setup = awaitUntil { it.content is TaskBoardContent.Setup }
             assertThat(setup.content).isEqualTo(TaskBoardContent.Setup(canCreate = true, isCreating = false, createFailed = false))
             setup.eventSink(TaskBoardEvent.CreateBoard)
-            // The board shows as soon as its root is sent; the pointer follows.
+            // The board shows once the room points at its root.
             awaitUntil { it.content is TaskBoardContent.Board }
             settle()
             assertThat(sent).containsExactly(MatchaConfig.EVENT_KANBAN_BOARD)
@@ -128,6 +152,36 @@ class TaskBoardPresenterTest {
             awaitUntil { it.content is TaskBoardContent.Setup }.eventSink(TaskBoardEvent.CreateBoard)
             val failed = awaitUntil { (it.content as? TaskBoardContent.Setup)?.createFailed == true }
             assertThat((failed.content as TaskBoardContent.Setup).isCreating).isFalse()
+        }
+    }
+
+    @Test
+    fun `a board whose pointer couldn't be set is pointed at again rather than sent twice`() = runTest {
+        val sent = mutableListOf<String>()
+        val pointers = mutableListOf<String>()
+        var failPointer = true
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            sendRawStateEventResult = { _, _, content ->
+                pointers += content
+                if (failPointer) Result.failure(IllegalStateException("offline")) else Result.success(EventId("\$pointer"))
+            },
+        ) { type, _ ->
+            sent += type
+            Result.success(EventId("\$root"))
+        }
+        aPresenter(store).test {
+            awaitUntil { it.content is TaskBoardContent.Setup }.eventSink(TaskBoardEvent.CreateBoard)
+            // The root alone is no board, for this client or any other.
+            val failed = awaitUntil { (it.content as? TaskBoardContent.Setup)?.createFailed == true }
+            assertThat(store.snapshot.value.board).isNull()
+            failPointer = false
+            failed.eventSink(TaskBoardEvent.CreateBoard)
+            awaitUntil { it.content is TaskBoardContent.Board }
+            assertThat(sent).containsExactly(MatchaConfig.EVENT_KANBAN_BOARD)
+            assertThat(pointers).hasSize(2)
+            assertThat(pointers.all { it.contains("\"event_id\":\"\$root\"") }).isTrue()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -255,6 +309,137 @@ class TaskBoardPresenterTest {
             assertThat(sent[0].second).contains("\"name\":\"Launch plan\"")
             assertThat(sent[0].second).contains("\"rel_type\":\"m.reference\"")
             assertThat(sent[1].second).contains("\"title\":\"Launch plan\"")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a new task waits for its thread to be set up before its card is written`() = runTest {
+        val sent = mutableListOf<String>()
+        var failSetup = true
+        val store = aMatchaRoomStore(backgroundScope, boardRoot = boardRoot) { type, _ ->
+            sent += type
+            when {
+                type == "m.room.message" -> Result.success(EventId("\$root"))
+                type == MatchaConfig.EVENT_THREAD_METADATA && failSetup -> Result.failure(IllegalStateException("offline"))
+                else -> Result.success(EventId("\$e${sent.size}"))
+            }
+        }
+        aPresenter(store).test {
+            awaitUntil { (it.content as? TaskBoardContent.Board)?.canAdd == true }.eventSink(TaskBoardEvent.NewTask(TaskStatus.Todo))
+            awaitUntil { it.editor != null }.editor!!.eventSink(TaskEditorEvent.SetTitle("Book the venue"))
+            awaitUntil { it.editor?.title == "Book the venue" }.editor!!.eventSink(TaskEditorEvent.Save)
+            val failed = awaitUntil { it.editor?.saveError != null }.editor!!
+            assertThat(failed.saveError).isEqualTo(TaskWriteError.ThreadSetupFailed)
+            assertThat(sent).containsExactly("m.room.message", MatchaConfig.EVENT_THREAD_METADATA).inOrder()
+
+            failSetup = false
+            failed.eventSink(TaskEditorEvent.Save)
+            awaitUntil { it.editor == null }
+            // The root isn't sent again: the setup reply is, then the card.
+            assertThat(sent.drop(2)).containsExactly(MatchaConfig.EVENT_THREAD_METADATA, MatchaConfig.EVENT_KANBAN_CARD).inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `an untitled thread's task asks for a name, which also names the thread`() = runTest {
+        val sent = mutableListOf<Pair<String, String>>()
+        val store = aMatchaRoomStore(backgroundScope, boardRoot = boardRoot, threads = listOf(aThreadListItem(thread, body = ""))) { type, content ->
+            sent += type to content
+            Result.success(EventId("\$e${sent.size + 10}"))
+        }
+        aPresenter(store).test {
+            awaitUntil { it.board()?.todo?.isNotEmpty() == true }.eventSink(TaskBoardEvent.EditTask(threadCardId))
+            val editor = awaitUntil { it.editor != null }.editor!!
+            assertThat(editor.title).isEmpty()
+            assertThat(editor.hasChanges).isFalse()
+            editor.eventSink(TaskEditorEvent.Save)
+            assertThat(awaitUntil { it.editor?.titleError != null }.editor!!.titleError).isEqualTo(TaskFieldError.Empty)
+            assertThat(sent).isEmpty()
+            editor.eventSink(TaskEditorEvent.SetTitle("Plan"))
+            awaitUntil { it.editor?.title == "Plan" }.editor!!.eventSink(TaskEditorEvent.Save)
+            awaitUntil { it.editor == null }
+            assertThat(sent.map { it.first }).containsExactly(MatchaConfig.EVENT_THREAD_METADATA, MatchaConfig.EVENT_KANBAN_CARD).inOrder()
+            assertThat(sent[0].second).contains("\"name\":\"Plan\"")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `moving a task whose card is older than the history read keeps what the card says`() = runTest {
+        val sent = mutableListOf<String>()
+        // The thread started at 100 ms; its card was written at 150 ms, in the eleventh page, older than the ten read up front.
+        val olderPages = List(10) { emptyList<MatrixTimelineItem>() } +
+            listOf(listOf(card(150, threadCardId, "Plan", TaskStatus.Doing, threadId = thread, description = "Steps", dueAt = A_NOW + 5_000))) +
+            listOf(listOf(card(50, "c-older", "Older", TaskStatus.Todo)))
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(aThreadListItem(thread, body = "Plan", timestamp = 100)),
+            olderPages = olderPages,
+        ) { _, content ->
+            sent += content
+            Result.success(EventId("\$e${sent.size + 1000}"))
+        }
+        aPresenter(store).test {
+            // Until its card is read, the thread's task shows the defaults.
+            awaitUntil { it.board()?.todo?.isNotEmpty() == true }.eventSink(TaskBoardEvent.Move(threadCardId, TaskStatus.Done))
+            awaitUntil { it.board()?.done?.isNotEmpty() == true }
+            val written = Json.parseToJsonElement(sent.single()).jsonObject
+            assertThat(written["column"]?.jsonPrimitive?.content).isEqualTo("done")
+            assertThat(written["description"]?.jsonPrimitive?.content).isEqualTo("Steps")
+            assertThat(written["due_at"]?.jsonPrimitive?.content).isEqualTo("${A_NOW + 5_000}")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `history from before a thread started isn't read for its task`() = runTest {
+        var pagesRead = 0
+        val sent = mutableListOf<String>()
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(aThreadListItem(thread, body = "Plan", timestamp = 100)),
+            // The history read so far already reaches back before the thread started.
+            items = listOf(card(50, "c-older", "Older", TaskStatus.Todo)),
+            olderPages = List(12) { emptyList() },
+            paginateResult = {
+                pagesRead++
+                Result.success(Unit)
+            },
+        ) { _, content ->
+            sent += content
+            Result.success(EventId("\$e${sent.size + 1000}"))
+        }
+        aPresenter(store).test {
+            awaitUntil { it.board()?.todo?.size == 2 }.eventSink(TaskBoardEvent.Move(threadCardId, TaskStatus.Done))
+            awaitUntil { it.board()?.done?.isNotEmpty() == true }
+            assertThat(sent.single()).contains("\"column\":\"done\"")
+            assertThat(pagesRead).isEqualTo(MatchaRoomStore.INITIAL_HISTORY_PAGES)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a task whose history can't be read isn't written over`() = runTest {
+        var fail = false
+        val snackbarDispatcher = SnackbarDispatcher()
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(aThreadListItem(thread, body = "Plan", timestamp = 100)),
+            olderPages = List(12) { emptyList() },
+            paginateResult = { if (fail) Result.failure(IllegalStateException("offline")) else Result.success(Unit) },
+        ) { _, _ -> error("Nothing must be sent") }
+        aPresenter(store, snackbarDispatcher = snackbarDispatcher).test {
+            val state = awaitUntil { it.board()?.todo?.isNotEmpty() == true }
+            fail = true
+            state.eventSink(TaskBoardEvent.Move(threadCardId, TaskStatus.Done))
+            val failure = snackbarDispatcher.snackbarMessage.first { it != null }!!
+            assertThat(failure.messageResId).isEqualTo(R.string.screen_matcha_tasks_history_incomplete)
+            assertThat(failure.actionResId).isEqualTo(CommonStrings.action_retry)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -512,7 +697,7 @@ class TaskBoardPresenterTest {
         snackbarDispatcher = snackbarDispatcher,
         deadlineFormatter = aDeadlineFormatter,
         clock = aFixedClock,
-        editorPresenterFactory = aTaskEditorPresenterFactory(snackbarDispatcher),
+        editorPresenterFactory = aTaskEditorPresenterFactory(),
         roomCoroutineScope = backgroundScope,
     )
 

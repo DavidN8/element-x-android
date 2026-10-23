@@ -460,7 +460,7 @@ class ChatBarPresenterTest {
             featureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to isEnabled)),
             snackbarDispatcher = snackbarDispatcher,
             roomCoroutineScope = backgroundScope,
-            editorPresenterFactory = aTaskEditorPresenterFactory(snackbarDispatcher),
+            editorPresenterFactory = aTaskEditorPresenterFactory(),
         ),
         selection = selection,
         actions = actions,

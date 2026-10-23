@@ -36,10 +36,10 @@ data class TaskBoardState(
 
 @Immutable
 sealed interface TaskBoardContent {
-    /** The board pointer isn't proven absent yet, so creating a board could replace one made elsewhere. */
+    /** The board isn't proven absent yet, so creating a board could replace one made elsewhere; the history is being read. */
     data object LookingForBoard : TaskBoardContent
 
-    /** The Matcha data of the chat could not be opened. */
+    /** The Matcha data of the chat could not be opened, or its history could not be read to look for the board. */
     data object LoadFailed : TaskBoardContent
 
     /** The chat has no board. */

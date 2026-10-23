@@ -206,23 +206,88 @@ class MatchaRoomStoreTest {
     }
 
     @Test
-    fun `the pointer is only proven absent after a successful read, and re-read on demand`() = runTest {
+    fun `the stored pointer is re-read on demand, and a failed read is never taken for an empty one`() = runTest {
         var pointer: Result<Map<String, String>> = Result.failure(IllegalStateException("offline"))
         val (store, _) = aStore(scope = backgroundScope, items = emptyList(), boardPointerResult = { pointer })
         settle()
-        assertThat(store.snapshot.value.boardPointerRead).isFalse()
         assertThat(store.readBoardPointer().isFailure).isTrue()
 
         pointer = Result.success(emptyMap())
         assertThat(store.readBoardPointer().getOrThrow()).isNull()
-        settle()
-        assertThat(store.snapshot.value.boardPointerRead).isTrue()
-        assertThat(store.snapshot.value.board).isNull()
+
+        pointer = Result.failure(IllegalStateException("offline"))
+        assertThat(store.readBoardPointer().isFailure).isTrue()
 
         pointer = Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
         assertThat(store.readBoardPointer().getOrThrow()).isEqualTo(boardRoot)
         settle()
         assertThat(store.snapshot.value.board?.rootId).isEqualTo(boardRoot)
+    }
+
+    @Test
+    fun `a missing board is only resolved once the history is read back to the start`() = runTest {
+        // Ten pages are read up front; the pointer is in the twelfth.
+        val olderPages = List(11) { emptyList<MatrixTimelineItem>() } + listOf(listOf(aBoardPointerItem(1, boardRoot)))
+        val store = aMatchaRoomStore(backgroundScope, olderPages = olderPages)
+        settle()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        assertThat(store.snapshot.value.board).isNull()
+        assertThat(store.snapshot.value.isBoardResolved).isFalse()
+
+        assertThat(store.loadHistoryUntil { it.board != null }.isSuccess).isTrue()
+        settle()
+        assertThat(store.snapshot.value.board?.rootId).isEqualTo(boardRoot)
+        assertThat(store.snapshot.value.isBoardResolved).isTrue()
+
+        val empty = aMatchaRoomStore(backgroundScope, olderPages = List(12) { emptyList() })
+        settle()
+        assertThat(empty.loadHistoryUntil { it.board != null }.isSuccess).isTrue()
+        assertThat(empty.snapshot.value.board).isNull()
+        assertThat(empty.snapshot.value.isBoardResolved).isTrue()
+        assertThat(empty.snapshot.value.hasMoreHistory).isFalse()
+    }
+
+    @Test
+    fun `reading the history stops at a page that can't be read`() = runTest {
+        var fail = false
+        val store = aMatchaRoomStore(backgroundScope, olderPages = List(12) { emptyList() }, paginateResult = {
+            if (fail) Result.failure(IllegalStateException("offline")) else Result.success(Unit)
+        })
+        settle()
+        fail = true
+        assertThat(store.loadHistoryUntil { false }.isFailure).isTrue()
+        settle()
+        assertThat(store.snapshot.value.isBoardResolved).isFalse()
+        assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.Network)
+    }
+
+    @Test
+    fun `a board root that no pointer refers to is not a board, but the board cards refer to is`() = runTest {
+        val strayRoot = aMatchaEventItem(1, MatchaConfig.EVENT_KANBAN_BOARD, """{"version": 1}""")
+        val stray = aMatchaRoomStore(backgroundScope, items = listOf(strayRoot))
+        settle()
+        assertThat(stray.snapshot.value.board).isNull()
+
+        val card = aMatchaEventItem(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("c-1", "Card", null), boardRoot))
+        val withCards = aMatchaRoomStore(backgroundScope, items = listOf(strayRoot, card))
+        settle()
+        assertThat(withCards.snapshot.value.board?.rootId).isEqualTo(boardRoot)
+    }
+
+    @Test
+    fun `every task has its own id, even a card named like a list row or unlinked from its thread`() = runTest {
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            items = listOf(
+                event(1, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("archived", "Named like a row", null), boardRoot)),
+                // The newest revision of the thread's card no longer links it.
+                event(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Unlinked", null), boardRoot)),
+            ),
+            threads = listOf(threadItem(thread, "Thread")),
+        )
+        settle()
+        val ids = store.snapshot.value.board!!.cards.map { it.id }
+        assertThat(ids).containsExactly(KanbanProtocol.threadCardId(thread), "archived")
     }
 
     @Test

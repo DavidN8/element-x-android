@@ -47,10 +47,14 @@ internal fun aMatchaRoomStore(
     sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> Result.success(EventId("\$state")) },
     /** Overrides how the board pointer is read; by default it points at [boardRoot]. */
     boardPointerResult: (() -> Result<Map<String, String>>)? = null,
+    olderPages: List<List<MatrixTimelineItem>> = emptyList(),
+    paginateResult: () -> Result<Unit> = { Result.success(Unit) },
     sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
 ): MatchaRoomStore = MatchaRoomStore(
     aMatchaJoinedRoom(
         items = items,
+        olderPages = olderPages,
+        paginateResult = paginateResult,
         threads = threads,
         threadsPaginationStatus = threadsPaginationStatus,
         canSendMessage = canSendMessage,
@@ -78,11 +82,13 @@ internal fun aMatchaJoinedRoom(
     boardPointerResult: (() -> Result<Map<String, String>>)? = null,
     sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
     onCreateTimeline: () -> Unit = {},
+    /** History older than [items], one page per backward pagination, newest page first. */
+    olderPages: List<List<MatrixTimelineItem>> = emptyList(),
+    paginateResult: () -> Result<Unit> = { Result.success(Unit) },
+    /** Overrides opening the Matcha timeline; by default it opens on [items]. */
+    createTimelineResult: (() -> Result<Timeline>)? = null,
 ): FakeJoinedRoom {
-    val timeline = FakeTimeline(
-        timelineItems = MutableStateFlow(items),
-        backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = false)),
-    )
+    val timeline = aMatchaTimeline(items, olderPages, paginateResult)
     return FakeJoinedRoom(
         baseRoom = FakeBaseRoom(
             roomId = roomId,
@@ -95,7 +101,7 @@ internal fun aMatchaJoinedRoom(
         ),
         createTimelineResult = {
             onCreateTimeline()
-            Result.success(timeline)
+            createTimelineResult?.invoke() ?: Result.success(timeline)
         },
         sendRawEventResult = sendRawEventResult,
         sendRawStateEventResult = sendRawStateEventResult,
@@ -110,18 +116,44 @@ internal fun aMatchaJoinedRoom(
     )
 }
 
-/** A timeline item carrying a Matcha event with the given raw [content]. */
-internal fun aMatchaEventItem(index: Int, type: String, content: String) = MatrixTimelineItem.Event(
+/** A Matcha timeline holding [items] (oldest first), which reads [olderPages] one backward page at a time. */
+internal fun aMatchaTimeline(
+    items: List<MatrixTimelineItem> = emptyList(),
+    olderPages: List<List<MatrixTimelineItem>> = emptyList(),
+    paginateResult: () -> Result<Unit> = { Result.success(Unit) },
+): FakeTimeline {
+    val timelineItems = MutableStateFlow(items)
+    val remaining = ArrayDeque(olderPages)
+    val status = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = remaining.isNotEmpty()))
+    return FakeTimeline(timelineItems = timelineItems, backwardPaginationStatus = status).apply {
+        paginateLambda = {
+            paginateResult().map {
+                remaining.removeFirstOrNull()?.let { page -> timelineItems.value = page + timelineItems.value }
+                status.value = status.value.copy(hasMoreToLoad = remaining.isNotEmpty())
+                remaining.isEmpty()
+            }
+        }
+    }
+}
+
+/** A timeline item carrying a Matcha event with the given raw [content], sent at [index] ms; a state event with a [stateKey]. */
+internal fun aMatchaEventItem(index: Int, type: String, content: String, stateKey: String? = null) = MatrixTimelineItem.Event(
     uniqueId = UniqueId("item-$index"),
     event = anEventTimelineItem(
         eventId = EventId("\$e$index"),
         debugInfoProvider = TimelineItemDebugInfoProvider {
+            val stateKeyField = stateKey?.let { """"state_key": "$it", """ }.orEmpty()
             aTimelineItemDebugInfo(
-                originalJson = """{"type": "$type", "event_id": "${'$'}e$index", "sender": "@bob:x", "origin_server_ts": $index, "content": $content}"""
+                originalJson = """{"type": "$type", $stateKeyField"event_id": "${'$'}e$index", "sender": "@bob:x", "origin_server_ts": $index, """ +
+                    """"content": $content}"""
             )
         },
     ),
 )
+
+/** A timeline item carrying the board pointer state event, pointing at [rootId]. */
+internal fun aBoardPointerItem(index: Int, rootId: String) =
+    aMatchaEventItem(index, MatchaConfig.STATE_KANBAN, """{"version": 1, "event_id": "$rootId"}""", stateKey = "")
 
 internal fun aThreadListItem(
     id: String,

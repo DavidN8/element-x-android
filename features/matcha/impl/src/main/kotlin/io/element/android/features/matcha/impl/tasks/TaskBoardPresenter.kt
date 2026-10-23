@@ -94,11 +94,19 @@ class TaskBoardPresenter(
         var reminderTarget by remember { mutableStateOf<MatchaReminderTarget?>(null) }
         var isCreatingBoard by remember { mutableStateOf(false) }
         var createFailed by remember { mutableStateOf(false) }
+        var searchFailed by remember { mutableStateOf(false) }
 
         val permissions = snapshot.permissions
         val canRemind = rememberCanRemind(room, permissions.canSendMessages)
         val tasks = remember(snapshot) { snapshot.toTaskItems(deadlineFormatter, clock.now().toEpochMilliseconds()) }
-        val content = boardContent(snapshot, tasks, canRemind, isCreatingBoard, createFailed)
+        val content = boardContent(snapshot, tasks, canRemind, isCreatingBoard, createFailed, searchFailed)
+
+        // A board made elsewhere may lie further back than the history read so far: offering to create one could orphan its cards.
+        if (content == TaskBoardContent.LookingForBoard && snapshot.isLoaded) {
+            LaunchedEffect(Unit) {
+                searchFailed = store.loadHistoryUntil { it.board != null }.isFailure
+            }
+        }
 
         LaunchedEffect(snapshot) {
             val threadId = pendingThreadId ?: return@LaunchedEffect
@@ -142,7 +150,10 @@ class TaskBoardPresenter(
                         isCreatingBoard = false
                     }
                 }
-                TaskBoardEvent.RetryLoad -> store.retryLoad()
+                TaskBoardEvent.RetryLoad -> {
+                    searchFailed = false
+                    store.retryLoad()
+                }
                 is TaskBoardEvent.OpenTask -> {
                     val task = tasks.firstOrNull { it.id == event.taskId } ?: return
                     when {
@@ -205,6 +216,7 @@ class TaskBoardPresenter(
         canRemind: Boolean,
         isCreatingBoard: Boolean,
         createFailed: Boolean,
+        searchFailed: Boolean,
     ): TaskBoardContent {
         val permissions: MatchaPermissions = snapshot.permissions
         return when {
@@ -226,9 +238,9 @@ class TaskBoardPresenter(
                     isLoadingMore = snapshot.isLoadingMore,
                 )
             }
-            snapshot.loadFailed -> TaskBoardContent.LoadFailed
-            // Until the pointer is read, a board made elsewhere may exist: offering to create one could orphan its cards.
-            !snapshot.isLoaded || !snapshot.boardPointerRead -> TaskBoardContent.LookingForBoard
+            snapshot.loadFailed || searchFailed -> TaskBoardContent.LoadFailed
+            // Until the board is proven absent, a board made elsewhere may exist: offering to create one could orphan its cards.
+            !snapshot.isLoaded || !snapshot.isBoardResolved -> TaskBoardContent.LookingForBoard
             else -> TaskBoardContent.Setup(canCreate = permissions.canCreateBoard, isCreating = isCreatingBoard, createFailed = createFailed)
         }
     }

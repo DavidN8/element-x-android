@@ -24,6 +24,12 @@ enum class TaskWriteError {
     /** Another card already belongs to the thread. */
     ThreadHasTask,
 
+    /** The history that may hold the card's newest revision could not be read, so writing could erase it. */
+    HistoryIncomplete,
+
+    /** A new task's thread was started but could not be set up; saving again finishes it. */
+    ThreadSetupFailed,
+
     /** The send failed or was not allowed. */
     Failed,
 }
@@ -42,38 +48,79 @@ enum class CreateBoardResult {
  */
 class TaskWriter(private val store: MatchaRoomStore) {
     /**
-     * Creates the board, after re-reading the room state so a board created elsewhere (whose cards may not be loaded yet) is never
-     * replaced: sends the root, then the state pointing at it.
+     * Creates the board: sends the root, then the state pointing at it. A board made elsewhere, whose cards may not be loaded, is never
+     * replaced: the stored state only holds what the sync asked for, so the history is read back to the start of the room first.
+     * A root whose pointer failed is pointed at again rather than sent twice.
      */
     suspend fun createBoard(): CreateBoardResult {
         val existing = store.readBoardPointer().getOrElse { return CreateBoardResult.Failed }
         if (existing != null) return CreateBoardResult.AlreadyExists
-        val root = store.send(MatchaConfig.EVENT_KANBAN_BOARD, KanbanProtocol.boardRootContent()).getOrElse {
-            Timber.w(it, "Could not send the board root")
+        store.loadHistoryUntil { it.board != null }.onFailure {
+            Timber.w(it, "Could not make sure the room has no board")
             return CreateBoardResult.Failed
         }
-        store.sendState(MatchaConfig.STATE_KANBAN, "", KanbanProtocol.boardPointerContent(root.value)).onFailure {
+        if (store.snapshot.value.board != null) return CreateBoardResult.AlreadyExists
+        val root = store.unpointedBoardRoot ?: store.send(MatchaConfig.EVENT_KANBAN_BOARD, KanbanProtocol.boardRootContent()).getOrElse {
+            Timber.w(it, "Could not send the board root")
+            return CreateBoardResult.Failed
+        }.value
+        store.unpointedBoardRoot = root
+        store.sendState(MatchaConfig.STATE_KANBAN, "", KanbanProtocol.boardPointerContent(root)).onFailure {
             Timber.w(it, "Could not point the room at its board")
             return CreateBoardResult.Failed
         }
-        store.rememberCreatedBoard(root.value)
+        store.unpointedBoardRoot = null
+        store.rememberCreatedBoard(root)
         return CreateBoardResult.Created
     }
 
     /**
-     * Sends a complete revision of a card. Returns null once sent.
+     * Sends the first revision of a new thread's card. Returns null once sent.
      *
      * @param boardRootId the board the user was looking at; the write is refused when the room now points elsewhere.
      * @param card the whole card as it should be.
-     * @param renameThread true to rename the card's thread to the card title first.
-     * @param archiveThread true to archive or restore the card's thread like the card first.
+     * @param renameThread true to rename the thread to the card title first.
      */
-    suspend fun write(
+    suspend fun create(boardRootId: String, card: CardRevision, renameThread: Boolean): TaskWriteError? =
+        send(boardRootId, card, renameThread = renameThread, archiveThread = false)
+
+    /**
+     * Changes a card on the board: [change] gets the card's newest revision and returns it changed, and the result is sent as a
+     * complete revision. A linked card is renamed with its thread. Returns null once sent.
+     *
+     * A thread's card that no revision read so far describes shows the defaults, while its revision may lie further back: the history
+     * is read until it is found, so fields the user didn't change are never reset for everyone.
+     *
+     * @param boardRootId the board the user was looking at; the write is refused when the room now points elsewhere.
+     * @param cardId the card as shown on the board.
+     * @param archiveThread true to archive or restore the card's thread like the card first.
+     * @param change makes the card as it should be from its newest revision.
+     */
+    suspend fun update(
         boardRootId: String,
-        card: CardRevision,
-        renameThread: Boolean = false,
+        cardId: String,
         archiveThread: Boolean = false,
+        change: (CardRevision) -> CardRevision,
     ): TaskWriteError? {
+        var current = store.snapshot.value.board?.cards?.firstOrNull { it.id == cardId } ?: return refuse(TaskWriteError.Failed)
+        val threadId = current.threadId
+        if (threadId != null && !current.hasRevision && store.snapshot.value.hasMoreHistory) {
+            // A card can only be linked to the thread once the thread exists, so the history before its root holds no revision.
+            val rootTimestamp = store.snapshot.value.threads.firstOrNull { it.id.value == threadId }?.rootTimestamp ?: 0
+            store.loadHistoryUntil { snapshot ->
+                snapshot.board?.cards?.any { it.threadId == threadId && it.hasRevision } == true ||
+                    rootTimestamp > 0 && snapshot.events.lastOrNull()?.timestamp?.let { it in 1..rootTimestamp } == true
+            }.onFailure {
+                Timber.w(it, "Could not read the history of card %s", cardId)
+                return refuse(TaskWriteError.HistoryIncomplete)
+            }
+            current = store.snapshot.value.board?.cards?.firstOrNull { it.threadId == threadId } ?: return refuse(TaskWriteError.Failed)
+        }
+        val card = change(current.toRevision())
+        return send(boardRootId, card, renameThread = threadId != null && card.title != current.title, archiveThread = archiveThread)
+    }
+
+    private suspend fun send(boardRootId: String, card: CardRevision, renameThread: Boolean, archiveThread: Boolean): TaskWriteError? {
         val snapshot = store.snapshot.value
         val board = snapshot.board
         // ponytail: checks the pointer the store last read, where the web client re-reads room state; the SDK only caches it anyway.

@@ -27,6 +27,8 @@ open class TaskEditorStatePreviewParam : PreviewParameterProvider<TaskEditorStat
             aTaskEditorState(title = "Book the venue", saveError = TaskWriteError.Failed),
             aTaskEditorState(isNew = false, title = "Book the venue", saveError = TaskWriteError.BoardChanged),
             aTaskEditorState(title = "Book the venue", showDiscardDialog = true),
+            aTaskEditorState(title = "Book the venue", saveError = TaskWriteError.ThreadSetupFailed),
+            aTaskEditorState(isNew = false, title = "Book the venue", saveError = TaskWriteError.HistoryIncomplete),
         )
 }
 

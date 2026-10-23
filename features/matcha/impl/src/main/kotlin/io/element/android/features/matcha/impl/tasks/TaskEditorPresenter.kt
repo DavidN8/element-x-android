@@ -7,7 +7,6 @@
 
 package io.element.android.features.matcha.impl.tasks
 
-import androidx.compose.material3.SnackbarDuration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -23,7 +22,6 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.api.MatchaReminderTarget
-import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.chatbar.rememberCanRemind
 import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
@@ -32,11 +30,8 @@ import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.NamedThreadResult
 import io.element.android.features.matcha.impl.store.createNamedThread
 import io.element.android.features.matcha.impl.store.retrySetup
-import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
-import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -54,7 +49,6 @@ class TaskEditorPresenter(
     @Assisted private val store: MatchaRoomStore,
     @Assisted private val writeScope: CoroutineScope,
     private val deadlineFormatter: DeadlineFormatter,
-    private val snackbarDispatcher: SnackbarDispatcher,
     private val clock: Clock,
 ) {
     @AssistedFactory
@@ -85,7 +79,9 @@ class TaskEditorPresenter(
         if (target is TaskEditorTarget.Edit && initial == null) {
             LaunchedEffect(Unit) { currentOnClose() }
         }
-        var title by rememberSaveable { mutableStateOf(initial?.title.orEmpty()) }
+        // Without a shared name or a readable root, the name falls back to the thread id: the user is asked for a name instead.
+        val initialTitle = initial?.title?.takeUnless { it == initial.threadId }.orEmpty()
+        var title by rememberSaveable { mutableStateOf(initialTitle) }
         var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
         var status by rememberSaveable { mutableStateOf(initial?.status ?: (target as? TaskEditorTarget.New)?.status ?: TaskStatus.Todo) }
         var dueAt by rememberSaveable { mutableStateOf(initial?.dueAt) }
@@ -99,6 +95,8 @@ class TaskEditorPresenter(
         // Set once a new task's thread exists, so a retry writes the card instead of creating another thread.
         var createdThreadId by rememberSaveable { mutableStateOf<String?>(null) }
         var createdThreadName by rememberSaveable { mutableStateOf<String?>(null) }
+        // False while the new thread's root was sent without the reply that makes it a thread; its card waits until it is.
+        var isThreadSetUp by rememberSaveable { mutableStateOf(false) }
 
         val permissions = snapshot.permissions
         val threadId = initial?.threadId
@@ -106,9 +104,9 @@ class TaskEditorPresenter(
         val titleMaxLength = if (isLinked) MatchaConfig.THREAD_NAME_MAX_LENGTH else MatchaConfig.CARD_TITLE_MAX_LENGTH
         val canRename = threadId == null || permissions.canManageThreads
         val canRemind = rememberCanRemind(room, permissions.canSendMessages) && onRemind != null && initial != null && !initial.archived
-        val hasChanges = title != initial?.title.orEmpty() || description != initial?.description.orEmpty() ||
+        val hasChanges = title != initialTitle || description != initial?.description.orEmpty() ||
             dueAt != initial?.dueAt || initial != null && status != initial.status
-        val titleError = titleError(title.trim(), titleMaxLength, includeEmpty = showErrors)
+        val titleError = titleError(title.trim(), titleMaxLength, includeEmpty = showErrors).takeIf { canRename }
         val descriptionError = TaskFieldError.TooLong(MatchaConfig.CARD_DESCRIPTION_MAX_LENGTH)
             .takeIf { description.length > MatchaConfig.CARD_DESCRIPTION_MAX_LENGTH }
         val nowMillis = clock.now().toEpochMilliseconds()
@@ -119,13 +117,22 @@ class TaskEditorPresenter(
             val trimmed = title.trim()
             val error = if (initial == null) {
                 val thread = createdThreadId ?: when (val result = store.createNamedThread(trimmed)) {
-                    is NamedThreadResult.Created -> result.threadId.value
-                    // The root exists, so the task can still be saved; the snackbar offers to finish setting the thread up.
-                    is NamedThreadResult.RootOnly -> result.threadId.value.also { postSetupFailed(result.threadId, trimmed) }
+                    is NamedThreadResult.Created -> result.threadId.value.also { isThreadSetUp = true }
+                    is NamedThreadResult.RootOnly -> {
+                        createdThreadId = result.threadId.value
+                        createdThreadName = trimmed
+                        return TaskWriteError.ThreadSetupFailed
+                    }
                     NamedThreadResult.Failed -> return TaskWriteError.Failed
                 }
                 if (createdThreadId == null) {
                     createdThreadId = thread
+                    createdThreadName = trimmed
+                }
+                // A card linked to a root that isn't a thread breaks the board on the web client, so it waits for the thread.
+                if (!isThreadSetUp) {
+                    store.retrySetup(ThreadId(thread), trimmed).onFailure { return TaskWriteError.ThreadSetupFailed }
+                    isThreadSetUp = true
                     createdThreadName = trimmed
                 }
                 val rename = createdThreadName != trimmed
@@ -141,13 +148,17 @@ class TaskEditorPresenter(
                     showToRoom = true,
                 )
                 // A retry after the name was changed renames the thread created by the first attempt.
-                writer.write(root, card, renameThread = rename)
+                writer.create(root, card, renameThread = rename)
             } else {
-                // Read-modify-write: fields the editor doesn't show keep their newest values.
-                val current = store.snapshot.value.board?.cards?.firstOrNull { it.id == initial.id } ?: return TaskWriteError.Failed
-                val newTitle = if (canRename) trimmed else current.title
-                val card = current.toRevision().copy(title = newTitle, description = description, status = status, dueAt = dueAt)
-                writer.write(root, card, renameThread = current.threadId != null && newTitle != current.title)
+                // Read-modify-write: only the fields the user changed are written over the newest revision.
+                writer.update(root, initial.id) { current ->
+                    current.copy(
+                        title = if (canRename && trimmed != initialTitle) trimmed else current.title,
+                        description = if (description != initial.description) description else current.description,
+                        status = if (status != initial.status) status else current.status,
+                        dueAt = if (dueAt != initial.dueAt) dueAt else current.dueAt,
+                    )
+                }
             }
             if (error == TaskWriteError.BoardChanged) boardRootId = store.snapshot.value.board?.rootId
             return error
@@ -173,7 +184,9 @@ class TaskEditorPresenter(
                 TaskEditorEvent.Save -> {
                     if (isSaving) return
                     showErrors = true
-                    if (titleError(title.trim(), titleMaxLength, includeEmpty = true) != null || descriptionError != null) return
+                    // A name the user can't change isn't written, so it can't stop the save.
+                    val hasTitleError = canRename && titleError(title.trim(), titleMaxLength, includeEmpty = true) != null
+                    if (hasTitleError || descriptionError != null) return
                     isSaving = true
                     saveError = null
                     localScope.launch {
@@ -227,21 +240,6 @@ class TaskEditorPresenter(
     }
 
     private enum class Exit { Close, ToThread }
-
-    private fun postSetupFailed(threadId: ThreadId, name: String) {
-        snackbarDispatcher.post(
-            SnackbarMessage(
-                messageResId = R.string.screen_matcha_threads_setup_failed,
-                duration = SnackbarDuration.Long,
-                actionResId = CommonStrings.action_retry,
-                action = {
-                    writeScope.launch {
-                        store.retrySetup(threadId, name).onFailure { postSetupFailed(threadId, name) }
-                    }
-                },
-            )
-        )
-    }
 }
 
 /** An empty name is only an error once the user tries to save; a name that is too long is flagged while typing. */

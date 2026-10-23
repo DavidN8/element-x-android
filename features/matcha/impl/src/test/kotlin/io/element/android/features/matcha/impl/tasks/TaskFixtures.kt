@@ -7,7 +7,6 @@
 
 package io.element.android.features.matcha.impl.tasks
 
-import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import kotlin.time.Clock
 import kotlin.time.Instant
 
@@ -20,14 +19,13 @@ internal val aFixedClock = object : Clock {
 
 internal val aDeadlineFormatter = DeadlineFormatter { "at $it" }
 
-internal fun aTaskEditorPresenterFactory(snackbarDispatcher: SnackbarDispatcher = SnackbarDispatcher()) =
+internal fun aTaskEditorPresenterFactory() =
     TaskEditorPresenter.Factory { room, store, writeScope ->
         TaskEditorPresenter(
             room = room,
             store = store,
             writeScope = writeScope,
             deadlineFormatter = aDeadlineFormatter,
-            snackbarDispatcher = snackbarDispatcher,
             clock = aFixedClock,
         )
     }

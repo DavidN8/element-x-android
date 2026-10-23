@@ -86,6 +86,8 @@
     <string name="screen_matcha_tasks_already_has_board">"This chat already has a task board."</string>
     <string name="screen_matcha_tasks_board_changed">"The task board changed. Try again."</string>
     <string name="screen_matcha_tasks_thread_has_task">"This thread already has a task."</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: a task whose earlier changes couldn't be loaded isn't saved over them. -->
+    <string name="screen_matcha_tasks_history_incomplete">"Couldn't load this task's earlier changes. Check your connection and try again."</string>
     <string name="screen_matcha_tasks_board_empty_title">"No tasks yet"</string>
     <string name="screen_matcha_tasks_board_empty_body">"Tap + to add the first one."</string>
     <string name="screen_matcha_tasks_read_only">"You can see these tasks but can't change them."</string>

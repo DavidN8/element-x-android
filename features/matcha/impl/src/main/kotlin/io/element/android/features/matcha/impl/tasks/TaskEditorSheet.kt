@@ -488,6 +488,8 @@ private fun TaskDeadlineError.messageResId() = when (this) {
 internal fun TaskWriteError.messageResId() = when (this) {
     TaskWriteError.BoardChanged -> R.string.screen_matcha_tasks_board_changed
     TaskWriteError.ThreadHasTask -> R.string.screen_matcha_tasks_thread_has_task
+    TaskWriteError.HistoryIncomplete -> R.string.screen_matcha_tasks_history_incomplete
+    TaskWriteError.ThreadSetupFailed -> R.string.screen_matcha_threads_setup_failed
     TaskWriteError.Failed -> R.string.common_matcha_write_failed
 }
 
