@@ -131,6 +131,7 @@ class KonsistPreviewTest {
         "ProgressDialogWithContentPreview",
         "ProgressDialogWithTextAndContentPreview",
         "ReadReceiptBottomSheetPreview",
+        "RoomListFiltersViewSpaceSelectedPreview",
         "RoomSummaryRowSelectedPreview",
         "SasEmojisPreview",
         "SecureBackupSetupViewChangePreview",
