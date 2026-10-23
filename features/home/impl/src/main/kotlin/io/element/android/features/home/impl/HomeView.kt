@@ -210,7 +210,7 @@ private fun HomeScaffold(
             floatingActionButton = {
                 HomeFloatingActionButton(CompoundIcons.ChatNew(), CommonStrings.action_start_chat, onStartChatClick)
             },
-        ) { modifier ->
+        ) { padding ->
             RoomListContentView(
                 contentState = roomListState.contentState,
                 filtersState = roomListState.filtersState,
@@ -225,7 +225,9 @@ private fun HomeScaffold(
                 onRoomClick = ::onRoomClick,
                 onCreateRoomClick = onStartChatClick,
                 contentPadding = listContentPadding,
-                modifier = modifier,
+                modifier = Modifier
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
             )
             SpaceFiltersView(roomListState.spaceFiltersState)
         }
@@ -234,9 +236,12 @@ private fun HomeScaffold(
             floatingActionButton = {
                 HomeFloatingActionButton(CompoundIcons.Plus(), CommonStrings.action_create_space, onCreateSpaceClick)
             },
-        ) { modifier ->
+        ) { padding ->
             HomeSpacesView(
-                modifier = modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
                 contentPadding = listContentPadding,
                 state = state.homeSpacesState,
                 lazyListState = spacesLazyListState,
@@ -324,11 +329,7 @@ private fun HomeScaffold(
                     .fillMaxSize()
                     .nestedScroll(scrollBehavior.nestedScrollConnection)
             ) {
-                tab.content(
-                    Modifier
-                        .padding(outerPadding)
-                        .consumeWindowInsets(outerPadding)
-                )
+                tab.content(outerPadding)
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -340,12 +341,12 @@ private fun HomeScaffold(
  *
  * @param lazyListState the tab's list, scrolled back to the top when the tab is selected again, if any.
  * @param floatingActionButton the tab's primary action, at the bottom end, if any.
- * @param content the tab's content, given the modifier that places it between the bars.
+ * @param content the tab's content, given the padding of the top bar and of the navigation bar.
  */
 private data class HomeTabContent(
     val lazyListState: LazyListState?,
     val floatingActionButton: (@Composable () -> Unit)?,
-    val content: @Composable (Modifier) -> Unit,
+    val content: @Composable (padding: PaddingValues) -> Unit,
 )
 
 @Composable
