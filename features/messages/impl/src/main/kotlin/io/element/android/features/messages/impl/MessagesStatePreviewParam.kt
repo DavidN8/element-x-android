@@ -100,7 +100,8 @@ open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
 
 fun aMessagesState(
     roomName: String? = ROOM_NAME,
-    roomAvatar: AvatarData = AvatarData("!id:domain", ROOM_NAME, size = AvatarSize.TimelineRoom),
+    roomAvatar: AvatarData = AvatarData("!id:domain", ROOM_NAME, size = AvatarSize.ChatTopBar),
+    joinedMemberCount: Long = 12,
     userEventPermissions: UserEventPermissions = aUserEventPermissions(),
     composerState: MessageComposerState = aMessageComposerState(
         textEditorState = aTextEditorStateRich(initialText = "Hello", initialFocus = true),
@@ -140,6 +141,7 @@ fun aMessagesState(
     roomName = roomName,
     roomAvatar = roomAvatar,
     heroes = persistentListOf(),
+    joinedMemberCount = joinedMemberCount,
     userEventPermissions = userEventPermissions,
     composerState = composerState,
     voiceMessageComposerState = voiceMessageComposerState,

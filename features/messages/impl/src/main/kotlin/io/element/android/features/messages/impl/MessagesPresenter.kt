@@ -332,6 +332,7 @@ class MessagesPresenter(
             roomName = roomInfo.name,
             roomAvatar = roomAvatar,
             heroes = heroes,
+            joinedMemberCount = roomInfo.joinedMembersCount,
             userEventPermissions = userEventPermissions,
             composerState = composerState,
             voiceMessageComposerState = voiceMessageComposerState,
@@ -383,13 +384,13 @@ class MessagesPresenter(
             id = id.value,
             name = name,
             url = avatarUrl,
-            size = AvatarSize.TimelineRoom
+            size = AvatarSize.ChatTopBar
         )
     }
 
     private fun RoomInfo.heroes(): List<AvatarData> {
         return heroes.map { user ->
-            user.getAvatarData(size = AvatarSize.TimelineRoom)
+            user.getAvatarData(size = AvatarSize.ChatTopBar)
         }
     }
 

@@ -98,7 +98,7 @@ fun TypingNotificationView(
 }
 
 @Composable
-private fun computeTypingNotificationText(typingMembers: ImmutableList<TypingRoomMember>): AnnotatedString {
+internal fun computeTypingNotificationText(typingMembers: ImmutableList<TypingRoomMember>): AnnotatedString {
     // Remember the last value to avoid empty typing messages while animating
     var result by remember { mutableStateOf(AnnotatedString("")) }
     if (typingMembers.isNotEmpty()) {

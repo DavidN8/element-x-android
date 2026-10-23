@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
@@ -44,7 +45,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -97,6 +101,7 @@ import io.element.android.features.messages.impl.timeline.components.receipt.bot
 import io.element.android.features.messages.impl.timeline.isSelectionModeActive
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.TimelineItemGroupPosition
+import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextBasedContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemStateEventContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
 import io.element.android.features.messages.impl.timeline.selectedCount
@@ -104,6 +109,7 @@ import io.element.android.features.messages.impl.timeline.sendfailure.SendFailur
 import io.element.android.features.messages.impl.topbars.MessagesViewTopBar
 import io.element.android.features.messages.impl.topbars.SelectionModeTopBar
 import io.element.android.features.messages.impl.topbars.ThreadTopBar
+import io.element.android.features.messages.impl.topbars.roomTopBarSubtitle
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessagePermissionRationaleDialog
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessageSendingFailedDialog
 import io.element.android.features.roomcall.api.RoomCallState
@@ -118,12 +124,14 @@ import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.text.toAnnotatedString
 import io.element.android.libraries.designsystem.text.toDp
+import io.element.android.libraries.designsystem.theme.chatWallpaper
 import io.element.android.libraries.designsystem.theme.components.BottomSheetDragHandle
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.utils.HideKeyboardWhenDisposed
 import io.element.android.libraries.designsystem.utils.KeepScreenOn
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 import io.element.android.libraries.designsystem.utils.OnLifecycleEvent
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
 import io.element.android.libraries.designsystem.utils.screenSystemBarsInsets
@@ -131,7 +139,9 @@ import io.element.android.libraries.designsystem.utils.snackbar.SnackbarHost
 import io.element.android.libraries.designsystem.utils.snackbar.rememberSnackbarHostState
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.core.asEventId
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.room.tombstone.SuccessorRoom
 import io.element.android.libraries.matrix.api.timeline.Timeline
@@ -241,9 +251,15 @@ fun MessagesView(
     }
 
     val expandableState = rememberExpandableBottomSheetLayoutState()
+    // On the phone the root pads the status bar: give it the top bar's colour rather than the wallpaper's.
+    val statusBarHeightPx = if (LocalIsInDetailPane.current) 0 else WindowInsets.statusBars.getTop(LocalDensity.current)
+    val statusBarColor = ElementTheme.colors.bgCanvasDefault
     ExpandableBottomSheetLayout(
         modifier = modifier
             .fillMaxSize()
+            // The wallpaper is painted before the IME and system bar paddings, so it reaches under the navigation bar and around the composer.
+            .background(ElementTheme.colors.chatWallpaper)
+            .drawBehind { drawRect(statusBarColor, size = Size(size.width, statusBarHeightPx.toFloat())) }
             .imePadding()
             .windowInsetsPadding(screenSystemBarsInsets)
             .onSizeChanged { size ->
@@ -255,6 +271,8 @@ fun MessagesView(
         content = {
             Scaffold(
                 contentWindowInsets = scaffoldScrollableContentInsets,
+                containerColor = Color.Transparent,
+                contentColor = ElementTheme.colors.textPrimary,
                 topBar = {
                     when {
                         state.timelineState.isSelectionModeActive -> {
@@ -271,7 +289,12 @@ fun MessagesView(
                             )
                         }
                         state.timelineState.timelineMode is Timeline.Mode.Thread -> {
+                            val threadRootId = state.timelineState.timelineMode.threadRootId
+                            val threadName = remember(state.timelineState.timelineItems, threadRootId) {
+                                state.timelineState.timelineItems.threadName(threadRootId)
+                            }
                             ThreadTopBar(
+                                threadName = threadName,
                                 roomName = state.roomName,
                                 roomAvatarData = state.roomAvatar,
                                 heroes = state.heroes,
@@ -288,6 +311,12 @@ fun MessagesView(
                                 dmUserIdentityState = state.dmUserVerificationState,
                                 sharedHistoryIcon = state.topBarSharedHistoryIcon,
                                 dmUserStatus = state.dmUserStatus,
+                                subtitle = roomTopBarSubtitle(
+                                    isDm = state.timelineState.timelineRoomInfo.isDm,
+                                    isTombstoned = state.isTombstoned,
+                                    joinedMemberCount = state.joinedMemberCount,
+                                    typingNotificationState = state.timelineState.timelineRoomInfo.typingNotificationState,
+                                ),
                                 onBackClick = { hidingKeyboard { onBackClick() } },
                                 onRoomDetailsClick = { hidingKeyboard { onRoomDetailsClick() } },
                                 menuActions = {
@@ -507,6 +536,16 @@ fun MessagesView(
             onDismissRequest = { state.eventSink(MessagesEvent.CancelRedact) },
         )
     }
+}
+
+/**
+ * The name of the thread rooted at [threadRootId], from the first line of its root message, or null when the root is not loaded or has no text.
+ */
+private fun List<TimelineItem>.threadName(threadRootId: ThreadId): String? {
+    val rootEventId = threadRootId.asEventId()
+    val root = lastOrNull { it is TimelineItem.Event && it.eventId == rootEventId } as? TimelineItem.Event ?: return null
+    val content = root.content as? TimelineItemTextBasedContent ?: return null
+    return content.plainText.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
 }
 
 @Composable

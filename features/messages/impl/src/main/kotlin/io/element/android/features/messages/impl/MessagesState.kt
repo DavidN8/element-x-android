@@ -37,6 +37,8 @@ data class MessagesState(
     val roomName: String?,
     val roomAvatar: AvatarData,
     val heroes: ImmutableList<AvatarData>,
+    /** The number of joined members, shown under the name of a group in the top bar. */
+    val joinedMemberCount: Long,
     val userEventPermissions: UserEventPermissions,
     val composerState: MessageComposerState,
     val voiceMessageComposerState: VoiceMessageComposerState,

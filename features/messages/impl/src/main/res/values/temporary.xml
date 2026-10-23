@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2026 Element Creations Ltd.
+  ~
+  ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+  ~ Please see LICENSE files in the repository root for full details.
+  -->
+
+<resources>
+    <string name="screen_matcha_room_typing_dm">typing…</string>
+    <plurals name="screen_matcha_room_unread_band">
+        <item quantity="one">%1$d unread message</item>
+        <item quantity="other">%1$d unread messages</item>
+    </plurals>
+    <string name="a11y_matcha_emoji">Emoji</string>
+    <string name="a11y_matcha_message_read">Read</string>
+    <string name="a11y_matcha_new_messages">New messages</string>
+</resources>
