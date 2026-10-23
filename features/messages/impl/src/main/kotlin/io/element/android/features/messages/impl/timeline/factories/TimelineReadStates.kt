@@ -27,7 +27,7 @@ private const val MATCHA_REMINDER_BOT_LOCALPART = "matcha-reminder"
  *   A DM needs the other member's receipt. Rooms with more than [MAX_MEMBERS_FOR_READ_TICK] joined members never show it.
  * - [TimelineItemReadMarkerModel.unreadCount]: the number of messages from others newer than the read marker (state events do not count).
  *
- * @param items the timeline items, ordered from the newest to the oldest as the timeline renders them.
+ * The receiver holds the timeline items ordered from the newest to the oldest, as the timeline renders them.
  */
 internal fun List<TimelineItem>.withReadStates(roomMembers: List<RoomMember>): List<TimelineItem> {
     val currentUserId = firstNotNullOfOrNull { (it as? TimelineItem.Event)?.takeIf { event -> event.isMine }?.senderId }

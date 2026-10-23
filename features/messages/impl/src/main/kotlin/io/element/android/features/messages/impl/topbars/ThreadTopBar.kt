@@ -48,8 +48,7 @@ import kotlinx.collections.immutable.toImmutableList
 
 /**
  * The top bar of a thread: the thread's name as the title and the room as the subtitle, next to the room avatar.
- *
- * @param threadName the thread's name, taken from its root message. When null, the bar shows the generic "Thread".
+ * [threadName] comes from the thread's root message; without it, the bar shows the generic "Thread".
  */
 @Composable
 internal fun ThreadTopBar(

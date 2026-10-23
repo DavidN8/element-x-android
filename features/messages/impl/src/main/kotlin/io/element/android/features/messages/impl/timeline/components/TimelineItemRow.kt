@@ -194,7 +194,6 @@ private fun TimelineItemRowContent(
                     is TimelineItemStateContent, is TimelineItemLegacyCallInviteContent -> {
                         TimelineItemStateEventRow(
                             event = timelineItem,
-                            isLastOutgoingMessage = isLastOutgoingMessage,
                             onClick = { onContentClick(timelineItem) },
                             onLongClick = { onLongClick(timelineItem) },
                             timelineProtectionState = timelineProtectionState,
@@ -265,7 +264,6 @@ private fun TimelineItemRowContent(
                             timelineMode = timelineMode,
                             timelineRoomInfo = timelineRoomInfo,
                             timelineProtectionState = timelineProtectionState,
-                            isLastOutgoingMessage = isLastOutgoingMessage,
                             displayThreadSummaries = displayThreadSummaries,
                             onEventClick = { onContentClick(timelineItem) },
                             onLongClick = { onLongClick(timelineItem) },

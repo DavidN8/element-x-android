@@ -175,7 +175,6 @@ fun TimelineItemEventRow(
     timelineMode: Timeline.Mode,
     timelineRoomInfo: TimelineRoomInfo,
     timelineProtectionState: TimelineProtectionState,
-    isLastOutgoingMessage: Boolean,
     displayThreadSummaries: Boolean,
     onEventClick: () -> Unit,
     onGalleryItemClick: ((Int) -> Unit),
@@ -344,18 +343,6 @@ fun TimelineItemEventRow(
 
         // The send state and the read state are shown by the ticks inside the bubble; who read it is behind the "Seen by" action.
     }
-}
-
-/**
- * Hides this element and its descendants from screen readers while [hidden] is true.
- *
- * A clickable descendant stays an accessibility node of its own even though the row merges its descendants, so while the row acts as a selection toggle
- * it would otherwise still be reachable and activatable by a screen reader. Reactions already hide themselves this way at all times.
- */
-private fun Modifier.hiddenFromAccessibilityWhile(hidden: Boolean): Modifier = if (hidden) {
-    semantics { hideFromAccessibility() }
-} else {
-    this
 }
 
 /**

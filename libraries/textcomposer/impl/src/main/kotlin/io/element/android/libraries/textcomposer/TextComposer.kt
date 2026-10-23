@@ -703,7 +703,7 @@ private fun TextFormattingLayout(
 /**
  * The text input and its caption warning.
  *
- * @param drawOwnPill true in the formatting layout, where the input draws its own rounded box and the reply or edit preview.
+ * [drawOwnPill] is true in the formatting layout, where the input draws its own rounded box and the reply or edit preview.
  * In the standard layout the surrounding composer pill draws them.
  */
 @Composable

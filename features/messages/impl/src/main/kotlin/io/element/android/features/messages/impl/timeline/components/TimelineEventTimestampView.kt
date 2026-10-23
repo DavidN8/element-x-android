@@ -43,10 +43,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
- * The meta row at the bottom-end of a bubble: [Edited] [pin] time [send state].
- *
- * @param isPinned whether the event is pinned in the room.
- * @param onMedia true when the row sits on the dark scrim of an image or a video, where it is drawn in white.
+ * The meta row at the bottom-end of a bubble: [Edited] [pin] time [send state]. The pin shows when [isPinned]. With [onMedia], the row
+ * sits on the dark scrim of an image or a video and is drawn in white.
  */
 @Composable
 fun TimelineEventTimestampView(
@@ -138,6 +136,7 @@ fun TimelineEventTimestampView(
                 modifier = Modifier.size(15.dp, 18.dp),
             )
         } else if (event.isMine) {
+            Spacer(modifier = Modifier.width(3.dp))
             SendStateTick(
                 sendState = event.tickState(),
                 tint = tint,
@@ -179,7 +178,6 @@ private fun SendStateTick(
     sendState: TickState,
     tint: Color,
 ) {
-    Spacer(modifier = Modifier.width(3.dp))
     when (sendState) {
         TickState.Sending -> Icon(
             imageVector = CompoundIcons.Time(),

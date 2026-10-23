@@ -54,9 +54,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
  * The quoted message of a reply, drawn on the quote surface of a bubble or of the composer: a bar in the quoted sender's colour at the start,
- * the sender's name, the quoted text, and a thumbnail at the end for media.
- *
- * @param isFromMe whether the quoted message is yours, which draws the bar in the accent colour.
+ * the sender's name, the quoted text, and a thumbnail at the end for media. When [isFromMe], the quoted message is yours and the bar
+ * uses the accent colour.
  */
 @Composable
 fun InReplyToView(

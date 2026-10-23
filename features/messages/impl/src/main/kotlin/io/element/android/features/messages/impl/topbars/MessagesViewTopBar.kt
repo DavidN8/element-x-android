@@ -145,6 +145,8 @@ internal fun MessagesViewTopBar(
     )
 }
 
+// The icons are laid out by the caller's row, after the name.
+@Suppress("MultipleEmitters")
 @Composable
 private fun TopBarIdentityIcons(
     dmUserIdentityState: IdentityState?,
