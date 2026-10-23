@@ -9,6 +9,7 @@ package io.element.android.features.matcha.impl.docs.editor
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.features.matcha.impl.docs.DocNameSheetState
+import kotlinx.collections.immutable.toImmutableList
 
 class DocEditorStatePreviewParam : PreviewParameterProvider<DocEditorState> {
     override val values: Sequence<DocEditorState>
@@ -50,6 +51,7 @@ internal fun aDocEditorState(
     notice = notice,
     isLoadError = isLoadError,
     text = text,
+    blocks = MarkdownParser.parse(text).toImmutableList(),
     isApplyingEdits = false,
     isEditing = isEditing,
     canEdit = canEdit,

@@ -7,6 +7,7 @@
 
 package io.element.android.features.matcha.impl.docs.editor
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -20,6 +21,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 
 /** A block of a Markdown document. */
+@Immutable
 sealed interface MarkdownBlock {
     data class Heading(val level: Int, val text: String) : MarkdownBlock
 
@@ -46,17 +48,18 @@ sealed interface MarkdownBlock {
  * A small Markdown reader for the doc preview: headings, paragraphs, bulleted, numbered and checklist items, quotes, fenced code,
  * rules and tables, with bold, italic, strikethrough, code, links and bare links inside them. Raw HTML stays text, as on the web.
  *
+ * Any member writes the text, so reading it stays linear: no pattern backtracks or recurses per character, and inline searches
+ * that only move forward reuse their last answer.
+ *
  * ponytail: no nested quotes, setext headings or reference links; a full CommonMark library if docs need them.
  */
 object MarkdownParser {
-    private val heading = Regex("^ {0,3}(#{1,6})\\s+(.*?)\\s*#*\\s*$")
-    private val rule = Regex("^ {0,3}([-*_])(\\s*\\1){2,}\\s*$")
+    private val heading = Regex("^ {0,3}(#{1,6})(?:[ \\t]+(.*))?$")
     private val task = Regex("^(\\s*)[-*+]\\s+\\[([ xX])]\\s+(.*)$")
     private val bullet = Regex("^(\\s*)[-*+]\\s+(.*)$")
     private val ordered = Regex("^(\\s*)(\\d{1,9})[.)]\\s+(.*)$")
     private val quote = Regex("^ {0,3}>\\s?(.*)$")
     private val fence = Regex("^ {0,3}(```|~~~)")
-    private val tableDelimiter = Regex("^\\s*\\|?\\s*:?-+:?\\s*(\\|\\s*:?-+:?\\s*)*\\|?\\s*$")
     private const val INDENT_PER_LEVEL = 2
     private val safeSchemes = listOf("https://", "http://", "mailto:")
     private const val ESCAPABLE = "\\`*_{}[]()#+-.!|~<>"
@@ -84,7 +87,7 @@ object MarkdownParser {
                     flush()
                     1
                 }
-                line.trimStart().startsWith("|") && lines.getOrNull(index + 1)?.let(tableDelimiter::matches) == true -> {
+                line.trimStart().startsWith("|") && lines.getOrNull(index + 1)?.let(::isTableDelimiter) == true -> {
                     flush()
                     val end = (index + 2 until lines.size).firstOrNull { !lines[it].trimStart().startsWith("|") } ?: lines.size
                     blocks += MarkdownBlock.Table((listOf(line) + lines.subList(index + 2, end)).map(::cells))
@@ -114,8 +117,8 @@ object MarkdownParser {
     }
 
     private fun lineBlock(line: String): MarkdownBlock? {
-        heading.find(line)?.let { return MarkdownBlock.Heading(it.groupValues[1].length, it.groupValues[2]) }
-        if (rule.matches(line)) return MarkdownBlock.Rule
+        heading.find(line)?.let { return MarkdownBlock.Heading(it.groupValues[1].length, headingText(it.groupValues[2])) }
+        if (isRule(line)) return MarkdownBlock.Rule
         task.find(line)?.let {
             val marker = if (it.groupValues[2].isBlank()) "☐" else "☑"
             return MarkdownBlock.ListItem(depth(it.groupValues[1]), marker, it.groupValues[3])
@@ -125,6 +128,28 @@ object MarkdownParser {
         return null
     }
 
+    /** A heading's text without its optional closing run of `#`, which only counts after a space. */
+    private fun headingText(text: String): String {
+        val trimmed = text.trimEnd()
+        val open = trimmed.trimEnd('#')
+        return if (open.isEmpty() || open.last().isWhitespace()) open.trimEnd() else trimmed
+    }
+
+    /** Three or more of the same `-`, `*` or `_`, with spaces between. */
+    private fun isRule(line: String): Boolean {
+        val indent = line.takeWhile { it == ' ' }.length
+        val mark = line.getOrNull(indent)?.takeIf { indent <= 3 && it in "-*_" } ?: return false
+        val marks = line.filterNot(Char::isWhitespace)
+        return marks.length >= 3 && marks.all { it == mark }
+    }
+
+    /** A table's delimiter row, such as `| --- | :-: |`. */
+    private fun isTableDelimiter(line: String): Boolean =
+        line.trim().removePrefix("|").removeSuffix("|").split('|').all { cell ->
+            val dashes = cell.trim().removePrefix(":").removeSuffix(":")
+            dashes.isNotEmpty() && dashes.all { it == '-' }
+        }
+
     private fun depth(indent: String) = indent.replace("\t", "    ").length / INDENT_PER_LEVEL
 
     private fun cells(line: String) = line.trim().removePrefix("|").removeSuffix("|").split('|').map { it.trim() }
@@ -133,27 +158,46 @@ object MarkdownParser {
     fun inline(text: String, styles: InlineStyles): AnnotatedString = buildAnnotatedString { appendInline(text, styles) }
 
     private fun AnnotatedString.Builder.appendInline(text: String, styles: InlineStyles) {
+        val search = ForwardSearch(text)
         var index = 0
         while (index < text.length) {
-            index = appendToken(text, index, styles)
+            index = appendToken(text, search, index, styles)
+        }
+    }
+
+    /**
+     * [String.indexOf] for searches whose start only moves forward: each needle's last answer still holds until the start passes
+     * it, so text full of unmatched markers is read in linear time.
+     */
+    private class ForwardSearch(private val text: String) {
+        private val last = HashMap<String, Pair<Int, Int>>()
+
+        fun indexOf(needle: String, start: Int): Int {
+            last[needle]?.let { (from, found) -> if (start >= from && (found < 0 || start <= found)) return found }
+            return text.indexOf(needle, start).also { last[needle] = start to it }
         }
     }
 
     /** Appends the token starting at [start] and returns where the next one starts. */
     @Suppress("CyclomaticComplexMethod", "ReturnCount")
-    private fun AnnotatedString.Builder.appendToken(text: String, start: Int, styles: InlineStyles): Int {
+    private fun AnnotatedString.Builder.appendToken(text: String, search: ForwardSearch, start: Int, styles: InlineStyles): Int {
         val char = text[start]
         if (char == '\\' && start + 1 < text.length && text[start + 1] in ESCAPABLE) {
             append(text[start + 1])
             return start + 2
         }
         if (char == '`') {
-            val run = text.substring(start).takeWhile { it == '`' }
-            val end = text.indexOf(run, start + run.length)
-            if (end > start + run.length) {
-                withStyle(styles.code) { append(text.substring(start + run.length, end).trim()) }
+            var runEnd = start
+            while (runEnd < text.length && text[runEnd] == '`') runEnd++
+            val run = text.substring(start, runEnd)
+            val end = search.indexOf(run, runEnd)
+            if (end > runEnd) {
+                withStyle(styles.code) { append(text.substring(runEnd, end).trim()) }
                 return end + run.length
             }
+            // A run that never closes is plain text, all of it.
+            append(run)
+            return runEnd
         }
         for ((marker, style) in listOf(
                 "**" to SpanStyle(fontWeight = FontWeight.Bold),
@@ -161,7 +205,7 @@ object MarkdownParser {
                 "~~" to styles.strike
             )) {
             if (text.startsWith(marker, start)) {
-                val end = text.indexOf(marker, start + marker.length)
+                val end = search.indexOf(marker, start + marker.length)
                 if (end > start + marker.length) {
                     withStyle(style) { appendInline(text.substring(start + marker.length, end), styles) }
                     return end + marker.length
@@ -169,7 +213,7 @@ object MarkdownParser {
             }
         }
         if (opensEmphasis(text, start)) {
-            val end = text.indexOf(char, start + 1)
+            val end = search.indexOf(char.toString(), start + 1)
             if (end > start + 1 && !text[end - 1].isWhitespace()) {
                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) { appendInline(text.substring(start + 1, end), styles) }
                 return end + 1
@@ -177,8 +221,8 @@ object MarkdownParser {
         }
         if (char == '[' || text.startsWith("![", start)) {
             val labelStart = if (char == '!') start + 2 else start + 1
-            val labelEnd = text.indexOf("](", labelStart)
-            val urlEnd = if (labelEnd < 0) -1 else text.indexOf(')', labelEnd + 2)
+            val labelEnd = search.indexOf("](", labelStart)
+            val urlEnd = if (labelEnd < 0) -1 else search.indexOf(")", labelEnd + 2)
             if (labelEnd >= 0 && urlEnd > labelEnd) {
                 val url = text.substring(labelEnd + 2, urlEnd).trim().substringBefore(' ')
                 // Images never load: their description stands in, as a link to the image.
@@ -187,9 +231,10 @@ object MarkdownParser {
             }
         }
         if (char == '<') {
-            val end = text.indexOf('>', start)
-            val url = if (end > 0) text.substring(start + 1, end) else ""
-            if (isSafe(url)) {
+            // An autolink holds no space and no '<', so the scan stops at the next one.
+            val end = (start + 1 until text.length).firstOrNull { text[it] == '>' || text[it] == '<' || text[it].isWhitespace() }
+            val url = end?.takeIf { text[it] == '>' }?.let { text.substring(start + 1, it) }
+            if (end != null && url != null && isSafe(url)) {
                 appendLink(url, url, styles)
                 return end + 1
             }

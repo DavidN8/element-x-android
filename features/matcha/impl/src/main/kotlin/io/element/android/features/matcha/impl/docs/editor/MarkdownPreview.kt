@@ -48,15 +48,16 @@ import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Text
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.toImmutableList
 
 /** A doc's Markdown, rendered with the theme: 16/24 body text, 16 dp gutters, links in the link colour, code on a grey fill. */
 @Composable
 fun MarkdownPreview(
-    markdown: String,
+    blocks: ImmutableList<MarkdownBlock>,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(16.dp),
 ) {
-    val blocks = remember(markdown) { MarkdownParser.parse(markdown) }
     val colors = ElementTheme.colors
     val styles = remember(colors) {
         InlineStyles(
@@ -150,7 +151,7 @@ private fun MarkdownTable(block: MarkdownBlock.Table, body: TextStyle, styles: I
     }
 }
 
-class MarkdownPreviewParam : PreviewParameterProvider<String> {
+class MarkdownStringPreviewParam : PreviewParameterProvider<String> {
     override val values = sequenceOf(
         """
         # Trip plans
@@ -179,6 +180,6 @@ class MarkdownPreviewParam : PreviewParameterProvider<String> {
 
 @PreviewsDayNight
 @Composable
-internal fun MarkdownPreviewPreview(@PreviewParameter(MarkdownPreviewParam::class) markdown: String) = ElementPreview {
-    MarkdownPreview(markdown = markdown)
+internal fun MarkdownPreviewPreview(@PreviewParameter(MarkdownStringPreviewParam::class) markdown: String) = ElementPreview {
+    MarkdownPreview(blocks = MarkdownParser.parse(markdown).toImmutableList())
 }

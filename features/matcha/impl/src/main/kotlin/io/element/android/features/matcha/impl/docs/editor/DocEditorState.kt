@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.impl.docs.editor
 
 import io.element.android.features.matcha.impl.docs.DocNameSheetState
+import kotlinx.collections.immutable.ImmutableList
 
 data class DocEditorState(
     /** The doc's name; null for Space notes before anyone names it. */
@@ -18,6 +19,8 @@ data class DocEditorState(
     val isLoadError: Boolean,
     /** The Markdown, including edits not saved yet. */
     val text: String,
+    /** [text] read as Markdown for the preview; it may lag behind [text] while it is read. */
+    val blocks: ImmutableList<MarkdownBlock>,
     /** Typed edits are still going into the document, so [text] may lag behind the field. */
     val isApplyingEdits: Boolean,
     val isEditing: Boolean,

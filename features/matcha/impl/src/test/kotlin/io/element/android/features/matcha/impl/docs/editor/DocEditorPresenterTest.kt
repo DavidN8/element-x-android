@@ -27,6 +27,7 @@ import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.consumeItemsUntilTimeout
 import io.element.android.tests.testutils.test
+import io.element.android.tests.testutils.testCoroutineDispatchers
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -53,6 +54,7 @@ class DocEditorPresenterTest {
         documentId = documentId,
         onDone = { doneCount++ },
         networkMonitor = fixture.networkMonitor,
+        dispatchers = testCoroutineDispatchers(),
     )
 
     @Test
@@ -62,6 +64,7 @@ class DocEditorPresenterTest {
             val state = consumeItemsUntilPredicate { it.status == DocStatus.Saved }.last()
             assertThat(state.title).isEqualTo("Plans")
             assertThat(state.text).isEqualTo("Hello")
+            assertThat(consumeItemsUntilPredicate { it.blocks.isNotEmpty() }.last().blocks).containsExactly(MarkdownBlock.Paragraph("Hello"))
             assertThat(state.canEdit).isTrue()
             assertThat(state.canRename).isTrue()
             assertThat(state.isEditing).isFalse()

@@ -14,6 +14,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -32,9 +33,14 @@ import io.element.android.features.matcha.impl.docs.transport.DocumentSync
 import io.element.android.features.networkmonitor.api.NetworkMonitor
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.libraries.architecture.Presenter
+import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 /**
@@ -47,6 +53,7 @@ class DocEditorPresenter(
     @Assisted private val documentId: String,
     @Assisted private val onDone: () -> Unit,
     private val networkMonitor: NetworkMonitor,
+    private val dispatchers: CoroutineDispatchers,
 ) : Presenter<DocEditorState> {
     @AssistedFactory
     fun interface Factory {
@@ -67,6 +74,11 @@ class DocEditorPresenter(
         var nameSheet by remember { mutableStateOf<DocNameSheetState?>(null) }
         var applyingEdits by remember { mutableIntStateOf(0) }
         var isLeaving by remember { mutableStateOf(false) }
+        val text = documentState.text
+        // Off the main thread: any member writes the text, and a long doc takes a while to read.
+        val blocks by produceState<ImmutableList<MarkdownBlock>>(persistentListOf(), text) {
+            value = withContext(dispatchers.computation) { MarkdownParser.parse(text).toImmutableList() }
+        }
 
         val isEarlier = context.isEarlierChatDocument
         val catalog = catalogState
@@ -157,7 +169,8 @@ class DocEditorPresenter(
             status = status(documentState, catalog, isEarlier = isEarlier, canEdit = canEdit, isOffline = isOffline),
             notice = notice(documentState.error, isOffline = isOffline && !isEarlier && (canEdit || hasUnsaved)),
             isLoadError = documentState.error in LOAD_ERRORS || catalog?.isReady == true && document == null,
-            text = documentState.text,
+            text = text,
+            blocks = blocks,
             isApplyingEdits = applyingEdits > 0,
             isEditing = isEditing && canEdit,
             canEdit = canEdit,

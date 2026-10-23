@@ -77,6 +77,51 @@ class MarkdownParserTest {
     }
 
     @Test
+    fun `a closing run of hashes is dropped only after a space`() {
+        assertThat(MarkdownParser.parse("## Plans ##\n# C#\n# ###\n#\n#hashtag")).containsExactly(
+            MarkdownBlock.Heading(2, "Plans"),
+            MarkdownBlock.Heading(1, "C#"),
+            MarkdownBlock.Heading(1, ""),
+            MarkdownBlock.Heading(1, ""),
+            MarkdownBlock.Paragraph("#hashtag"),
+        ).inOrder()
+    }
+
+    @Test
+    fun `rules and table delimiters`() {
+        assertThat(MarkdownParser.parse("* * *\n___\n   ---\n    ---\n-- -x")).containsExactly(
+            MarkdownBlock.Rule,
+            MarkdownBlock.Rule,
+            MarkdownBlock.Rule,
+            MarkdownBlock.Paragraph("--- -- -x"),
+        ).inOrder()
+        assertThat(MarkdownParser.parse("| A | B |\n|:--|--:|\n| 1 | 2 |").single()).isInstanceOf(MarkdownBlock.Table::class.java)
+        assertThat(MarkdownParser.parse("| A |\n| - - |").single()).isInstanceOf(MarkdownBlock.Paragraph::class.java)
+    }
+
+    @Test
+    fun `hostile text is read in linear time`() {
+        val long = 10_000
+        val lines = listOf(
+            "# a" + " ".repeat(long) + "b",
+            "- ".repeat(long) + "x",
+            "|---".repeat(long) + "x",
+            "[".repeat(long),
+            "<".repeat(long) + ">",
+            "`".repeat(long),
+            "[a](".repeat(long),
+            "*a ".repeat(long),
+        )
+        val started = System.nanoTime()
+        lines.forEach { line ->
+            MarkdownParser.parse(line).forEach { block -> if (block is MarkdownBlock.Paragraph) MarkdownParser.inline(block.text, InlineStyles.plain()) }
+        }
+        assertThat((System.nanoTime() - started) / 1_000_000).isLessThan(2_000)
+        assertThat(MarkdownParser.parse(lines[0]).single()).isEqualTo(MarkdownBlock.Heading(1, "a" + " ".repeat(long) + "b"))
+        assertThat(MarkdownParser.inline("`".repeat(long), InlineStyles.plain()).text).hasLength(long)
+    }
+
+    @Test
     fun `snake_case words stay plain`() {
         val text = MarkdownParser.inline("use snake_case_name here", InlineStyles.plain())
         assertThat(text.text).isEqualTo("use snake_case_name here")

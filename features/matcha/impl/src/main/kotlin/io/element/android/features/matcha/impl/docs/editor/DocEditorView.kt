@@ -126,7 +126,7 @@ fun DocEditorView(
                     color = ElementTheme.colors.textSecondary,
                     modifier = Modifier.padding(16.dp),
                 )
-                else -> MarkdownPreview(markdown = state.text, modifier = Modifier.fillMaxSize())
+                else -> MarkdownPreview(blocks = state.blocks, modifier = Modifier.fillMaxSize())
             }
         }
     }
