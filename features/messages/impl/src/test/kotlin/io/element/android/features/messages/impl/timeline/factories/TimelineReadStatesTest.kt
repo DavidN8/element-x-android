@@ -65,12 +65,12 @@ class TimelineReadStatesTest {
     }
 
     @Test
-    fun `the reminder bot of another homeserver is waited for like any member`() {
+    fun `the reminder bot of another homeserver is not waited for either`() {
         val otherServerBot = UserId("@matcha-reminder:other.org")
         val members = listOf(aRoomMember(me), aRoomMember(alice), aRoomMember(otherServerBot))
         val items = listOf(anEvent(isMine = true, readers = listOf(alice)))
         val result = items.withReadStates(members).filterIsInstance<TimelineItem.Event>()
-        assertThat(result.single().isReadByOthers).isFalse()
+        assertThat(result.single().isReadByOthers).isTrue()
     }
 
     @Test

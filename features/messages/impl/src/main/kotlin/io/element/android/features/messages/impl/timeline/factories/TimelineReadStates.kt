@@ -60,11 +60,11 @@ internal fun List<TimelineItem>.withReadStates(roomMembers: List<RoomMember>): L
 /** The joined members who must have read a message for it to show as read; bots send no read receipts, so they are left out. */
 private fun List<RoomMember>.requiredReaders(currentUserId: UserId?): Set<String> {
     if (currentUserId == null) return emptySet()
-    // The Matcha reminder bot of the user's homeserver, and service members (MSC4171).
-    val reminderBotId = MatchaConfig.reminderBotUserId(currentUserId)
+    // Service members (MSC4171) and the Matcha reminder bot of any homeserver: in a federated room, a member of another server who set a
+    // reminder has invited the bot of their own server, which sends no receipts either.
     return asSequence()
         .filter { it.membership == RoomMembershipState.JOIN }
-        .filter { it.userId != currentUserId && !it.isServiceMember && it.userId != reminderBotId }
+        .filter { it.userId != currentUserId && !it.isServiceMember && it.userId.extractedDisplayName != MatchaConfig.REMINDER_BOT_LOCALPART }
         .map { it.userId.value }
         .toSet()
 }

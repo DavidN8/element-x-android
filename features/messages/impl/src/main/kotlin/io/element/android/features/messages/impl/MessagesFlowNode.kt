@@ -260,6 +260,9 @@ class MessagesFlowNode(
     /** The joined spaces this chat belongs to, whose docs can be opened from the chat; empty while the Matcha workspaces are off. */
     private var parentSpaces by mutableStateOf<ImmutableList<SpaceRoom>>(persistentListOf())
 
+    /** Whether the Matcha workspaces are on, read when a thread is picked in All threads. */
+    private var isMatchaWorkspacesEnabled = false
+
     /** The spaces offered by the "Choose a space" sheet, while it is shown. */
     private var spaceDocsChoice by mutableStateOf<ImmutableList<SpaceRoom>?>(null)
 
@@ -280,6 +283,7 @@ class MessagesFlowNode(
         featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces)
             .distinctUntilChanged()
             .onEach { isEnabled ->
+                isMatchaWorkspacesEnabled = isEnabled
                 parentSpaces = if (isEnabled) {
                     spaceService.joinedParents(room.roomId)
                         .onFailure { Timber.w(it, "Could not read the parent spaces of the room") }
@@ -304,19 +308,7 @@ class MessagesFlowNode(
         }
     }
 
-    /** Goes back to the chat's own timeline, closing the threads and the board opened above it. */
-    private fun openGeneral() {
-        val messages = backstack.elements.value
-            .lastOrNull { it.key.navTarget is NavTarget.Messages && it.targetState != BackStack.State.DESTROYED }
-            ?.key
-            ?.navTarget
-        if (messages != null) {
-            backstack.singleTop(messages)
-        } else {
-            // The flow started on another screen, such as the pinned messages.
-            backstack.newRoot(NavTarget.Messages(focusedEventId = null))
-        }
-    }
+    private fun openGeneral() = backstack.backToGeneral()
 
     private val openSpaceDocsAction: () -> Unit = { openSpaceDocs() }
 
@@ -818,7 +810,11 @@ class MessagesFlowNode(
             NavTarget.ThreadsList -> {
                 val callback = object : ThreadsListNode.Callback {
                     override fun openThread(threadId: ThreadId) {
-                        backstack.push(NavTarget.Thread(threadId, focusedEventId = null))
+                        if (isMatchaWorkspacesEnabled) {
+                            backstack.openThreadOverGeneral(threadId)
+                        } else {
+                            backstack.push(NavTarget.Thread(threadId, focusedEventId = null))
+                        }
                     }
                 }
                 createNode<ThreadsListNode>(buildContext, listOf(callback))
@@ -1150,6 +1146,29 @@ class MessagesFlowNode(
             }
         }
     }
+}
+
+/** Goes back to the chat's own timeline, closing the threads and the board opened above it. */
+internal fun BackStack<MessagesFlowNode.NavTarget>.backToGeneral() {
+    val messages = elements.value
+        .lastOrNull { it.key.navTarget is MessagesFlowNode.NavTarget.Messages && it.targetState != BackStack.State.DESTROYED }
+        ?.key
+        ?.navTarget
+    if (messages != null) {
+        singleTop(messages)
+    } else {
+        // The flow started on another screen, such as the pinned messages.
+        newRoot(MessagesFlowNode.NavTarget.Messages(focusedEventId = null))
+    }
+}
+
+/**
+ * Opens [threadId] as the only screen above the chat's timeline, as a thread picked in All threads does: the threads, boards and All threads
+ * opened before are closed, so they don't stack and back returns to General.
+ */
+internal fun BackStack<MessagesFlowNode.NavTarget>.openThreadOverGeneral(threadId: ThreadId) {
+    backToGeneral()
+    push(MessagesFlowNode.NavTarget.Thread(threadId, focusedEventId = null))
 }
 
 private fun GalleryItem.Type.toMediaViewerType(): GalleryItemData.Type {
