@@ -54,4 +54,21 @@ class TimelineItemActionComparatorTest {
             TimelineItemAction.ViewSource,
         ).inOrder()
     }
+
+    @Test
+    fun `remind me comes right after pin and unpin, before the edits`() {
+        val sut = TimelineItemActionComparator()
+        val sorted = listOf(
+            TimelineItemAction.Edit,
+            TimelineItemAction.RemindMe,
+            TimelineItemAction.Unpin,
+            TimelineItemAction.Pin,
+        ).sortedWith(sut)
+        assertThat(sorted).containsExactly(
+            TimelineItemAction.Pin,
+            TimelineItemAction.Unpin,
+            TimelineItemAction.RemindMe,
+            TimelineItemAction.Edit,
+        ).inOrder()
+    }
 }

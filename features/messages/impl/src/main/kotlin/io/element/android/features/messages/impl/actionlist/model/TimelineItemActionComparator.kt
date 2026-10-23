@@ -25,6 +25,7 @@ class TimelineItemActionComparator : Comparator<TimelineItemAction> {
         TimelineItemAction.CopyLink,
         TimelineItemAction.Pin,
         TimelineItemAction.Unpin,
+        TimelineItemAction.RemindMe,
         TimelineItemAction.Edit,
         TimelineItemAction.EditPoll,
         TimelineItemAction.AddCaption,

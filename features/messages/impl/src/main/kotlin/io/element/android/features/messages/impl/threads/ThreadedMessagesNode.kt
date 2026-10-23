@@ -30,6 +30,7 @@ import io.element.android.annotations.ContributesNode
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.matcha.api.MatchaChatBarActions
 import io.element.android.features.matcha.api.MatchaChatBarRenderer
+import io.element.android.features.matcha.api.MatchaReminderRenderer
 import io.element.android.features.messages.impl.MessagesEvent
 import io.element.android.features.messages.impl.MessagesNavigator
 import io.element.android.features.messages.impl.MessagesPresenter
@@ -103,6 +104,7 @@ class ThreadedMessagesNode(
     private val dispatchers: CoroutineDispatchers,
     // Lazy: the chip bar reads the room's Matcha data as soon as it exists, which only the Matcha workspaces need.
     private val matchaChatBarRenderer: Lazy<MatchaChatBarRenderer>,
+    private val matchaReminderRenderer: Lazy<MatchaReminderRenderer>,
 ) : Node(buildContext, plugins = plugins), MessagesNavigator, TimelineSelectionOwner {
     data class Inputs(
         val threadRootEventId: ThreadId,
@@ -371,6 +373,7 @@ class ThreadedMessagesNode(
                     matchaChatBar = { selection ->
                         matchaChatBarRenderer.value.Render(selection = selection, actions = callback.matchaChatBarActions, modifier = Modifier)
                     },
+                    matchaReminderSheet = { target, onDismiss -> matchaReminderRenderer.value.Render(target = target, onDismiss = onDismiss) },
                 )
 
                 roomMemberModerationRenderer.Render(

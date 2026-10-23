@@ -24,6 +24,9 @@ sealed interface MessagesEvent {
     data object ShowLiveLocationShare : MessagesEvent
     data object MarkAsFullyReadAndExit : MessagesEvent
     data object ConfirmSelectionAction : MessagesEvent
+
+    /** The Matcha "Remind me" sheet was closed. */
+    data object DismissMatchaReminder : MessagesEvent
 }
 
 enum class InviteDialogAction {

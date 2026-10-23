@@ -28,6 +28,7 @@ import im.vector.app.features.analytics.plan.PinUnpinAction
 import io.element.android.appconfig.MessageComposerConfig
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
 import io.element.android.features.location.api.live.isCurrentlySharing
+import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.messages.api.timeline.HtmlConverterProvider
 import io.element.android.features.messages.impl.MessagesState.Threads
@@ -160,6 +161,9 @@ class MessagesPresenter(
     )
 
     private val markingAsReadAndExiting = AtomicBoolean(false)
+
+    /** What the Matcha "Remind me" sheet is about while it is open. */
+    private var matchaReminderTarget by mutableStateOf<MatchaReminderTarget?>(null)
 
     @Composable
     override fun present(): MessagesState {
@@ -317,6 +321,7 @@ class MessagesPresenter(
                 MessagesEvent.ShowLiveLocationShare -> {
                     navigator.navigateToCurrentLiveLocation()
                 }
+                MessagesEvent.DismissMatchaReminder -> matchaReminderTarget = null
                 is MessagesEvent.MarkAsFullyReadAndExit -> if (!markingAsReadAndExiting.getAndSet(true)) {
                     coroutineScope.launch {
                         val latestEventId = room.liveTimeline.getLatestEventId().getOrElse {
@@ -385,6 +390,7 @@ class MessagesPresenter(
         return MatchaChatState(
             hasChatBar = hasChatBar,
             threads = threads,
+            reminderTarget = matchaReminderTarget,
         )
     }
 
@@ -494,7 +500,23 @@ class MessagesPresenter(
             TimelineItemAction.RetrySending -> handleRetrySending(targetEvent)
             TimelineItemAction.AbortSending -> handleActionAbortSend(targetEvent)
             TimelineItemAction.ReadBy -> handleReadByAction(targetEvent, timelineState, readReceiptBottomSheetState)
+            TimelineItemAction.RemindMe -> handleRemindMeAction(targetEvent, timelineState)
         }
+    }
+
+    /** Opens the Matcha "Remind me" sheet about this message, prefilled with the start of its text. */
+    private fun handleRemindMeAction(targetEvent: TimelineItem.Event, timelineState: TimelineState) {
+        val eventId = targetEvent.eventId ?: return
+        val text = when (val content = targetEvent.content) {
+            is TimelineItemTextBasedContent -> content.plainText
+            else -> content.captionOrNull().orEmpty()
+        }
+        matchaReminderTarget = MatchaReminderTarget(
+            message = text.take(REMINDER_MESSAGE_PREFILL_LENGTH),
+            eventId = eventId,
+            threadId = (timelineState.timelineMode as? Timeline.Mode.Thread)?.threadRootId
+                ?: (targetEvent.threadInfo as? TimelineItemThreadInfo.ThreadResponse)?.threadRootId,
+        )
     }
 
     private suspend fun handleRetrySending(targetEvent: TimelineItem.Event) {
@@ -734,3 +756,6 @@ class MessagesPresenter(
         }
     }
 }
+
+/** The reminder sheet is prefilled with at most this much of the message (WHATSAPP_DESIGN.md §4d). */
+private const val REMINDER_MESSAGE_PREFILL_LENGTH = 200

@@ -33,8 +33,10 @@ import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.emoji.api.recentemojis.GetRecentEmojis
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
+import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.room.BaseRoom
+import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.test.AN_EVENT_ID
@@ -45,11 +47,15 @@ import io.element.android.libraries.matrix.test.A_TRANSACTION_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.aRoomInfo
+import io.element.android.libraries.matrix.test.room.aRoomMember
 import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
 import io.element.android.tests.testutils.WarmUpRule
+import io.element.android.tests.testutils.consumeItemsUntilPredicate
+import io.element.android.tests.testutils.consumeItemsUntilTimeout
 import io.element.android.tests.testutils.test
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -1362,7 +1368,7 @@ class ActionListPresenterTest {
         val presenter = createActionListPresenter(
             isDeveloperModeEnabled = false,
             timelineMode = Timeline.Mode.Thread(A_THREAD_ID),
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true, FeatureFlags.MatchaWorkspaces.key to false)),
         )
         presenter.test {
             val initialState = awaitItem()
@@ -1412,7 +1418,7 @@ class ActionListPresenterTest {
     fun `present - compute for remote timeline item with threads enabled`() = runTest {
         val presenter = createActionListPresenter(
             isDeveloperModeEnabled = false,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true, FeatureFlags.MatchaWorkspaces.key to false)),
         )
         presenter.test {
             val initialState = awaitItem()
@@ -1465,7 +1471,7 @@ class ActionListPresenterTest {
     fun `present - compute for remote timeline item already in thread with threads enabled`() = runTest {
         val presenter = createActionListPresenter(
             isDeveloperModeEnabled = false,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true, FeatureFlags.MatchaWorkspaces.key to false)),
         )
         presenter.test {
             val initialState = awaitItem()
@@ -1519,7 +1525,7 @@ class ActionListPresenterTest {
     fun `present - compute for local timeline item with threads enabled`() = runTest {
         val presenter = createActionListPresenter(
             isDeveloperModeEnabled = false,
-            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true)),
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to true, FeatureFlags.MatchaWorkspaces.key to false)),
         )
         presenter.test {
             val initialState = awaitItem()
@@ -1607,13 +1613,85 @@ class ActionListPresenterTest {
                 .isEqualTo(expectedEmojis)
         }
     }
+
+    @Test
+    fun `present - Remind me is offered on remote messages with the Matcha workspaces`() = runTest {
+        val actions = computeMatchaActions()
+        assertThat(actions).contains(TimelineItemAction.RemindMe)
+        // Right after Pin and Unpin, before the edits (WHATSAPP_DESIGN.md §3.3).
+        assertThat(actions.indexOf(TimelineItemAction.RemindMe)).isGreaterThan(actions.indexOf(TimelineItemAction.CopyText))
+    }
+
+    @Test
+    fun `present - Remind me needs the Matcha workspaces`() = runTest {
+        val presenter = createActionListPresenter(isDeveloperModeEnabled = false)
+        presenter.test {
+            val initialState = awaitItem()
+            initialState.eventSink(ActionListEvent.ComputeForMessage(event = aMessageEvent(isMine = false), userEventPermissions = aUserEventPermissions()))
+            val target = consumeItemsUntilPredicate { it.target is ActionListState.Target.Success }.last().target as ActionListState.Target.Success
+            assertThat(target.actions).doesNotContain(TimelineItemAction.RemindMe)
+        }
+    }
+
+    @Test
+    fun `present - Remind me needs a remote message and permission to send messages`() = runTest {
+        assertThat(computeMatchaActions(isRemote = false)).doesNotContain(TimelineItemAction.RemindMe)
+        assertThat(computeMatchaActions(canSendMessage = false)).doesNotContain(TimelineItemAction.RemindMe)
+    }
+
+    @Test
+    fun `present - in a DM, Remind me needs the reminder bot to have joined`() = runTest {
+        val botLookups = mutableListOf<UserId>()
+        fun aDm(botMembership: RoomMembershipState) = FakeBaseRoom(
+            initialRoomInfo = aRoomInfo(isDm = true),
+            getUpdatedMemberResult = { userId ->
+                botLookups += userId
+                Result.success(aRoomMember(userId = userId, membership = botMembership))
+            },
+        )
+        assertThat(computeMatchaActions(room = aDm(RoomMembershipState.LEAVE))).doesNotContain(TimelineItemAction.RemindMe)
+        assertThat(computeMatchaActions(room = aDm(RoomMembershipState.JOIN))).contains(TimelineItemAction.RemindMe)
+        // The bot of the session's own homeserver.
+        assertThat(botLookups.distinct()).containsExactly(UserId("@matcha-reminder:server.org"))
+    }
+
+    /** The actions offered on someone else's message with the Matcha workspaces on. */
+    private suspend fun TestScope.computeMatchaActions(
+        room: BaseRoom = FakeBaseRoom(),
+        canSendMessage: Boolean = true,
+        isRemote: Boolean = true,
+    ): List<TimelineItemAction> {
+        val presenter = createActionListPresenter(
+            isDeveloperModeEnabled = false,
+            room = room,
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MatchaWorkspaces.key to true)),
+        )
+        var actions: List<TimelineItemAction> = emptyList()
+        presenter.test {
+            // The Matcha flag and, in a DM, the reminder bot's membership are read first.
+            val readyState = consumeItemsUntilTimeout().last()
+            val messageEvent = if (isRemote) {
+                aMessageEvent(isMine = false)
+            } else {
+                aMessageEvent(eventId = null, transactionId = A_TRANSACTION_ID, isMine = false)
+            }
+            readyState.eventSink(
+                ActionListEvent.ComputeForMessage(event = messageEvent, userEventPermissions = aUserEventPermissions(canSendMessage = canSendMessage))
+            )
+            val target = consumeItemsUntilPredicate { it.target is ActionListState.Target.Success }.last().target as ActionListState.Target.Success
+            actions = target.actions
+        }
+        return actions
+    }
 }
 
 private fun createActionListPresenter(
     isDeveloperModeEnabled: Boolean,
     room: BaseRoom = FakeBaseRoom(),
     timelineMode: Timeline.Mode = Timeline.Mode.Live,
-    featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.Threads.key to false)),
+    featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(
+        initialState = mapOf(FeatureFlags.Threads.key to false, FeatureFlags.MatchaWorkspaces.key to false),
+    ),
     recentEmojis: GetRecentEmojis = GetRecentEmojis { Result.success(persistentListOf()) },
 ): ActionListPresenter {
     val preferencesStore = InMemoryAppPreferencesStore(isDeveloperModeEnabled = isDeveloperModeEnabled)

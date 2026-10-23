@@ -14,6 +14,7 @@ import androidx.lifecycle.Lifecycle
 import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.PinUnpinAction
 import io.element.android.features.location.test.FakeActiveLiveLocationShareManager
+import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.features.matcha.test.FakeMatchaRoomController
@@ -191,6 +192,38 @@ class MessagesPresenterTest {
             assertThat(state.matcha?.threads).isEqualTo(threads)
             controller.hasChatBar.value = true
             assertThat(consumeItemsUntilTimeout().last().matcha?.hasChatBar).isTrue()
+        }
+    }
+
+    @Test
+    fun `present - Remind me opens the reminder sheet about the message, and dismissing it closes it`() = runTest {
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+        )
+        presenter.testWithLifecycleOwner {
+            val initialState = consumeItemsUntilTimeout().last()
+            val longText = "a".repeat(250)
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RemindMe, aMessageEvent(content = aTimelineItemTextContent(body = longText))))
+            val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
+            assertThat(target).isEqualTo(MatchaReminderTarget(message = "a".repeat(200), eventId = AN_EVENT_ID, threadId = null))
+
+            initialState.eventSink(MessagesEvent.DismissMatchaReminder)
+            assertThat(consumeItemsUntilPredicate { it.matcha?.reminderTarget == null }.last().matcha?.reminderTarget).isNull()
+        }
+    }
+
+    @Test
+    fun `present - Remind me in a thread links the reminder to the thread`() = runTest {
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+            timelineState = aTimelineState(timelineMode = Timeline.Mode.Thread(A_THREAD_ID)),
+        )
+        presenter.testWithLifecycleOwner {
+            val initialState = consumeItemsUntilTimeout().last()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RemindMe, aMessageEvent()))
+            val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
+            assertThat(target?.threadId).isEqualTo(A_THREAD_ID)
+            assertThat(target?.eventId).isEqualTo(AN_EVENT_ID)
         }
     }
 

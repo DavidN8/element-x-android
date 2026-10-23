@@ -33,6 +33,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.emojibasebindings.Emoji
 import io.element.android.emojibasebindings.EmojibaseCategory
 import io.element.android.features.matcha.api.MatchaChatBarSelection
+import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListState
@@ -830,6 +831,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
     onViewAllPinnedMessagesClick: () -> Unit = EnsureNeverCalled(),
     onThreadsListClicked: () -> Unit = EnsureNeverCalled(),
     matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit = {},
+    matchaReminderSheet: @Composable (MatchaReminderTarget?, () -> Unit) -> Unit = { _, _ -> },
 ) {
     val emojiPickerRenderer = DefaultEmojiPickerRenderer()
     setSafeContent {
@@ -849,6 +851,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
                 onViewAllPinnedMessagesClick = onViewAllPinnedMessagesClick,
                 knockRequestsBannerView = {},
                 matchaChatBar = matchaChatBar,
+                matchaReminderSheet = matchaReminderSheet,
                 customReactionBottomSheet = {
                     CustomReactionBottomSheet(
                         state = state.customReactionState,

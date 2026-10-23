@@ -66,6 +66,7 @@ import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.location.api.LiveLocationSharingBanner
 import io.element.android.features.matcha.api.MatchaChatBarSelection
+import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.messages.api.timeline.voicemessages.composer.VoiceMessageComposerEvent
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListView
@@ -178,6 +179,7 @@ fun MessagesView(
     onThreadsListClick: () -> Unit,
     knockRequestsBannerView: @Composable () -> Unit,
     matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit,
+    matchaReminderSheet: @Composable (target: MatchaReminderTarget?, onDismiss: () -> Unit) -> Unit,
     modifier: Modifier = Modifier,
     forceJumpToBottomVisibility: Boolean = false,
     customReactionBottomSheet: @Composable () -> Unit,
@@ -465,6 +467,10 @@ fun MessagesView(
     )
 
     customReactionBottomSheet()
+
+    state.matcha?.let { matcha ->
+        matchaReminderSheet(matcha.reminderTarget) { state.eventSink(MessagesEvent.DismissMatchaReminder) }
+    }
 
     ReactionSummaryView(state = state.reactionSummaryState)
     ReadReceiptBottomSheet(
@@ -854,6 +860,7 @@ internal fun MessagesViewPreview(@PreviewParameter(MessagesStatePreviewParam::cl
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
         matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -889,6 +896,7 @@ internal fun MessagesViewSelectionModePreview() = ElementPreview {
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
         matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -948,6 +956,7 @@ internal fun MessagesViewA11yPreview() = ElementPreview {
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
         matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
         customReactionBottomSheet = {},
     )
 }

@@ -7,6 +7,7 @@
 
 package io.element.android.features.messages.impl.matcha
 
+import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.libraries.matrix.api.core.ThreadId
 import kotlinx.collections.immutable.ImmutableMap
@@ -20,12 +21,16 @@ data class MatchaChatState(
     val hasChatBar: Boolean,
     /** The Matcha names and archive flags of the chat's threads. */
     val threads: ImmutableMap<ThreadId, MatchaThreadInfo>,
+    /** What the open "Remind me" sheet is about, or null while it is closed. */
+    val reminderTarget: MatchaReminderTarget?,
 )
 
 fun aMatchaChatState(
     hasChatBar: Boolean = true,
     threads: ImmutableMap<ThreadId, MatchaThreadInfo> = persistentMapOf(),
+    reminderTarget: MatchaReminderTarget? = null,
 ) = MatchaChatState(
     hasChatBar = hasChatBar,
     threads = threads,
+    reminderTarget = reminderTarget,
 )

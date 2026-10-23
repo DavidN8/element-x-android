@@ -37,6 +37,7 @@ enum class TimelineItemAction(
     EndPoll(CommonStrings.action_end_poll, CompoundDrawables.ic_compound_polls_end),
     Pin(CommonStrings.action_pin, CompoundDrawables.ic_compound_pin),
     Unpin(CommonStrings.action_unpin, CompoundDrawables.ic_compound_unpin),
+    RemindMe(CommonStrings.action_matcha_remind_me, CompoundDrawables.ic_compound_notifications),
     ReadBy(CommonStrings.common_seen_by, DesignSystemR.drawable.ic_matcha_done_all),
 
     // Note: these actions are not used in UI for now
