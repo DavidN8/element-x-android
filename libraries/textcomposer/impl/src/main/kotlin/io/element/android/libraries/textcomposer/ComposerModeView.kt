@@ -12,7 +12,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -35,6 +34,7 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.quoteOverlay
 import io.element.android.libraries.matrix.ui.media.contentvalidation.collectOverallState
@@ -145,8 +145,8 @@ private fun ReplyToModeView(
 
     val contentHasErrors = currentValidationState.hasError()
 
-    // The same quote block as in bubbles, at the top of the composer pill.
-    Box(
+    // The same quote block as in bubbles, at the top of the composer pill, with the close button after it so it never covers the quote.
+    Row(
         modifier
             .clip(shape)
             .background(
@@ -164,23 +164,16 @@ private fun ReplyToModeView(
             hideImage = hideImage,
             contentValidationValue = currentValidationState,
             maxLines = maxReplyContentLines,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
         )
-        Icon(
-            imageVector = CompoundIcons.Close(),
-            contentDescription = stringResource(CommonStrings.action_close),
-            tint = if (contentHasErrors) ElementTheme.colors.iconCriticalPrimary else ElementTheme.colors.iconSecondary,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 8.dp, top = 8.dp, start = 8.dp, bottom = 16.dp)
-                .size(16.dp)
-                .clickable(
-                    enabled = true,
-                    onClick = onResetComposerMode,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(bounded = false)
-                ),
-        )
+        IconButton(onClick = onResetComposerMode) {
+            Icon(
+                imageVector = CompoundIcons.Close(),
+                contentDescription = stringResource(CommonStrings.action_close),
+                tint = if (contentHasErrors) ElementTheme.colors.iconCriticalPrimary else ElementTheme.colors.iconSecondary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 

@@ -882,7 +882,9 @@ private fun MessageEventBubbleContent(
             val backgroundColor = if (contentHasError) ElementTheme.colors.bgCriticalSubtle else ElementTheme.colors.quoteOverlay
             Box(
                 modifier = talkbackCompatModifier
-                    .background(backgroundColor, shape)
+                    .background(backgroundColor, shape),
+                // Pass on EqualWidthColumn's minimum width, so the quote spans the bubble and its thumbnail sits at the end.
+                propagateMinConstraints = true,
             ) {
                 val contentValidationState = rememberEventContentValidationState(eventId = inReplyTo.eventId(), eventContent = inReplyTo.content())
                 val updatedEventSink by rememberUpdatedState(eventSink)

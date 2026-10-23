@@ -76,8 +76,8 @@ fun InReplyToView(
                 isFromMe = isFromMe,
                 modifier = modifier,
             )
-            ContentValidationValue.Invalid -> ReplyToInvalidContent()
-            is ContentValidationValue.UnrecoverableError -> ReplyToNotFoundContent()
+            ContentValidationValue.Invalid -> ReplyToInvalidContent(modifier = modifier)
+            is ContentValidationValue.UnrecoverableError -> ReplyToNotFoundContent(modifier = modifier)
             else -> ReplyToLoadingContent(modifier = modifier)
         }
         is InReplyToDetails.Error ->
@@ -104,6 +104,8 @@ private fun ReplyToReadyContent(
                 drawRect(barColor, size = Size(QUOTE_BAR_WIDTH.toPx(), size.height))
             }
             .padding(start = QUOTE_BAR_WIDTH),
+        // Wraps its content, but once given a minimum width (the bubble's or the composer's), the thumbnail sits at the end.
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val a11InReplyToText = stringResource(CommonStrings.common_in_reply_to, senderProfile.getDisambiguatedDisplayName(senderId))
