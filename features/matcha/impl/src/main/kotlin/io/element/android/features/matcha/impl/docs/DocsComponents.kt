@@ -178,9 +178,10 @@ internal fun DocsMessagePage(
     }
 }
 
+/** All the docs components in one preview. */
 @PreviewsDayNight
 @Composable
-internal fun DocsComponentsPreview() = ElementPreview {
+internal fun DocRowContentPreview() = ElementPreview {
     Column {
         DocsNoticeStrip(icon = CompoundIcons.Offline(), text = "You're offline. Keep this screen open and your edits will send when you reconnect.")
         DocRowContent(title = "Space notes", subtitle = "Edited Yesterday")

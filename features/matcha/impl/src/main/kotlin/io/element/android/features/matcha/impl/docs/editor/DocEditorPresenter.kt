@@ -151,7 +151,7 @@ class DocEditorPresenter(
                     onDone()
                 }
                 DocEditorEvent.CancelLeave -> showLeaveDialog = false
-                DocEditorEvent.Rename -> if (canWriteCatalog) nameSheet = DocNameSheetState(documentId = documentId, name = document.title.orEmpty())
+                DocEditorEvent.Rename -> if (canWriteCatalog) nameSheet = DocNameSheetState.rename(documentId, document.title.orEmpty())
                 is DocEditorEvent.UpdateName -> nameSheet = nameSheet?.copy(name = event.name, error = docNameError(event.name))
                 DocEditorEvent.SubmitName -> submitName()
                 DocEditorEvent.DismissNameSheet -> nameSheet = null

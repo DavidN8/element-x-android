@@ -29,13 +29,17 @@ data class SpaceDocument(
 )
 
 data class CatalogState(
-    val documents: List<SpaceDocument> = emptyList(),
-    val isReady: Boolean = false,
-    val canEdit: Boolean = false,
-    val sync: DocumentSync = DocumentSync.Loading,
-    val pendingUpdates: Int = 0,
-    val error: DocumentError? = null,
-)
+    val documents: List<SpaceDocument>,
+    val isReady: Boolean,
+    val canEdit: Boolean,
+    val sync: DocumentSync,
+    val pendingUpdates: Int,
+    val error: DocumentError?,
+) {
+    companion object {
+        val Loading = CatalogState(documents = emptyList(), isReady = false, canEdit = false, sync = DocumentSync.Loading, pendingUpdates = 0, error = null)
+    }
+}
 
 /**
  * The encrypted list of a space's document names, kept in the reserved `catalog` document like the web client's

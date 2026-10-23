@@ -49,11 +49,23 @@ data class DocNameSheetState(
     /** Null for a new doc. */
     val documentId: String?,
     val name: String,
-    val error: DocNameError? = null,
-    val isSaving: Boolean = false,
+    val error: DocNameError?,
+    val isSaving: Boolean,
     /** A new doc whose first save failed: submitting again saves it rather than adding another. */
-    val unsavedDocumentId: String? = null,
-)
+    val unsavedDocumentId: String?,
+) {
+    companion object {
+        fun new() = DocNameSheetState(documentId = null, name = "", error = null, isSaving = false, unsavedDocumentId = null)
+
+        fun rename(documentId: String, name: String) = DocNameSheetState(
+            documentId = documentId,
+            name = name,
+            error = null,
+            isSaving = false,
+            unsavedDocumentId = null
+        )
+    }
+}
 
 enum class DocNameError { Empty, TooLong, SaveFailed }
 
@@ -123,12 +135,12 @@ private fun DocNameSheetContent(
 
 class DocNameSheetStatePreviewParam : PreviewParameterProvider<DocNameSheetState> {
     override val values = sequenceOf(
-        DocNameSheetState(documentId = null, name = ""),
-        DocNameSheetState(documentId = "main", name = "Space notes"),
-        DocNameSheetState(documentId = null, name = "", error = DocNameError.Empty),
-        DocNameSheetState(documentId = null, name = "A".repeat(101), error = DocNameError.TooLong),
-        DocNameSheetState(documentId = null, name = "Trip plans", isSaving = true),
-        DocNameSheetState(documentId = null, name = "Trip plans", error = DocNameError.SaveFailed),
+        DocNameSheetState.new(),
+        DocNameSheetState.rename("main", "Space notes"),
+        DocNameSheetState.new().copy(error = DocNameError.Empty),
+        DocNameSheetState.new().copy(name = "A".repeat(101), error = DocNameError.TooLong),
+        DocNameSheetState.new().copy(name = "Trip plans", isSaving = true),
+        DocNameSheetState.new().copy(name = "Trip plans", error = DocNameError.SaveFailed),
     )
 }
 

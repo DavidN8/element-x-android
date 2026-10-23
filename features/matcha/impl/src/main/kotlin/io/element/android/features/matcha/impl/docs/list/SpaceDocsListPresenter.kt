@@ -65,7 +65,7 @@ class SpaceDocsListPresenter(
     @Composable
     override fun present(): SpaceDocsListState {
         val coroutineScope = rememberCoroutineScope()
-        val catalogState by remember { catalog.state }.collectAsState(CatalogState())
+        val catalogState by remember { catalog.state }.collectAsState(CatalogState.Loading)
         val roomInfo by context.room.roomInfoFlow.collectAsState()
         val lastEdits by remember { context.store.snapshot.map { lastEdits(it.events) }.distinctUntilChanged() }.collectAsState(emptyMap())
         var setupStatus by remember { mutableStateOf<SpaceDocsSetupStatus?>(null) }
@@ -105,10 +105,10 @@ class SpaceDocsListPresenter(
             when (event) {
                 is SpaceDocsListEvent.OpenDocument -> navigator.openDocument(event.documentId)
                 SpaceDocsListEvent.OpenSetup -> navigator.openSetup()
-                SpaceDocsListEvent.NewDocument -> nameSheet = DocNameSheetState(documentId = null, name = "")
+                SpaceDocsListEvent.NewDocument -> nameSheet = DocNameSheetState.new()
                 is SpaceDocsListEvent.Rename -> {
                     val title = catalogState.documents.firstOrNull { it.id == event.documentId }?.title.orEmpty()
-                    nameSheet = DocNameSheetState(documentId = event.documentId, name = title)
+                    nameSheet = DocNameSheetState.rename(event.documentId, title)
                 }
                 is SpaceDocsListEvent.UpdateName -> nameSheet = nameSheet?.copy(name = event.name, error = docNameError(event.name))
                 SpaceDocsListEvent.SubmitName -> submitName()

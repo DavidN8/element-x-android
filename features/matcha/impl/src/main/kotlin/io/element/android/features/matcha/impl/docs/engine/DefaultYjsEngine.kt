@@ -53,7 +53,7 @@ import kotlin.time.Duration.Companion.seconds
  */
 @SingleIn(SessionScope::class)
 @ContributesBinding(SessionScope::class)
-class WebViewYjsEngine(
+class DefaultYjsEngine(
     @ApplicationContext private val context: Context,
     private val dispatchers: CoroutineDispatchers,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
@@ -78,9 +78,9 @@ class WebViewYjsEngine(
 
     private fun release(host: Host, documentId: String) = sessionCoroutineScope.launch(dispatchers.main) {
         openDocuments--
-        if (openDocuments <= 0 && this@WebViewYjsEngine.host === host) {
+        if (openDocuments <= 0 && this@DefaultYjsEngine.host === host) {
             openDocuments = 0
-            this@WebViewYjsEngine.host = null
+            this@DefaultYjsEngine.host = null
             host.destroy()
         } else if (host.isAlive) {
             runCatchingExceptions { host.call("close", buildJsonObject { put("doc", documentId) }) }

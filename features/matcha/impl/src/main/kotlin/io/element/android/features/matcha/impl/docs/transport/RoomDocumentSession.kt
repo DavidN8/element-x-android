@@ -69,15 +69,15 @@ enum class DocumentSync { Loading, Saved, Saving, Offline, Error }
 
 data class DocumentSessionState(
     /** The whole history has been replayed and nothing is missing. */
-    val isReady: Boolean = false,
-    val canEdit: Boolean = false,
-    val sync: DocumentSync = DocumentSync.Loading,
+    val isReady: Boolean,
+    val canEdit: Boolean,
+    val sync: DocumentSync,
     /** Local updates not yet acknowledged by the server. */
-    val pendingUpdates: Int = 0,
-    val error: DocumentError? = null,
-    val text: String = "",
+    val pendingUpdates: Int,
+    val error: DocumentError?,
+    val text: String,
     /** The raw entries of the "documents" map, for the catalog. */
-    val entries: JsonObject = JsonObject(emptyMap()),
+    val entries: JsonObject,
 )
 
 private class DocumentException(val error: DocumentError, cause: Throwable? = null) : Exception(error.name, cause)
@@ -108,6 +108,7 @@ class RoomDocumentSession(
     private var document: YjsDocument? = null
     private var anchor: String? = null
     private var isLoading = true
+
     /** The whole history has been replayed; [publish] also checks that no update is missing. */
     private var isReady = false
     private var error: DocumentError? = null
@@ -148,7 +149,17 @@ class RoomDocumentSession(
         isJoined && canSendFrames && (!isEncrypted || canSendEncrypted)
     }.stateIn(scope, SharingStarted.Eagerly, false)
 
-    private val _state = MutableStateFlow(DocumentSessionState())
+    private val _state = MutableStateFlow(
+        DocumentSessionState(
+            isReady = false,
+            canEdit = false,
+            sync = DocumentSync.Loading,
+            pendingUpdates = 0,
+            error = null,
+            text = "",
+            entries = JsonObject(emptyMap()),
+        )
+    )
     val state: StateFlow<DocumentSessionState> = _state.asStateFlow()
 
     init {

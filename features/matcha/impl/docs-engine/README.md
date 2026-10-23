@@ -1,7 +1,7 @@
 # Matcha docs engine
 
 `entry.js` is the Yjs engine behind Space Docs. It is bundled into `../src/main/assets/matcha-docs/engine.js` and runs in a
-headless WebView (`docs/engine/WebViewYjsEngine.kt`) with no network or file access. Kotlin owns the Matrix transport; the
+headless WebView (`docs/engine/DefaultYjsEngine.kt`) with no network or file access. Kotlin owns the Matrix transport; the
 engine only holds the Yjs documents (`Y.Text` `"markdown"`, catalog `Y.Map` `"documents"`), checks and applies updates,
 reports missing causal history and turns text edits into updates.
 
