@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +51,7 @@ import io.element.android.features.messages.impl.R
 import io.element.android.libraries.designsystem.atomic.atoms.PlaceholderAtom
 import io.element.android.libraries.designsystem.atomic.molecules.IconTitleSubtitleMolecule
 import io.element.android.libraries.designsystem.components.BigIcon
+import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.components.button.BackButton
 import io.element.android.libraries.designsystem.preview.ElementPreview
@@ -88,43 +90,51 @@ fun ThreadsListView(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = {
-                    val description = stringResource(
-                        CommonStrings.a11y_threads_in_room,
-                        state.roomName,
+            Column {
+                TopAppBar(
+                    title = {
+                        val description = stringResource(
+                            CommonStrings.a11y_threads_in_room,
+                            state.roomName,
+                        )
+                        Column(
+                            modifier = Modifier.clearAndSetSemantics {
+                                heading()
+                                contentDescription = description
+                            },
+                        ) {
+                            Text(
+                                text = stringResource(CommonStrings.common_matcha_all_threads),
+                                style = ElementTheme.typography.aliasChatTitle,
+                                color = ElementTheme.colors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                text = state.roomName,
+                                style = ElementTheme.typography.fontBodyMdRegular,
+                                color = ElementTheme.colors.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    },
+                    navigationIcon = {
+                        BackButton(onBackClick)
+                    },
+                    windowInsets = scaffoldScrollableContentInsets,
+                )
+                state.archiveFilter?.let { filter ->
+                    ThreadArchiveChips(
+                        selected = filter,
+                        onSelect = { state.eventSink(ThreadsListEvent.SelectArchiveFilter(it)) },
                     )
-                    Column(
-                        modifier = Modifier.clearAndSetSemantics {
-                            heading()
-                            contentDescription = description
-                        },
-                    ) {
-                        Text(
-                            text = stringResource(CommonStrings.common_matcha_all_threads),
-                            style = ElementTheme.typography.aliasChatTitle,
-                            color = ElementTheme.colors.textPrimary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = state.roomName,
-                            style = ElementTheme.typography.fontBodyMdRegular,
-                            color = ElementTheme.colors.textSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                },
-                navigationIcon = {
-                    BackButton(onBackClick)
-                },
-                windowInsets = scaffoldScrollableContentInsets,
-            )
+                }
+            }
         }
     ) { padding ->
         when {
-            state.threads.isNotEmpty() -> ThreadsList(
+            state.visibleThreads.isNotEmpty() -> ThreadsList(
                 state = state,
                 onThreadClick = onThreadClick,
                 contentPadding = padding,
@@ -142,8 +152,52 @@ fun ThreadsListView(
                 repeat(3) { ThreadListPlaceholderRow() }
             }
             else -> ThreadsListMessage(
-                title = stringResource(R.string.screen_matcha_threads_list_empty_title),
+                title = stringResource(
+                    if (state.archiveFilter == ThreadArchiveFilter.Archived) {
+                        R.string.screen_matcha_threads_list_archived_empty
+                    } else {
+                        R.string.screen_matcha_threads_list_empty_title
+                    }
+                ),
+                // Only the Matcha workspaces have a New thread chip to point at.
+                subtitle = if (state.archiveFilter == ThreadArchiveFilter.Active) stringResource(R.string.screen_matcha_threads_list_empty_body) else null,
                 modifier = Modifier.padding(padding),
+            ) {
+                // The loaded threads may all be in the other chip; older ones may still match this one.
+                if (state.threads.isNotEmpty() && state.hasMoreToLoad) {
+                    TextButton(
+                        text = stringResource(R.string.screen_matcha_threads_list_load_older),
+                        onClick = { state.eventSink(ThreadsListEvent.Paginate) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Active · Archived, single-select chips like the chat list's. */
+@Composable
+private fun ThreadArchiveChips(
+    selected: ThreadArchiveFilter,
+    onSelect: (ThreadArchiveFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ThreadArchiveFilter.entries.forEach { filter ->
+            PillFilterChip(
+                label = stringResource(
+                    when (filter) {
+                        ThreadArchiveFilter.Active -> CommonStrings.common_matcha_active
+                        ThreadArchiveFilter.Archived -> CommonStrings.common_matcha_archived
+                    }
+                ),
+                selected = filter == selected,
+                onClick = { onSelect(filter) },
             )
         }
     }
@@ -161,9 +215,10 @@ private fun ThreadsList(
         contentPadding = contentPadding + lazyColumnContentPadding,
         state = lazyListState,
     ) {
-        items(state.threads, key = { row -> row.item.threadId }) { row ->
+        items(state.visibleThreads, key = { row -> row.item.threadId }) { row ->
             ThreadListItemRow(
                 threadItem = row,
+                name = state.nameOf(row),
                 onClick = onThreadClick,
             )
         }
@@ -190,6 +245,7 @@ private fun ThreadsList(
 private fun ThreadsListMessage(
     title: String,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
     action: @Composable () -> Unit = {},
 ) {
     Column(
@@ -201,7 +257,7 @@ private fun ThreadsListMessage(
     ) {
         IconTitleSubtitleMolecule(
             title = title,
-            subTitle = null,
+            subTitle = subtitle,
             iconStyle = BigIcon.Style.Default(CompoundIcons.Threads()),
         )
         action()
@@ -259,6 +315,7 @@ private fun ScrollHelper(
 @Composable
 private fun ThreadListItemRow(
     threadItem: ThreadListRowItem,
+    name: String?,
     onClick: (ThreadId) -> Unit,
 ) {
     Row(
@@ -290,7 +347,6 @@ private fun ThreadListItemRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val name = threadItem.rootEventText?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
                 Text(
                     modifier = Modifier.weight(1f),
                     text = name ?: stringResource(CommonStrings.common_matcha_thread_untitled),
@@ -368,6 +424,7 @@ internal fun ThreadListItemRowPreview() {
     ElementPreview {
         ThreadListItemRow(
             threadItem = aThreadListRowItem(),
+            name = "Hello world!",
             onClick = {},
         )
     }

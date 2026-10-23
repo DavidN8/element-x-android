@@ -70,6 +70,8 @@ import androidx.compose.ui.zIndex
 import androidx.constraintlayout.compose.ConstraintLayout
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
+import io.element.android.features.matcha.api.MatchaThreadInfo
+import io.element.android.features.messages.impl.matcha.LocalMatchaThreads
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineRoomInfo
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
@@ -388,14 +390,17 @@ private fun rememberTimelineItemAccessibilityActions(
 
 /**
  * The footer of a thread root's bubble: a hairline, then the thread icon, its name, the reply count and the latest replier's avatar.
+ *
+ * @param threadInfo the thread's Matcha name, while the Matcha workspaces are on and the thread is known; otherwise it reads "Thread".
  */
 @Composable
 private fun ThreadFooter(
     threadSummary: ThreadSummary,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    threadName: String? = null,
+    threadInfo: MatchaThreadInfo? = null,
 ) {
+    val isUntitled = threadInfo != null && threadInfo.name == null
     val separatorColor = ElementTheme.colors.separatorPrimary
     Row(
         modifier = modifier
@@ -423,9 +428,12 @@ private fun ThreadFooter(
             )
             Text(
                 modifier = Modifier.weight(1f, fill = false),
-                text = threadName ?: stringResource(CommonStrings.common_thread),
+                text = when {
+                    isUntitled -> stringResource(CommonStrings.common_matcha_thread_untitled)
+                    else -> threadInfo?.name ?: stringResource(CommonStrings.common_thread)
+                },
                 style = ElementTheme.typography.fontBodyMdMedium,
-                color = ElementTheme.colors.textPrimary,
+                color = if (isUntitled) ElementTheme.colors.bubbleSecondaryText else ElementTheme.colors.textPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -918,9 +926,11 @@ private fun MessageEventBubbleContent(
         }
         val threadFooter = @Composable {
             if (threadRoot != null) {
+                val matchaThreads = LocalMatchaThreads.current
                 ThreadFooter(
                     threadSummary = threadRoot.summary,
                     onClick = onThreadClick,
+                    threadInfo = event.eventId?.let { matchaThreads?.get(it.toThreadId()) },
                 )
             }
         }
@@ -1242,9 +1252,21 @@ internal fun ThreadFooterPreview() {
             numberOfReplies = 12,
         )
 
-        ThreadFooter(
-            threadSummary = threadSummary,
-            onClick = {},
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            ThreadFooter(
+                threadSummary = threadSummary,
+                onClick = {},
+            )
+            ThreadFooter(
+                threadSummary = threadSummary,
+                onClick = {},
+                threadInfo = MatchaThreadInfo(name = "Release planning", isArchived = false),
+            )
+            ThreadFooter(
+                threadSummary = threadSummary,
+                onClick = {},
+                threadInfo = MatchaThreadInfo(name = null, isArchived = false),
+            )
+        }
     }
 }

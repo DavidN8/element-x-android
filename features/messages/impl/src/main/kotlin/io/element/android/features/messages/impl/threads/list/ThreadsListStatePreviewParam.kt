@@ -8,11 +8,13 @@
 package io.element.android.features.messages.impl.threads.list
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.libraries.designsystem.preview.ROOM_NAME
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 
 open class ThreadsListStatePreviewParam : PreviewParameterProvider<ThreadsListState> {
     override val values: Sequence<ThreadsListState>
@@ -28,6 +30,16 @@ open class ThreadsListStatePreviewParam : PreviewParameterProvider<ThreadsListSt
                 ),
                 hasMoreToLoad = false,
             ),
+            aThreadsListState(
+                archiveFilter = ThreadArchiveFilter.Active,
+                matchaThreads = mapOf(
+                    ThreadId("\$thread-0") to MatchaThreadInfo(name = "Release planning", isArchived = false),
+                    ThreadId("\$thread-1") to MatchaThreadInfo(name = null, isArchived = false),
+                    ThreadId("\$thread-2") to MatchaThreadInfo(name = "Venue", isArchived = true),
+                ),
+            ),
+            aThreadsListState(archiveFilter = ThreadArchiveFilter.Archived, hasMoreToLoad = false),
+            aThreadsListState(threads = emptyList(), hasMoreToLoad = false, archiveFilter = ThreadArchiveFilter.Active),
         )
 }
 
@@ -35,6 +47,8 @@ internal fun aThreadsListState(
     threads: List<ThreadListRowItem> = List(10) { aThreadListRowItem(threadId = ThreadId("\$thread-$it")) },
     hasMoreToLoad: Boolean = true,
     loadFailed: Boolean = false,
+    archiveFilter: ThreadArchiveFilter? = null,
+    matchaThreads: Map<ThreadId, MatchaThreadInfo> = emptyMap(),
     eventSink: (ThreadsListEvent) -> Unit = {},
 ) = ThreadsListState(
     roomId = RoomId("!room-id:server"),
@@ -45,5 +59,7 @@ internal fun aThreadsListState(
     threads = threads.toImmutableList(),
     hasMoreToLoad = hasMoreToLoad,
     loadFailed = loadFailed,
+    archiveFilter = archiveFilter,
+    matchaThreads = matchaThreads.toImmutableMap(),
     eventSink = eventSink,
 )

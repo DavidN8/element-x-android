@@ -15,18 +15,23 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Inject
+import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.messages.impl.timeline.factories.event.TimelineItemContentFactory
 import io.element.android.features.messages.impl.utils.messagesummary.MessageSummaryFormatter
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.dateformatter.api.DateFormatter
 import io.element.android.libraries.dateformatter.api.DateFormatterMode
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.ui.model.getAvatarData
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.onStart
@@ -39,6 +44,9 @@ class ThreadsListPresenter(
     private val timelineItemContentFactory: TimelineItemContentFactory,
     private val messageSummaryFormatter: MessageSummaryFormatter,
     private val dateFormatter: DateFormatter,
+    private val featureFlagService: FeatureFlagService,
+    // Lazy: the controller reads the room's Matcha data as soon as it exists, which only the Matcha workspaces need.
+    private val matchaRoomController: Lazy<MatchaRoomController>,
 ) : Presenter<ThreadsListState> {
     @Composable
     override fun present(): ThreadsListState {
@@ -109,6 +117,14 @@ class ThreadsListPresenter(
         }
 
         val roomInfo by room.roomInfoFlow.collectAsState()
+        val isMatchaEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
+        val matchaThreads = if (isMatchaEnabled) {
+            val controller = remember { matchaRoomController.value }
+            controller.threads.collectAsState().value
+        } else {
+            persistentMapOf()
+        }
+        var archiveFilter by rememberSaveable { mutableStateOf(ThreadArchiveFilter.Active) }
 
         val heroes by remember {
             derivedStateOf { roomInfo.heroes.map { it.getAvatarData(AvatarSize.CurrentUserTopBar) }.toImmutableList() }
@@ -126,6 +142,7 @@ class ThreadsListPresenter(
                     loadFailed = false
                     coroutineScope.paginate()
                 }
+                is ThreadsListEvent.SelectArchiveFilter -> archiveFilter = event.filter
             }
         }
 
@@ -139,6 +156,8 @@ class ThreadsListPresenter(
             // While a page is loading there may be more
             hasMoreToLoad = (paginationStatus as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad ?: true,
             loadFailed = loadFailed,
+            archiveFilter = archiveFilter.takeIf { isMatchaEnabled },
+            matchaThreads = matchaThreads,
             eventSink = ::handleEvent,
         )
     }
