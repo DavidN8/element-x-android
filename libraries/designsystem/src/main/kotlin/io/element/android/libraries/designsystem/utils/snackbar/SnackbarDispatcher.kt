@@ -9,6 +9,7 @@
 package io.element.android.libraries.designsystem.utils.snackbar
 
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
@@ -67,6 +68,7 @@ fun rememberSnackbarHostState(snackbarMessage: SnackbarMessage?): SnackbarHostSt
     val snackbarMessageText = snackbarMessage?.let {
         stringResource(id = snackbarMessage.messageResId)
     } ?: return snackbarHostState
+    val actionLabel = snackbarMessage.actionResId?.let { stringResource(id = it) }
 
     val dispatcher = LocalSnackbarDispatcher.current
     LaunchedEffect(snackbarMessage.id) {
@@ -74,10 +76,12 @@ fun rememberSnackbarHostState(snackbarMessage: SnackbarMessage?): SnackbarHostSt
         // This will prevent the message from appearing in any other active SnackbarHosts
         if (snackbarMessage.isDisplayed.getAndSet(true).not()) {
             try {
-                snackbarHostState.showSnackbar(
+                val result = snackbarHostState.showSnackbar(
                     message = snackbarMessageText,
+                    actionLabel = actionLabel,
                     duration = snackbarMessage.duration,
                 )
+                if (result == SnackbarResult.ActionPerformed) snackbarMessage.action()
                 // The snackbar item was displayed and dismissed, clear its message
                 dispatcher.clear()
             } catch (e: CancellationException) {
