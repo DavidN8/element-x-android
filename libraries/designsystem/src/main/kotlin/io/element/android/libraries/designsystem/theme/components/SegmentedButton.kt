@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import io.element.android.compound.theme.ElementTheme
+import io.element.android.libraries.designsystem.theme.chipOutline
 
 @Composable
 fun SingleChoiceSegmentedButtonRowScope.SegmentedButton(
@@ -42,16 +43,17 @@ fun SingleChoiceSegmentedButtonRowScope.SegmentedButton(
                 style = ElementTheme.typography.fontBodyMdMedium,
             )
         },
+        // Styled like the filter chips: the selected segment is tonal green, the outline a neutral hairline.
         colors = SegmentedButtonDefaults.colors(
-            activeContainerColor = ElementTheme.materialColors.primary,
-            activeContentColor = ElementTheme.materialColors.onPrimary,
-            activeBorderColor = ElementTheme.materialColors.primary,
+            activeContainerColor = ElementTheme.colors.bgAccentSubtle,
+            activeContentColor = ElementTheme.colors.textBadgeAccent,
+            activeBorderColor = ElementTheme.colors.chipOutline,
             inactiveContainerColor = ElementTheme.materialColors.surface,
-            inactiveContentColor = ElementTheme.materialColors.onSurface,
-            inactiveBorderColor = ElementTheme.materialColors.primary,
-            disabledActiveContainerColor = ElementTheme.colors.bgActionPrimaryDisabled,
-            disabledActiveContentColor = ElementTheme.colors.textOnSolidPrimary,
-            disabledActiveBorderColor = ElementTheme.colors.bgActionPrimaryDisabled,
+            inactiveContentColor = ElementTheme.colors.textSecondary,
+            inactiveBorderColor = ElementTheme.colors.chipOutline,
+            disabledActiveContainerColor = ElementTheme.colors.bgSubtlePrimary,
+            disabledActiveContentColor = ElementTheme.colors.textDisabled,
+            disabledActiveBorderColor = ElementTheme.colors.chipOutline,
             disabledInactiveContainerColor = ElementTheme.materialColors.surface,
             disabledInactiveContentColor = ElementTheme.colors.textDisabled,
             disabledInactiveBorderColor = Color.Transparent,

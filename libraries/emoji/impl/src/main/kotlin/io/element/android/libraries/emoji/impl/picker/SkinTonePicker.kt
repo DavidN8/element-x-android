@@ -90,9 +90,9 @@ private fun SkinToneSlot(
     onClick: () -> Unit,
 ) {
     val background = when {
-        isSelected && isHovered -> ElementTheme.colors.bgActionPrimaryPressed
-        isSelected -> ElementTheme.colors.bgActionPrimaryRest
-        isHovered -> ElementTheme.colors.bgActionPrimaryHovered
+        // Selection is a tonal green, never the solid action green; hovering an unselected tone shows a grey press.
+        isSelected -> ElementTheme.colors.bgAccentSelected
+        isHovered -> ElementTheme.colors.bgSubtlePrimary
         else -> Color.Transparent
     }
     Box(
