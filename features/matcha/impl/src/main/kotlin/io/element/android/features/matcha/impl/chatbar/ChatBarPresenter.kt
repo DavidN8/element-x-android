@@ -12,11 +12,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Inject
 import io.element.android.appconfig.MatchaConfig
@@ -33,6 +35,8 @@ import io.element.android.features.matcha.impl.store.MatchaThread
 import io.element.android.features.matcha.impl.store.NamedThreadResult
 import io.element.android.features.matcha.impl.store.createNamedThread
 import io.element.android.features.matcha.impl.store.retrySetup
+import io.element.android.features.matcha.impl.tasks.TaskEditorPresenter
+import io.element.android.features.matcha.impl.tasks.TaskEditorTarget
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.di.annotations.RoomCoroutineScope
@@ -61,7 +65,10 @@ class ChatBarPresenter(
     private val featureFlagService: FeatureFlagService,
     private val snackbarDispatcher: SnackbarDispatcher,
     @RoomCoroutineScope private val roomCoroutineScope: CoroutineScope,
+    editorPresenterFactory: TaskEditorPresenter.Factory,
 ) {
+    private val editorPresenter = editorPresenterFactory.create(room, store, roomCoroutineScope)
+
     @Composable
     fun present(selection: MatchaChatBarSelection, actions: MatchaChatBarActions): ChatBarState {
         val isEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
@@ -71,6 +78,7 @@ class ChatBarPresenter(
         val localScope = rememberCoroutineScope()
         var sheet by remember { mutableStateOf<ChatBarSheet?>(null) }
         var reminderTarget by remember { mutableStateOf<MatchaReminderTarget?>(null) }
+        var editorTarget by rememberSaveable { mutableStateOf<TaskEditorTarget?>(null) }
         // Threads created from this bar, named until the thread list includes them.
         val createdNames = remember { mutableStateMapOf<ThreadId, String>() }
 
@@ -81,10 +89,31 @@ class ChatBarPresenter(
         val threads = chipThreads(snapshot, selection, createdNames)
         val request by controller.requests.collectAsState()
 
-        LaunchedEffect(request, isEnabled, canCreate) {
-            if (request == ChatBarRequest.NewThread && isEnabled) {
-                if (canCreate) sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false)
-                controller.consume(ChatBarRequest.NewThread)
+        val canAddTask = permissions.canWriteCards && canCreate
+        LaunchedEffect(request, isEnabled) {
+            val current = request ?: return@LaunchedEffect
+            if (!isEnabled) return@LaunchedEffect
+            when (current) {
+                ChatBarRequest.NewThread -> if (canCreate) sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false)
+                ChatBarRequest.NewTask -> when {
+                    // Without a board, the board's setup explains how to start one.
+                    snapshot.board == null -> currentActions.openTasks()
+                    canAddTask -> editorTarget = TaskEditorTarget.New(TaskStatus.Todo)
+                }
+            }
+            controller.consume(current)
+        }
+        val editor = editorTarget?.let { target ->
+            key(target) {
+                editorPresenter.present(
+                    target = target,
+                    onClose = { editorTarget = null },
+                    onRemind = { reminderTarget = it },
+                    onOpenThread = {
+                        editorTarget = null
+                        currentActions.openThread(it)
+                    },
+                )
             }
         }
 
@@ -179,6 +208,7 @@ class ChatBarPresenter(
             canOpenSpaceDocs = actions.openSpaceDocs != null,
             warning = snapshot.warning,
             sheet = sheet,
+            editor = editor,
             reminderTarget = reminderTarget,
             eventSink = ::handleEvent,
         )

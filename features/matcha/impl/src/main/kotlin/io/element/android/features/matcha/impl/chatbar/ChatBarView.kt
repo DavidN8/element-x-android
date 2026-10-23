@@ -32,7 +32,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -46,6 +47,7 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.store.MatchaWarning
+import io.element.android.features.matcha.impl.tasks.TaskEditorSheet
 import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -66,7 +68,8 @@ fun ChatBarView(
     modifier: Modifier = Modifier,
 ) {
     // The bar gives way to the content on a short window, and to the keyboard on a narrow one.
-    val isHiddenByWindow = hasCompactHeightWindowSize() || WindowInsets.isImeVisible && LocalConfiguration.current.screenWidthDp < COMPACT_WIDTH_DP
+    val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
+    val isHiddenByWindow = hasCompactHeightWindowSize() || WindowInsets.isImeVisible && windowWidth < COMPACT_WIDTH
     if (state.showBar && !isHiddenByWindow) {
         Column(
             modifier = modifier
@@ -87,9 +90,10 @@ fun ChatBarView(
         )
         null -> Unit
     }
+    state.editor?.let { TaskEditorSheet(it) }
 }
 
-private const val COMPACT_WIDTH_DP = 600
+private val COMPACT_WIDTH = 600.dp
 
 private fun MatchaWarning.messageResId() = when (this) {
     MatchaWarning.Undecryptable -> R.string.screen_matcha_threads_warning_undecryptable

@@ -77,6 +77,7 @@ internal fun aChatBarState(
     canOpenSpaceDocs = canOpenSpaceDocs,
     warning = warning,
     sheet = sheet,
+    editor = null,
     reminderTarget = null,
     eventSink = eventSink,
 )

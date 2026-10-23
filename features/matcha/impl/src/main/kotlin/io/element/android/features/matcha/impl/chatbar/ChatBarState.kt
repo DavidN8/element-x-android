@@ -11,6 +11,7 @@ import androidx.compose.runtime.Immutable
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.impl.store.MatchaWarning
+import io.element.android.features.matcha.impl.tasks.TaskEditorState
 import io.element.android.libraries.matrix.api.core.ThreadId
 import kotlinx.collections.immutable.ImmutableList
 
@@ -31,6 +32,8 @@ data class ChatBarState(
     /** Why some thread names may be missing or out of date, shown as a strip under the bar. */
     val warning: MatchaWarning?,
     val sheet: ChatBarSheet?,
+    /** The task editor sheet, opened from the chat through [io.element.android.features.matcha.api.MatchaRoomController.openNewTask]. */
+    val editor: TaskEditorState?,
     /** The reminder sheet is shown while this is set. */
     val reminderTarget: MatchaReminderTarget?,
     val eventSink: (ChatBarEvent) -> Unit,

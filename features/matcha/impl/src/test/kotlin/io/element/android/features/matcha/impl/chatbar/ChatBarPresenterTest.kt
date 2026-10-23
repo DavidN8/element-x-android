@@ -24,6 +24,8 @@ import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
+import io.element.android.features.matcha.impl.tasks.TaskEditorEvent
+import io.element.android.features.matcha.impl.tasks.aTaskEditorPresenterFactory
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
@@ -356,6 +358,31 @@ class ChatBarPresenterTest {
     }
 
     @Test
+    fun `the room controller opens the task editor, or the board when the chat has none`() = runTest {
+        val withBoard = aMatchaRoomStore(backgroundScope, boardRoot = boardRoot)
+        val controller = DefaultMatchaRoomController(withBoard, backgroundScope)
+        aPresenter(withBoard, controller = controller).test {
+            awaitUntil { it.showBar }
+            controller.openNewTask()
+            val editor = awaitUntil { it.editor != null }.editor!!
+            assertThat(editor.isNew).isTrue()
+            editor.eventSink(TaskEditorEvent.Close)
+            awaitUntil { it.editor == null }
+            cancelAndIgnoreRemainingEvents()
+        }
+        val actions = FakeMatchaChatBarActions()
+        val withoutBoard = aMatchaRoomStore(backgroundScope)
+        val otherController = DefaultMatchaRoomController(withoutBoard, backgroundScope)
+        aPresenter(withoutBoard, controller = otherController, actions = actions).test {
+            awaitUntil { it.isVisible }
+            otherController.openNewTask()
+            awaitUntil { otherController.requests.value == null }
+            assertThat(actions.calls).containsExactly("tasks")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `without permission threads cannot be created or managed`() = runTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
@@ -433,6 +460,7 @@ class ChatBarPresenterTest {
             featureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to isEnabled)),
             snackbarDispatcher = snackbarDispatcher,
             roomCoroutineScope = backgroundScope,
+            editorPresenterFactory = aTaskEditorPresenterFactory(snackbarDispatcher),
         ),
         selection = selection,
         actions = actions,
