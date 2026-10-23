@@ -296,7 +296,7 @@ private fun PhoneBoard(
                 when {
                     board.isLoading -> item(key = "loading") { TaskPlaceholders() }
                     tasks.isEmpty() -> item(key = "empty") { EmptyBoard(canAdd = board.canAdd, modifier = Modifier.fillParentMaxWidth()) }
-                    else -> items(tasks, key = { it.id }) { task ->
+                    else -> items(tasks, key = { "task:" + it.id }) { task ->
                         TaskRow(
                             task = task,
                             onClick = { eventSink(TaskBoardEvent.OpenTask(task.id)) },
@@ -396,7 +396,7 @@ private fun BoardColumn(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(tasks, key = { it.id }) { task ->
+            items(tasks, key = { "task:" + it.id }) { task ->
                 TaskCard(
                     task = task,
                     onClick = { eventSink(TaskBoardEvent.OpenTask(task.id)) },

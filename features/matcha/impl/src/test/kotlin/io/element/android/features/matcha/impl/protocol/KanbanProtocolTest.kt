@@ -127,9 +127,22 @@ class KanbanProtocolTest {
         assertThat(first.status).isEqualTo(TaskStatus.Doing)
         assertThat(first.description).isEqualTo("Notes")
         assertThat(first.earlierCards).containsExactly(earlier)
+        assertThat(first.hasRevision).isTrue()
         val fresh = cards[2]
         assertThat(fresh.id).isEqualTo(KanbanProtocol.threadCardId("\$t2"))
         assertThat(fresh.status).isEqualTo(TaskStatus.Todo)
+        // Nothing read so far describes the new thread's card: it only shows the defaults.
+        assertThat(fresh.hasRevision).isFalse()
+    }
+
+    @Test
+    fun `a card unlinked from its thread gives way to the thread's card, so ids stay unique`() {
+        val unlinked = CardRevision(KanbanProtocol.threadCardId("\$t"), "Unlinked", "Notes", TaskStatus.Done, false, null, null, null, true)
+        val other = CardRevision("c-2", "Other", "", TaskStatus.Todo, false, null, null, null, true)
+        val cards = KanbanProtocol.project(listOf(unlinked, other), mapOf("\$t" to ThreadMetadata("Thread", archived = false, archiveExplicit = false)))
+        assertThat(cards.map { it.id }).containsExactly(KanbanProtocol.threadCardId("\$t"), "c-2").inOrder()
+        assertThat(cards.first().title).isEqualTo("Thread")
+        assertThat(cards.first().threadId).isEqualTo("\$t")
     }
 
     @Test

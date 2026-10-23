@@ -78,7 +78,7 @@ internal fun ArchivedTasksView(state: TaskBoardState, modifier: Modifier = Modif
                         .padding(vertical = 64.dp),
                 )
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(board.archived, key = { it.id }) { task ->
+                    items(board.archived, key = { "task:" + it.id }) { task ->
                         TaskRow(
                             task = task,
                             onClick = { eventSink(TaskBoardEvent.OpenTask(task.id)) },

@@ -57,6 +57,11 @@ data class ProjectedCard(
     val showToRoom: Boolean,
     /** Older cards that were linked to the same thread under a different card id; kept, never merged. */
     val earlierCards: List<CardRevision>,
+    /**
+     * False for a thread's card that no revision read so far describes, so it shows the defaults; its revision may lie further back
+     * in the history.
+     */
+    val hasRevision: Boolean,
 )
 
 /**
@@ -161,7 +166,8 @@ object KanbanProtocol {
     }
 
     /**
-     * Projects every thread onto exactly one card, keeping standalone cards.
+     * Projects every thread onto exactly one card, keeping standalone cards. Card ids are unique: like the web client's map of cards,
+     * a thread's card replaces a standalone card with the same id (one unlinked from the thread) in its place.
      *
      * @param latestCards the newest revision of each card, newest card first (see [latestRevisions]).
      * @param threads every thread known for the room (thread list, threads referenced by cards, the thread the user came from),
@@ -174,18 +180,20 @@ object KanbanProtocol {
             addAll(threads.keys)
             addAll(linked.keys)
         }
-        val projected = standalone.map { it.toProjected(earlierCards = emptyList()) }.toMutableList()
+        val projected = LinkedHashMap<String, ProjectedCard>()
+        for (card in standalone) projected[card.cardId] = card.toProjected(earlierCards = emptyList())
         for (threadId in threadIds) {
             val revisions = linked[threadId].orEmpty()
             val existing = revisions.firstOrNull()
             val metadata = threads[threadId]
             if (metadata == null) {
                 // Unreadable metadata: keep what the card itself says rather than hiding it.
-                if (existing != null) projected += existing.toProjected(earlierCards = revisions.drop(1))
+                if (existing != null) projected[existing.cardId] = existing.toProjected(earlierCards = revisions.drop(1))
                 continue
             }
-            projected += ProjectedCard(
-                id = existing?.cardId ?: threadCardId(threadId),
+            val id = existing?.cardId ?: threadCardId(threadId)
+            projected[id] = ProjectedCard(
+                id = id,
                 title = metadata.name,
                 description = existing?.description.orEmpty(),
                 status = existing?.status ?: TaskStatus.Todo,
@@ -195,9 +203,10 @@ object KanbanProtocol {
                 reminderRequested = existing?.reminderRequested,
                 showToRoom = existing?.showToRoom ?: true,
                 earlierCards = revisions.drop(1),
+                hasRevision = existing != null,
             )
         }
-        return projected
+        return projected.values.toList()
     }
 
     private fun CardRevision.toProjected(earlierCards: List<CardRevision>) = ProjectedCard(
@@ -211,5 +220,6 @@ object KanbanProtocol {
         reminderRequested = reminderRequested,
         showToRoom = showToRoom,
         earlierCards = earlierCards,
+        hasRevision = true,
     )
 }
