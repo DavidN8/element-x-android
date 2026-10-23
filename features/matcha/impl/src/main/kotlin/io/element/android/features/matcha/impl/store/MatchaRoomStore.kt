@@ -115,7 +115,7 @@ class MatchaRoomStore(
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
-    private val storedState = MutableStateFlow(StoredState())
+    private val storedState = MutableStateFlow(StoredState(boardPointer = null, legacyArchive = emptyMap()))
     private val pagination = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = true))
     private val historyPagesRead = MutableStateFlow(0)
     private val loadingMore = MutableStateFlow(false)
@@ -126,8 +126,8 @@ class MatchaRoomStore(
     val snapshot: StateFlow<MatchaRoomSnapshot> = _snapshot.asStateFlow()
 
     private data class StoredState(
-        val boardPointer: String? = null,
-        val legacyArchive: Map<String, Boolean> = emptyMap(),
+        val boardPointer: String?,
+        val legacyArchive: Map<String, Boolean>,
     )
 
     init {
