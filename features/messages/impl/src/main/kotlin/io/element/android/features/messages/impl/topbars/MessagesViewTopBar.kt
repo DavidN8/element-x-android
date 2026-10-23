@@ -50,6 +50,7 @@ import io.element.android.libraries.designsystem.preview.ROOM_NAME
 import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.designsystem.utils.hasTwoPaneWindowSize
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.user.DisplayedStatus
 import io.element.android.libraries.matrix.ui.components.DisplayNameWithStatus
@@ -77,7 +78,10 @@ internal fun MessagesViewTopBar(
     TopAppBar(
         modifier = modifier.padding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()),
         navigationIcon = {
-            BackButton(onClick = onBackClick)
+            // In the two-pane layout the room list is already visible next to the room, so there is nothing to go back to.
+            if (!hasTwoPaneWindowSize()) {
+                BackButton(onClick = onBackClick)
+            }
         },
         title = {
             val roundedCornerShape = RoundedCornerShape(8.dp)
