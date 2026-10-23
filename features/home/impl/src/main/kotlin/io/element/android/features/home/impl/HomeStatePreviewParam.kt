@@ -50,6 +50,9 @@ open class HomeStatePreviewParam : PreviewParameterProvider<HomeState> {
             ),
         ) + aHomeState(
             showMultiAccountAnnouncement = true,
+        ) + aHomeState(
+            // The unread count badge on the Chats tab
+            totalUnreadCount = 5,
         )
 }
 

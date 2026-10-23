@@ -8,28 +8,39 @@
 
 package io.element.android.features.home.impl
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
-import io.element.android.compound.tokens.generated.CompoundIcons
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.vectorResource
+import io.element.android.libraries.designsystem.icons.CompoundDrawables
 
+/**
+ * The tabs of the bottom navigation bar, in display order. A tab's label is also its top bar title (except on Chats, which shows
+ * the app name); its content and floating action button are set in `HomeView`.
+ */
 enum class HomeNavigationBarItem(
     @StringRes
     val labelRes: Int,
+    @DrawableRes
+    private val iconRes: Int,
+    @DrawableRes
+    private val selectedIconRes: Int,
 ) {
     Chats(
-        labelRes = R.string.screen_home_tab_chats
+        labelRes = R.string.screen_home_tab_chats,
+        iconRes = CompoundDrawables.ic_compound_chat,
+        selectedIconRes = CompoundDrawables.ic_compound_chat_solid,
     ),
     Spaces(
-        labelRes = R.string.screen_home_tab_spaces
+        labelRes = R.string.screen_home_tab_spaces,
+        iconRes = CompoundDrawables.ic_compound_space,
+        selectedIconRes = CompoundDrawables.ic_compound_space_solid,
     );
 
+    /** The outlined icon, or the solid one when the tab is selected. */
     @Composable
-    fun icon(
-        isSelected: Boolean,
-    ) = when (this) {
-        Chats -> if (isSelected) CompoundIcons.ChatSolid() else CompoundIcons.Chat()
-        Spaces -> if (isSelected) CompoundIcons.SpaceSolid() else CompoundIcons.Space()
-    }
+    fun icon(isSelected: Boolean): ImageVector = ImageVector.vectorResource(if (isSelected) selectedIconRes else iconRes)
 
     companion object {
         fun from(index: Int): HomeNavigationBarItem {
