@@ -8,7 +8,9 @@
 
 package io.element.android.libraries.designsystem.components.button
 
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import io.element.android.libraries.designsystem.theme.components.Button
@@ -32,7 +34,12 @@ sealed interface ButtonVisuals {
     data class Text(val text: String, override val action: () -> Unit) : ButtonVisuals {
         @Composable
         override fun Composable() {
-            TextButton(text = text, onClick = action)
+            // Keep the colour of the host (the snackbar action colour), not the green of text buttons.
+            TextButton(
+                text = text,
+                onClick = action,
+                colors = ButtonDefaults.textButtonColors(contentColor = LocalContentColor.current),
+            )
         }
     }
     data class Icon(val iconSource: IconSource, override val action: () -> Unit) : ButtonVisuals {

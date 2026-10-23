@@ -88,7 +88,7 @@ fun TextField(
         maxLines = maxLines,
         minLines = minLines,
         readOnly = readOnly,
-        cursorBrush = SolidColor(ElementTheme.colors.textPrimary),
+        cursorBrush = SolidColor(ElementTheme.colors.textActionAccent),
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         visualTransformation = visualTransformation,
@@ -144,7 +144,7 @@ fun TextField(
         maxLines = maxLines,
         minLines = minLines,
         readOnly = readOnly,
-        cursorBrush = SolidColor(ElementTheme.colors.textPrimary),
+        cursorBrush = SolidColor(ElementTheme.colors.textActionAccent),
         keyboardOptions = keyboardOptions,
         keyboardActions = keyboardActions,
         visualTransformation = visualTransformation,
@@ -193,7 +193,7 @@ fun TextField(
         enabled = enabled,
         readOnly = readOnly,
         inputTransformation = inputTransformation,
-        cursorBrush = SolidColor(ElementTheme.colors.textPrimary),
+        cursorBrush = SolidColor(ElementTheme.colors.textActionAccent),
         keyboardOptions = keyboardOptions,
         onKeyboardAction = onKeyboardAction,
         lineLimits = lineLimits,
@@ -285,7 +285,7 @@ private fun TextFieldContainer(
     content: @Composable () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(4.dp),
+        shape = RoundedCornerShape(8.dp),
         border = if (readOnly) {
             null
         } else {

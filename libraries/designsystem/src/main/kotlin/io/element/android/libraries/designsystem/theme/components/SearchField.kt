@@ -8,7 +8,6 @@
 
 package io.element.android.libraries.designsystem.theme.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -91,9 +90,7 @@ private fun DecorationBox(
     onClear: () -> Unit,
     innerTextField: @Composable () -> Unit,
 ) {
-    SearchFieldContainer(
-        isFocused = isFocused,
-    ) {
+    SearchFieldContainer {
         Row(modifier = Modifier.padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(modifier = Modifier.weight(1f)) {
                 if (placeholder != null && isTextEmpty) {
@@ -129,21 +126,13 @@ private fun DecorationBox(
 
 @Composable
 private fun SearchFieldContainer(
-    isFocused: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    // A borderless filled pill, focused or not: the cursor and the clear button show the focus.
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(99.dp),
-        border = BorderStroke(
-            width = 1.dp,
-            color = if (isFocused) {
-                ElementTheme.colors.borderFocused
-            } else {
-                ElementTheme.colors.borderInteractiveSecondary
-            }
-        ),
         color = ElementTheme.colors.bgSubtleSecondary,
         content = content
     )
