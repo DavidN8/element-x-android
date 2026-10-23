@@ -58,8 +58,8 @@ class SpaceDocsContextFactory(
     suspend fun create(roomId: RoomId, isEarlierChatDocument: Boolean, parentScope: CoroutineScope): SpaceDocsContext? {
         val room = client.getJoinedRoom(roomId) ?: return null
         val scope = CoroutineScope(parentScope.coroutineContext + dispatchers.main + SupervisorJob(parentScope.coroutineContext.job))
-        // The create event anchors every frame; undecryptable frames must be noticed rather than skipped.
-        val store = MatchaRoomStore(room, scope, extraEventTypes = setOf(DocsProtocol.EVENT_ROOM_CREATE, DocsProtocol.EVENT_ROOM_ENCRYPTED))
+        // Undecryptable frames must be noticed rather than skipped.
+        val store = MatchaRoomStore(room, scope, extraEventTypes = setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))
         fun session(documentId: String) = RoomDocumentSession(
             documentId = documentId,
             room = room,

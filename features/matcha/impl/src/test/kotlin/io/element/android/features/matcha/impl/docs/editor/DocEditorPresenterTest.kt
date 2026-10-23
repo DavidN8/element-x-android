@@ -31,7 +31,6 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
-import kotlin.time.Duration.Companion.seconds
 
 class DocEditorPresenterTest {
     @get:Rule
@@ -184,8 +183,8 @@ class DocEditorPresenterTest {
             assertThat(consumeItemsUntilPredicate { it.isLoadError }.last().title).isEmpty()
             cancelAndIgnoreRemainingEvents()
         }
-        aPresenter(DocsRoomFixture(emptyList(), stateEvents = CONFIGURED_STATE), documentId = DocsProtocol.MAIN_DOCUMENT_ID).test {
-            val state = consumeItemsUntilPredicate(timeout = 10.seconds) { it.isLoadError }.last()
+        aPresenter(DocsRoomFixture(emptyList(), stateEvents = CONFIGURED_STATE, createEventId = null), documentId = DocsProtocol.MAIN_DOCUMENT_ID).test {
+            val state = consumeItemsUntilPredicate { it.isLoadError }.last()
             assertThat(state.title).isNull()
             cancelAndIgnoreRemainingEvents()
         }

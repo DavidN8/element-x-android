@@ -96,6 +96,8 @@ class DocsRoomFixture(
     stateEvents: Map<StateEventType, String> = emptyMap(),
     sendStateResult: (String, String, String) -> Result<EventId> = { _, _, _ -> Result.success(EventId("\$state")) },
     enableEncryptionResult: () -> Result<Unit> = { Result.success(Unit) },
+    /** The id of the room's `m.room.create` event in the room state, if the SDK has it. */
+    createEventId: String? = ANCHOR,
 ) {
     val timelineItems = MutableStateFlow(items)
     val sent = mutableListOf<Pair<String, String>>()
@@ -124,10 +126,11 @@ class DocsRoomFixture(
             sendStateResult(type, key, content).onSuccess { sentState += Triple(type, key, content) }
         },
         getStateEventsJsonResult = { type -> Result.success(this.stateEvents[type]?.let { mapOf("" to it) }.orEmpty()) },
+        getStateEventIdResult = { type, key -> Result.success(createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId)) },
         enableEncryptionResult = enableEncryptionResult,
     )
 
-    fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, setOf(DocsProtocol.EVENT_ROOM_CREATE, DocsProtocol.EVENT_ROOM_ENCRYPTED))
+    fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))
 
     fun session(
         scope: CoroutineScope,

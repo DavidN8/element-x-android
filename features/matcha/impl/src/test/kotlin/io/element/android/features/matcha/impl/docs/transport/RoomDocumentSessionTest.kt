@@ -291,17 +291,24 @@ class RoomDocumentSessionTest {
     }
 
     @Test
-    fun `the anchor comes from the create event, a version 12 room id, or the frames`() = runTest {
-        val noAnchor = DocsRoomFixture(emptyList()).session(backgroundScope)
-        val fromRoomId = DocsRoomFixture(emptyList(), roomId = RoomId("!" + "a".repeat(43))).session(backgroundScope)
-        val fromFrames = DocsRoomFixture(listOf(aFrameItem("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single()))).session(backgroundScope)
+    fun `the anchor is the create event of the room state or of a version 12 room id, never what the frames point at`() = runTest {
+        val frame = aFrameItem("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single())
+        // The create event is in neither the room state nor the timeline, as in a DM or a room whose start is hidden.
+        val noAnchor = DocsRoomFixture(listOf(frame), createEventId = null).session(backgroundScope)
+        val v12RoomId = "a".repeat(43)
+        val fromRoomId = DocsRoomFixture(
+            listOf(aFrameItem("\$f2", DocsProtocol.frames(hello(), "\$$v12RoomId", "u2", "main").single())),
+            roomId = RoomId("!$v12RoomId"),
+            createEventId = null,
+        ).session(backgroundScope)
+        // A member's frame related to another event is not part of this room's document.
+        val spoofed = aFrameItem("\$f3", DocsProtocol.frames(update(operation("s", text = "Spoofed")), "\$spoof", "u3", "main").single())
+        val fromState = DocsRoomFixture(listOf(spoofed, frame)).session(backgroundScope)
         settle()
-        assertThat(noAnchor.state.value.sync).isEqualTo(DocumentSync.Loading)
-        // The create event may still be on its way.
-        settle(5_000)
         assertThat(noAnchor.state.value.error).isEqualTo(DocumentError.AnchorError)
-        assertThat(fromRoomId.state.value.isReady).isTrue()
-        assertThat(fromFrames.state.value.text).isEqualTo("Hello")
+        assertThat(noAnchor.state.value.canEdit).isFalse()
+        assertThat(fromRoomId.state.value.text).isEqualTo("Hello")
+        assertThat(fromState.state.value.text).isEqualTo("Hello")
     }
 
     @Test

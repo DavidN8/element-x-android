@@ -174,7 +174,7 @@ class SpaceDocsListPresenterTest {
             assertThat(state.canCreate).isFalse()
             assertThat((state.content as SpaceDocsListContent.Documents).documents.map { it.id }).containsExactly("main")
         }
-        aPresenter(DocsRoomFixture(emptyList(), stateEvents = CONFIGURED_STATE)).test {
+        aPresenter(DocsRoomFixture(emptyList(), stateEvents = CONFIGURED_STATE, createEventId = null)).test {
             val state = consumeItemsUntilPredicate { it.content == SpaceDocsListContent.LoadError }.last()
             assertThat(state.canCreate).isFalse()
             state.eventSink(SpaceDocsListEvent.Retry)

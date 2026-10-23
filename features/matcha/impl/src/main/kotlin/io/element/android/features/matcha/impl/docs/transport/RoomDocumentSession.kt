@@ -24,6 +24,7 @@ import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.MessageEventType
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.powerlevels.permissionsFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -40,20 +41,17 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 /** Failures that must never be shown as an empty or saved document. Same codes as the web client. */
 enum class DocumentError {
@@ -235,9 +233,7 @@ class RoomDocumentSession(
             while (hasMoreHistory) hasMoreHistory = store.loadMore().getOrElse { throw DocumentException(DocumentError.LoadError, it) }
             // The timeline delivers its items a little after a page is read: wait for the store to see the start of the room.
             store.snapshot.first { !it.hasMoreHistory }
-            val anchor = anchor
-                ?: withTimeoutOrNull(ANCHOR_TIMEOUT) { store.snapshot.mapNotNull { findAnchor(it.events) }.first() }
-                ?: throw DocumentException(DocumentError.AnchorError)
+            val anchor = anchor ?: findAnchor() ?: throw DocumentException(DocumentError.AnchorError)
             lock.withLock {
                 val events = store.snapshot.value.events.asReversed()
                 this.anchor = anchor
@@ -336,14 +332,15 @@ class RoomDocumentSession(
     private fun RawEvent.isUndecryptedFrame(anchor: String) = type == DocsProtocol.EVENT_ROOM_ENCRYPTED && content.referenceTarget() == anchor
 
     /**
-     * The room's create event, read from history. ponytail: when history before joining is hidden, a room id of room version 12
-     * names it, else the target every frame already agrees on; an SDK method returning the create event id from the room state
-     * would replace both.
+     * The room's `m.room.create` event, from the room state like the web client, or the one a room id of room version 12 is
+     * derived from. Never taken from the frames: any member can relate a frame to any event.
      */
-    private fun findAnchor(events: List<RawEvent>): String? {
-        events.firstOrNull { it.type == DocsProtocol.EVENT_ROOM_CREATE && it.stateKey == "" }?.eventId?.let { return it }
-        room.roomId.value.takeIf { !it.contains(':') }?.let { return "$" + it.removePrefix("!") }
-        return events.filter { it.type == MatchaConfig.EVENT_DOCS_UPDATE }.mapNotNull { it.content.referenceTarget() }.distinct().singleOrNull()
+    private suspend fun findAnchor(): String? {
+        room.getStateEventId(StateEventType.RoomCreate, "")
+            .onFailure { Timber.w(it, "Could not read the create event of the room") }
+            .getOrNull()
+            ?.let { return it.value }
+        return room.roomId.value.takeIf { !it.contains(':') }?.let { "$" + it.removePrefix("!") }
     }
 
     /** Opens the engine document; after an engine restart this replays everything again, with the local edits kept. */
@@ -469,7 +466,6 @@ class RoomDocumentSession(
 
     private companion object {
         val DEBOUNCE = 500.milliseconds
-        val ANCHOR_TIMEOUT = 5.seconds
         val SEND_ERRORS = setOf(DocumentError.SendError, DocumentError.PermissionError, DocumentError.TooLargeError)
     }
 }
