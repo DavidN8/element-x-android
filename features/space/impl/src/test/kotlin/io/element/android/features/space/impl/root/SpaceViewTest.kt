@@ -72,6 +72,8 @@ class SpaceViewTest : RobolectricTest() {
         }
     }
 
+    // The larger space header and the Rooms section push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `clicking on Join room emits the expected Event`() = runAndroidComposeUiTest {
         val aSpaceRoom = aSpaceRoom(roomId = A_ROOM_ID, state = null)

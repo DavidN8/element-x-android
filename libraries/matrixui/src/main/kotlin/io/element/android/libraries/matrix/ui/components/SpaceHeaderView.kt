@@ -9,18 +9,16 @@
 package io.element.android.libraries.matrix.ui.components
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.datasource.LoremIpsum
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
-import io.element.android.libraries.designsystem.atomic.atoms.CopiableTextAtom
 import io.element.android.libraries.designsystem.atomic.atoms.RoomPreviewDescriptionAtom
 import io.element.android.libraries.designsystem.atomic.atoms.RoomPreviewTitleAtom
 import io.element.android.libraries.designsystem.atomic.organisms.RoomPreviewOrganism
@@ -36,23 +34,24 @@ import io.element.android.libraries.designsystem.preview.USER_NAME_ALICE
 import io.element.android.libraries.designsystem.preview.USER_NAME_BOB
 import io.element.android.libraries.designsystem.preview.USER_NAME_CHARLIE
 import io.element.android.libraries.designsystem.preview.USER_NAME_DAVID
-import io.element.android.libraries.matrix.api.core.RoomAlias
-import io.element.android.libraries.matrix.api.spaces.SpaceRoomVisibility
+import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.matrix.api.user.MatrixUser
+import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 
 /**
- * Ref: https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=3643-2429&m=dev
+ * The header of a space, like a WhatsApp community's: a large rounded-square avatar, the name, then "Space · N rooms".
+ *
+ * @param numberOfRooms the number of rooms in the space, or null while it is not known yet: then only "Space" is shown.
  */
 @Composable
 fun SpaceHeaderView(
     avatarData: AvatarData,
     name: String?,
-    alias: RoomAlias?,
+    numberOfRooms: Int?,
     topic: String?,
-    visibility: SpaceRoomVisibility,
     heroes: ImmutableList<MatrixUser>,
     numberOfMembers: Int,
     modifier: Modifier = Modifier,
@@ -82,15 +81,17 @@ fun SpaceHeaderView(
             }
         },
         subtitle = {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (alias != null) {
-                    CopiableTextAtom(text = alias.value)
-                }
-                SpaceInfoRow(visibility = visibility)
-            }
+            val space = stringResource(CommonStrings.common_space)
+            Text(
+                text = if (numberOfRooms == null) {
+                    space
+                } else {
+                    space + " · " + pluralStringResource(CommonPlurals.common_rooms, numberOfRooms, numberOfRooms)
+                },
+                style = ElementTheme.typography.fontBodyMdRegular,
+                color = ElementTheme.colors.textSecondary,
+                textAlign = TextAlign.Center,
+            )
         },
         description = if (topic.isNullOrBlank()) {
             null
@@ -124,11 +125,10 @@ internal fun SpaceHeaderViewPreview() = ElementPreview {
             url = "anUrl",
             size = AvatarSize.SpaceHeader,
         ),
-        alias = RoomAlias("#spaceAlias:matrix.org"),
         name = SPACE_NAME,
+        numberOfRooms = 12,
         topic = "Space topic: " + LoremIpsum(40).values.first(),
         topicMaxLines = 2,
-        visibility = SpaceRoomVisibility.Public,
         heroes = persistentListOf(
             aMatrixUser(id = "@1:d", displayName = USER_NAME_ALICE, avatarUrl = "aUrl"),
             aMatrixUser(id = "@2:d", displayName = USER_NAME_BOB),

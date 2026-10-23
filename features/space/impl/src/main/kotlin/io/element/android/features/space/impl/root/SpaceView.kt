@@ -15,16 +15,19 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,7 +89,6 @@ import io.element.android.libraries.designsystem.utils.scaffoldScrollableContent
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.spaces.SpaceRoom
-import io.element.android.libraries.matrix.api.spaces.SpaceRoomVisibility
 import io.element.android.libraries.matrix.ui.components.JoinButton
 import io.element.android.libraries.matrix.ui.components.SpaceHeaderView
 import io.element.android.libraries.matrix.ui.components.SpaceRoomItemView
@@ -263,19 +265,28 @@ private fun SpaceViewContent(
                 enter = fadeIn() + expandVertically(),
                 exit = fadeOut() + shrinkVertically()
             ) {
-                Column {
-                    SpaceHeaderView(
-                        avatarData = spaceInfo.getAvatarData(AvatarSize.SpaceHeader),
-                        alias = spaceInfo.canonicalAlias,
-                        name = spaceInfo.name,
-                        topic = spaceInfo.topic,
-                        topicMaxLines = 2,
-                        visibility = SpaceRoomVisibility.fromJoinRule(spaceInfo.joinRule),
-                        heroes = spaceInfo.heroes,
-                        numberOfMembers = spaceInfo.joinedMembersCount.toInt(),
-                        onTopicClick = onTopicClick
-                    )
-                    HorizontalDivider()
+                SpaceHeaderView(
+                    avatarData = spaceInfo.getAvatarData(AvatarSize.SpaceHeader),
+                    name = spaceInfo.name,
+                    // The count is only shown once all the rooms are loaded
+                    numberOfRooms = if (state.hasMoreToLoad) null else state.children.count { !it.isSpace },
+                    topic = spaceInfo.topic,
+                    topicMaxLines = 2,
+                    heroes = spaceInfo.heroes,
+                    numberOfMembers = spaceInfo.joinedMembersCount.toInt(),
+                    onTopicClick = onTopicClick
+                )
+            }
+        }
+
+        if (state.children.isNotEmpty()) {
+            item(key = "rooms_header") {
+                AnimatedVisibility(
+                    !state.isManageMode,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    RoomsSectionHeader()
                 }
             }
         }
@@ -288,10 +299,10 @@ private fun SpaceViewContent(
                 )
             }
         } else {
-            itemsIndexed(
+            items(
                 items = state.children,
-                key = { _, spaceRoom -> spaceRoom.roomId }
-            ) { index, spaceRoom ->
+                key = { spaceRoom -> spaceRoom.roomId }
+            ) { spaceRoom ->
                 val isInvitation = spaceRoom.state == CurrentUserMembership.INVITED
                 val isCurrentlyJoining = state.isJoining(spaceRoom.roomId)
                 val isSelected = state.isSelected(spaceRoom.roomId)
@@ -331,9 +342,6 @@ private fun SpaceViewContent(
                         )
                     }
                 )
-                if (index != state.children.lastIndex) {
-                    HorizontalDivider()
-                }
             }
 
             if (state.hasMoreToLoad) {
@@ -342,6 +350,29 @@ private fun SpaceViewContent(
                 }
             }
         }
+    }
+}
+
+/**
+ * An 8dp band in the raised fill, then the "Rooms" section title, like the sections of a WhatsApp community.
+ */
+@Composable
+private fun RoomsSectionHeader() {
+    Column {
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .background(ElementTheme.colors.bgSubtleSecondary)
+        )
+        Text(
+            text = stringResource(CommonStrings.common_header_rooms),
+            style = ElementTheme.typography.fontBodyMdMedium,
+            color = ElementTheme.colors.textSecondary,
+            modifier = Modifier
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 4.dp)
+                .semantics { heading() },
+        )
     }
 }
 
