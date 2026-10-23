@@ -7,6 +7,7 @@
 
 package io.element.android.features.matcha.impl.protocol
 
+import io.element.android.libraries.core.extensions.runCatchingExceptions
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -33,7 +34,7 @@ data class RawEvent(
         /** Parses a full event JSON object, or returns null when it is not one. */
         fun parse(json: String?): RawEvent? {
             if (json.isNullOrBlank()) return null
-            val root = runCatching { Json.parseToJsonElement(json).jsonObject }.getOrNull() ?: return null
+            val root = runCatchingExceptions { Json.parseToJsonElement(json).jsonObject }.getOrNull() ?: return null
             val type = root.stringOrNull("type") ?: return null
             val unsigned = root.objectOrNull("unsigned")
             return RawEvent(

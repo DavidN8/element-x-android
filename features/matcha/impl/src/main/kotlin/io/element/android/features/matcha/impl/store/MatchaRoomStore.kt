@@ -15,6 +15,7 @@ import io.element.android.features.matcha.impl.protocol.RawEvent
 import io.element.android.features.matcha.impl.protocol.ThreadMetadata
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
+import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.protocol.booleanOrNull
 import io.element.android.features.matcha.impl.protocol.referenceTarget
 import io.element.android.libraries.core.extensions.runCatchingExceptions
@@ -32,6 +33,8 @@ import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.EventTimelineItem
 import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
+import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
+import io.element.android.libraries.matrix.api.timeline.item.event.UtdCause
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -60,6 +64,10 @@ data class MatchaThread(
     val numberOfReplies: Long,
     /** Timestamp of the latest event in the thread, for ordering. */
     val lastActivityTimestamp: Long,
+    /** Timestamp of the thread root, 0 when unknown; the chip bar orders threads by it. */
+    val rootTimestamp: Long = 0,
+    /** True when the root message could not be decrypted on this device, so a name taken from it is missing. */
+    val isRootUnreadable: Boolean = false,
 )
 
 /** A room's board, if it has one. */
@@ -77,9 +85,24 @@ data class MatchaPermissions(
     val canInvite: Boolean = false,
 )
 
+/** Why some of a room's Matcha data may be missing or out of date: one line for the user, the plan's merged warning. */
+enum class MatchaWarning {
+    /** Some Matcha events or thread roots can't be decrypted on this device yet. */
+    Undecryptable,
+
+    /** Older Matcha events can't be decrypted on this device: the keys of that history aren't available. */
+    HistoryUnavailable,
+
+    /** Matcha events from before the user joined can't be read. */
+    NoAccess,
+
+    /** Reading history or the thread list failed; the data may be out of date. */
+    Network,
+}
+
 /** Everything the Matcha features know about one room, rebuilt from its timeline, thread list and state. */
 data class MatchaRoomSnapshot(
-    /** False until the thread list and the first history pages have been read. */
+    /** False until the thread list, the first history pages and the stored room state have been read. */
     val isLoaded: Boolean = false,
     /** All threads, active and archived, most recently active first. */
     val threads: List<MatchaThread> = emptyList(),
@@ -88,8 +111,21 @@ data class MatchaRoomSnapshot(
     val hasMoreHistory: Boolean = true,
     val hasMoreThreads: Boolean = true,
     val isLoadingMore: Boolean = false,
-    /** Matcha events in server order, newest first, for features that read them directly (documents). */
+    /**
+     * Matcha events in server order, newest first, for features that read them directly (documents). Events that can't be
+     * decrypted are included with the type `m.room.encrypted`; only their relation is readable.
+     */
     val events: List<RawEvent> = emptyList(),
+    /** The room holds a board card or thread patch that can't be decrypted, so the board or names may be out of date. */
+    val unreadable: Boolean = false,
+    val warning: MatchaWarning? = null,
+    /**
+     * True once a missing [board] is really missing: the board is known, or the Matcha history was read back to the start of
+     * the room. The stored room state alone proves nothing, since the sync only stores the custom state it asked for.
+     */
+    val isBoardResolved: Boolean = false,
+    /** The Matcha timeline could not be opened; [MatchaRoomStore.retryLoad] tries again. */
+    val loadFailed: Boolean = false,
 )
 
 /**
@@ -110,47 +146,81 @@ class MatchaRoomStore(
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
-    private val storedState = MutableStateFlow(StoredState())
+    private val storedState = MutableStateFlow(StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false))
+    private val utdCauses = MutableStateFlow<Map<String, UtdCause>>(emptyMap())
+    private val loadFailed = MutableStateFlow(false)
+    private val readFailed = MutableStateFlow(false)
     private val pagination = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = true))
     private val historyPagesRead = MutableStateFlow(0)
     private val loadingMore = MutableStateFlow(false)
     private val writeMutex = Mutex()
+    private val historyMutex = Mutex()
     private var timeline: Timeline? = null
+
+    /** A board root this client sent without managing to point the room at it; creating the board again points at this one. */
+    internal var unpointedBoardRoot: String? = null
 
     private val _snapshot = MutableStateFlow(MatchaRoomSnapshot())
     val snapshot: StateFlow<MatchaRoomSnapshot> = _snapshot.asStateFlow()
 
     private data class StoredState(
-        val boardPointer: String? = null,
-        val legacyArchive: Map<String, Boolean> = emptyMap(),
+        /** The board pointer of the stored room state; only a hint, see [MatchaRoomSnapshot.isBoardResolved]. */
+        val boardPointer: String?,
+        val legacyArchive: Map<String, Boolean>,
+        /** The board this client created, until its pointer is read back. */
+        val createdBoardRoot: String?,
+        /** The stored state was read at least once, successfully or not. */
+        val isRead: Boolean,
     )
 
     init {
         start()
     }
 
-    @OptIn(FlowPreview::class)
-    private fun start() {
+    private fun openTimeline() {
         coroutineScope.launch {
-            val created = room.createTimeline(CreateTimelineParams.OnlyEventTypes(MatchaConfig.MESSAGE_LIKE_EVENT_TYPES + MatchaConfig.STATE_EVENT_TYPES))
+            // Undecryptable events are read too, so the board can say when some of it can't be decrypted.
+            val types = MatchaConfig.MESSAGE_LIKE_EVENT_TYPES + MatchaConfig.STATE_EVENT_TYPES + EVENT_ROOM_ENCRYPTED
+            val created = room.createTimeline(CreateTimelineParams.OnlyEventTypes(types))
                 .onFailure { Timber.w(it, "Could not open the Matcha timeline") }
-                .getOrNull() ?: return@launch
+                .getOrNull()
+            loadFailed.value = created == null
+            created ?: return@launch
             timeline = created
             created.backwardPaginationStatus.onEach { pagination.value = it }.launchIn(this)
             created.timelineItems
-                .map { items -> items.mapNotNull(::parse).asReversed() }
-                .onEach { scanEvents.value = it }
+                .onEach { items ->
+                    val events = ArrayList<RawEvent>(items.size)
+                    val causes = HashMap<String, UtdCause>()
+                    for (item in items.asReversed()) {
+                        val event = parse(item) ?: continue
+                        events += event
+                        item.utdCause()?.let { cause -> event.eventId?.let { causes[it] = cause } }
+                    }
+                    utdCauses.value = causes
+                    scanEvents.value = events
+                }
                 .launchIn(this)
             // Read a bounded amount of history up front; older items are loaded on demand.
             readInitialHistory(created)
         }
+    }
+
+    /** Opens the Matcha timeline again after it [MatchaRoomSnapshot.loadFailed]. */
+    fun retryLoad() {
+        if (loadFailed.value && timeline == null) openTimeline()
+    }
+
+    @OptIn(FlowPreview::class)
+    private fun start() {
+        openTimeline()
         room.threadsListService.subscribeToItemUpdates()
             .onEach { threadItems.value = it }
             .launchIn(coroutineScope)
         room.threadsListService.subscribeToPaginationUpdates()
             .onEach { threadsPaginationStatus.value = it }
             .launchIn(coroutineScope)
-        coroutineScope.launch { room.threadsListService.paginate().onFailure { Timber.w(it, "Could not read threads") } }
+        coroutineScope.launch { paginateThreads() }
         // Stored state changes arrive with syncs; re-read it whenever something new arrives.
         combine(room.roomInfoFlow, scanEvents) { _, _ -> }
             .debounce(200.milliseconds)
@@ -175,7 +245,14 @@ class MatchaRoomStore(
             threadItems,
             storedState,
             permissions,
-            combine(pagination, threadsPaginationStatus, historyPagesRead, loadingMore) { p, t, pages, loading -> Quad(p, t, pages, loading) },
+            combine(
+                pagination,
+                threadsPaginationStatus,
+                historyPagesRead,
+                loadingMore,
+                combine(utdCauses, loadFailed, readFailed, ::Health),
+                ::Status,
+            ),
         ) { events, threads, state, perms, status ->
             buildSnapshot(events, threads, state, perms, status)
         }
@@ -184,17 +261,29 @@ class MatchaRoomStore(
             .launchIn(coroutineScope)
     }
 
-    private data class Quad(
+    private data class Status(
         val pagination: Timeline.PaginationStatus,
         val threads: ThreadListPaginationStatus,
         val pagesRead: Int,
         val loadingMore: Boolean,
+        val health: Health,
+    )
+
+    private data class Health(
+        /** Why each undecryptable event of the Matcha timeline couldn't be decrypted, by event id. */
+        val utdCauses: Map<String, UtdCause>,
+        val loadFailed: Boolean,
+        /** The last read of history or of the thread list failed. */
+        val readFailed: Boolean,
     )
 
     private suspend fun readInitialHistory(timeline: Timeline) {
         repeat(INITIAL_HISTORY_PAGES) {
             if (!timeline.backwardPaginationStatus.value.hasMoreToLoad) return
-            val result = runCatchingExceptions { timeline.paginate(Timeline.PaginationDirection.BACKWARDS).getOrThrow() }
+            val result = historyMutex.withLock {
+                runCatchingExceptions { timeline.paginate(Timeline.PaginationDirection.BACKWARDS).getOrThrow() }
+            }
+            readFailed.value = result.isFailure
             if (result.isFailure) {
                 Timber.w(result.exceptionOrNull(), "Could not read Matcha history")
                 return
@@ -213,20 +302,35 @@ class MatchaRoomStore(
         return event
     }
 
-    private suspend fun readStoredState() {
-        val pointer = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN)).getOrNull()
-            ?.get("")
-            ?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-            ?.let(KanbanProtocol::parseBoardPointer)
+    /** Reads the stored room state; returns the board pointer read, or the failure to read it. */
+    private suspend fun readStoredState(): Result<String?> {
+        val pointerRead = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
+            .onFailure { Timber.w(it, "Could not read the board pointer") }
+            .map { states ->
+                states[""]
+                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                    ?.let(KanbanProtocol::parseBoardPointer)
+            }
         val legacy = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_THREAD_ARCHIVE)).getOrNull()
             .orEmpty()
             .mapNotNull { (key, content) ->
-                val archived = runCatching { json.parseToJsonElement(content).jsonObject }.getOrNull()?.booleanOrNull("archived")
+                val archived = runCatchingExceptions { json.parseToJsonElement(content).jsonObject }.getOrNull()?.booleanOrNull("archived")
                 archived?.let { key to it }
             }
             .toMap()
-        storedState.value = StoredState(boardPointer = pointer, legacyArchive = legacy)
+        storedState.update { previous ->
+            // A failed read keeps what was known.
+            previous.copy(boardPointer = pointerRead.getOrElse { previous.boardPointer }, legacyArchive = legacy, isRead = true)
+        }
+        return pointerRead
     }
+
+    /**
+     * Reads the board pointer from the stored room state again, right before creating a board. Returns the root id, null when the
+     * stored state holds none (which doesn't prove the room has no board, see [MatchaRoomSnapshot.isBoardResolved]), or the
+     * failure of this read.
+     */
+    suspend fun readBoardPointer(): Result<String?> = readStoredState()
 
     private fun merge(scan: List<RawEvent>, optimistic: List<RawEvent>): List<RawEvent> {
         if (optimistic.isEmpty()) return scan
@@ -241,19 +345,22 @@ class MatchaRoomStore(
         threadList: List<ThreadListItem>,
         state: StoredState,
         permissions: MatchaPermissions,
-        status: Quad,
+        status: Status,
     ): MatchaRoomSnapshot {
+        val health = status.health
+        // Only a pointer makes a board, as on the web client. A root without one is never a board: it is left behind by a create
+        // whose pointer failed, and the pointer of a real board is newer than its root, so the scan holds it whenever it holds the
+        // root. Cards are newer than the pointer, so the board they refer to stands in for a pointer older than the scan.
         val boardRootId = state.boardPointer
             ?: events.firstOrNull { it.type == MatchaConfig.STATE_KANBAN && it.stateKey == "" }
                 ?.let { KanbanProtocol.parseBoardPointer(it.content) }
-            ?: events.firstOrNull { it.type == MatchaConfig.EVENT_KANBAN_BOARD && !it.isRedacted }?.eventId
+            ?: state.createdBoardRoot
             ?: events.firstOrNull { it.type == MatchaConfig.EVENT_KANBAN_CARD }?.content?.referenceTarget()
         val revisions = boardRootId?.let { root -> events.mapNotNull { KanbanProtocol.parseCard(it, root) } }.orEmpty()
         val latestCards = KanbanProtocol.latestRevisions(revisions)
 
         val patchesByRoot = HashMap<String, MutableList<ThreadMetadataPatch>>()
-        for (event in events) {
-            if (event.type != MatchaConfig.EVENT_THREAD_METADATA) continue
+        for (event in events.filter { it.type == MatchaConfig.EVENT_THREAD_METADATA }) {
             val root = event.content.referenceTarget() ?: continue
             ThreadMetadataProtocol.parsePatch(event, root)?.let { patchesByRoot.getOrPut(root) { mutableListOf() } += it }
         }
@@ -273,6 +380,8 @@ class MatchaRoomStore(
                 rootBody = rootBody,
                 numberOfReplies = item?.numberOfReplies ?: 0,
                 lastActivityTimestamp = item?.let { it.latestEvent?.timestamp ?: it.rootEvent.timestamp } ?: 0,
+                rootTimestamp = item?.rootEvent?.timestamp ?: 0,
+                isRootUnreadable = item?.rootEvent?.content is UnableToDecryptContent,
             )
         }.sortedByDescending { it.lastActivityTimestamp }
 
@@ -281,8 +390,19 @@ class MatchaRoomStore(
         }
         val historyRead = !status.pagination.hasMoreToLoad || status.pagesRead >= INITIAL_HISTORY_PAGES
         val threadsRead = status.threads is ThreadListPaginationStatus.Idle
+        // An undecryptable event's relation stays readable: one referring to the board or a thread is Matcha data.
+        val matchaTargets = threadIds + listOfNotNull(boardRootId)
+        val unreadableCauses = events
+            .filter { it.type == EVENT_ROOM_ENCRYPTED && it.content.referenceTarget() in matchaTargets }
+            .map { event -> event.eventId?.let(health.utdCauses::get) }
+        val unreadableRootCauses = threadList
+            .filter { item -> item.rootEvent.content is UnableToDecryptContent }
+            .filter { item -> threads.firstOrNull { it.id == item.threadId }?.metadata?.nameSource != ThreadNameSource.Explicit }
+            .map { item -> ((item.rootEvent.content as UnableToDecryptContent).data as? UnableToDecryptContent.Data.MegolmV1AesSha2)?.utdCause }
+        val warning = (unreadableCauses + unreadableRootCauses).map(::warningFor).minOrNull()
+            ?: MatchaWarning.Network.takeIf { health.readFailed }
         return MatchaRoomSnapshot(
-            isLoaded = historyRead && threadsRead,
+            isLoaded = historyRead && threadsRead && state.isRead,
             threads = threads,
             board = board,
             permissions = permissions,
@@ -290,28 +410,63 @@ class MatchaRoomStore(
             hasMoreThreads = (status.threads as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad ?: true,
             isLoadingMore = status.loadingMore || status.pagination.isPaginating,
             events = events,
+            unreadable = unreadableCauses.isNotEmpty(),
+            warning = warning,
+            // ponytail: history hidden from a member who joined later may hide an older pointer too; Path B reads it from the server.
+            isBoardResolved = boardRootId != null || !status.pagination.hasMoreToLoad,
+            loadFailed = health.loadFailed,
         )
     }
 
-    /** Loads one more page of history and of the thread list. */
-    suspend fun loadMore() {
-        if (loadingMore.value) return
+    private suspend fun paginateThreads() {
+        val result = room.threadsListService.paginate().onFailure { Timber.w(it, "Could not read threads") }
+        readFailed.value = result.isFailure
+    }
+
+    /**
+     * Loads one more page of history and of the thread list. Calls are serialized.
+     *
+     * @return whether older history remains, or the failure to read the history page; a failure to read more threads is only logged.
+     */
+    suspend fun loadMore(): Result<Boolean> = historyMutex.withLock {
+        val timeline = timeline ?: return@withLock Result.failure(IllegalStateException("The Matcha timeline is not open"))
         loadingMore.value = true
         try {
-            timeline?.takeIf { it.backwardPaginationStatus.value.hasMoreToLoad }?.paginate(Timeline.PaginationDirection.BACKWARDS)
-                ?.onFailure { Timber.w(it, "Could not read older Matcha history") }
-            if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) {
-                room.threadsListService.paginate().onFailure { Timber.w(it, "Could not read older threads") }
+            val history = if (timeline.backwardPaginationStatus.value.hasMoreToLoad) {
+                timeline.paginate(Timeline.PaginationDirection.BACKWARDS)
+                    .also { readFailed.value = it.isFailure }
+                    .onFailure { Timber.w(it, "Could not read older Matcha history") }
+            } else {
+                Result.success(true)
             }
+            if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) paginateThreads()
+            history.map { timeline.backwardPaginationStatus.value.hasMoreToLoad }
         } finally {
             loadingMore.value = false
         }
     }
 
+    /**
+     * Loads older history until [isFound] holds for the snapshot or the start of the room is reached, then returns once the
+     * snapshot shows what was read. Returns the failure to read a page.
+     *
+     * ponytail: reads page by page, so reaching the start of a long room takes many requests; Path B replaces the scan.
+     */
+    suspend fun loadHistoryUntil(isFound: (MatchaRoomSnapshot) -> Boolean): Result<Unit> {
+        while (!isFound(_snapshot.value)) {
+            val hasMore = loadMore().getOrElse { return Result.failure(it) }
+            if (!hasMore) {
+                _snapshot.first { !it.hasMoreHistory }
+                break
+            }
+        }
+        return Result.success(Unit)
+    }
+
     /** Sends a Matcha timeline event and shows it straight away, before its remote echo. */
     suspend fun send(eventType: String, contentJson: String): Result<EventId> = writeMutex.withLock {
         room.sendRawEvent(eventType, contentJson).onSuccess { eventId ->
-            val content = runCatching { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
+            val content = runCatchingExceptions { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
             val echo = RawEvent(
                 type = eventType,
                 content = content,
@@ -330,9 +485,9 @@ class MatchaRoomStore(
         room.sendRawStateEvent(eventType, stateKey, contentJson).onSuccess { readStoredState() }
     }
 
-    /** Overrides the board root until the state pointer is synced, after this client created the board. */
+    /** Shows the board this client created until its pointer is read back from the room. */
     fun rememberCreatedBoard(rootId: String) {
-        if (storedState.value.boardPointer == null) storedState.update { it.copy(boardPointer = rootId) }
+        storedState.update { it.copy(createdBoardRoot = rootId) }
     }
 
     /** The newest card revision currently known for [cardId], for read-modify-write edits. */
@@ -344,5 +499,20 @@ class MatchaRoomStore(
     companion object {
         /** Pages of 50 events read when the store opens. */
         const val INITIAL_HISTORY_PAGES = 10
+        private const val EVENT_ROOM_ENCRYPTED = "m.room.encrypted"
     }
+}
+
+/** Matrix only tells why an event can't be decrypted for Megolm events; anything else is plainly undecryptable. */
+private fun MatrixTimelineItem.utdCause(): UtdCause? {
+    val content = (this as? MatrixTimelineItem.Event)?.event?.content as? UnableToDecryptContent ?: return null
+    return (content.data as? UnableToDecryptContent.Data.MegolmV1AesSha2)?.utdCause ?: UtdCause.Unknown
+}
+
+/** The warning for one undecryptable event; the lowest one wins when several apply. */
+private fun warningFor(cause: UtdCause?): MatchaWarning = when (cause) {
+    UtdCause.SentBeforeWeJoined -> MatchaWarning.NoAccess
+    UtdCause.HistoricalMessageAndBackupIsDisabled,
+    UtdCause.HistoricalMessageAndDeviceIsUnverified -> MatchaWarning.HistoryUnavailable
+    else -> MatchaWarning.Undecryptable
 }

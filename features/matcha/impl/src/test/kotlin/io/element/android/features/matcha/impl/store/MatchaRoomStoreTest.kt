@@ -21,8 +21,11 @@ import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemDebugInfoProvider
+import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
+import io.element.android.libraries.matrix.api.timeline.item.event.UtdCause
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.powerlevels.FakeRoomPermissions
@@ -57,13 +60,13 @@ class MatchaRoomStoreTest {
     private fun event(index: Int, type: String, content: String) =
         item(index, """{"type": "$type", "event_id": "${'$'}e$index", "sender": "@bob:x", "origin_server_ts": $index, "content": $content}""")
 
-    private fun threadItem(id: String, body: String) = ThreadListItem(
+    private fun threadItem(id: String, body: String, content: EventContent = aMessageContent(body = body)) = ThreadListItem(
         rootEvent = ThreadListItemEvent(
             eventId = EventId(id),
             senderId = UserId("@bob:x"),
             senderProfile = ProfileDetails.Unavailable,
             isOwn = false,
-            content = aMessageContent(body = body),
+            content = content,
             timestamp = 10,
         ),
         latestEvent = null,
@@ -74,6 +77,8 @@ class MatchaRoomStoreTest {
         items: List<MatrixTimelineItem>,
         threads: List<ThreadListItem> = emptyList(),
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
+        createTimelineResult: (() -> Result<Timeline>)? = null,
+        boardPointerResult: () -> Result<Map<String, String>> = { Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}""")) },
         scope: kotlinx.coroutines.CoroutineScope,
     ): Pair<MatchaRoomStore, MutableStateFlow<List<MatrixTimelineItem>>> {
         val timelineItems = MutableStateFlow(items)
@@ -90,15 +95,11 @@ class MatchaRoomStoreTest {
             ),
             createTimelineResult = { params ->
                 requestedTypes = (params as CreateTimelineParams.OnlyEventTypes).types
-                Result.success(timeline)
+                createTimelineResult?.invoke() ?: Result.success(timeline)
             },
             sendRawEventResult = sendRawEventResult,
             getStateEventsJsonResult = { type ->
-                if (type == StateEventType.Custom(MatchaConfig.STATE_KANBAN)) {
-                    Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
-                } else {
-                    Result.success(emptyMap())
-                }
+                if (type == StateEventType.Custom(MatchaConfig.STATE_KANBAN)) boardPointerResult() else Result.success(emptyMap())
             },
         )
         val store = MatchaRoomStore(room, scope)
@@ -135,6 +136,20 @@ class MatchaRoomStoreTest {
     }
 
     @Test
+    fun `a thread whose root cannot be decrypted is flagged and keeps its root timestamp`() = runTest {
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            items = emptyList(),
+            threads = listOf(threadItem(thread, "", content = UnableToDecryptContent(UnableToDecryptContent.Data.Unknown, threadInfo = null))),
+        )
+        settle()
+        val matchaThread = store.snapshot.value.threads.single()
+        assertThat(matchaThread.isRootUnreadable).isTrue()
+        assertThat(matchaThread.rootTimestamp).isEqualTo(10)
+        assertThat(matchaThread.metadata.name).isEqualTo(thread)
+    }
+
+    @Test
     fun `a sent event is shown before its remote echo and not duplicated after`() = runTest {
         val (store, timelineItems) = aStore(scope = backgroundScope, items = emptyList())
         settle()
@@ -160,6 +175,165 @@ class MatchaRoomStoreTest {
         settle()
         assertThat(store.snapshot.value.events).isEmpty()
     }
+
+    @Test
+    fun `undecryptable board and thread events make the board unreadable, with the warning from their cause`() = runTest {
+        val unrelated = utd(1, target = "\$poll", cause = UtdCause.Unknown)
+        val historical = utd(2, target = boardRoot, cause = UtdCause.HistoricalMessageAndBackupIsDisabled)
+        val (store, timelineItems) = aStore(scope = backgroundScope, items = listOf(unrelated), threads = listOf(threadItem(thread, "Body")))
+        settle()
+        assertThat(store.snapshot.value.unreadable).isFalse()
+        assertThat(store.snapshot.value.warning).isNull()
+        assertThat(store.snapshot.value.events.map { it.type }).containsExactly("m.room.encrypted")
+
+        timelineItems.value = listOf(unrelated, historical)
+        settle()
+        assertThat(store.snapshot.value.unreadable).isTrue()
+        assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.HistoryUnavailable)
+
+        timelineItems.value = listOf(unrelated, historical, utd(3, target = thread, cause = UtdCause.UnknownDevice))
+        settle()
+        assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.Undecryptable)
+    }
+
+    @Test
+    fun `a thread root from before joining warns that it can't be read`() = runTest {
+        val content = UnableToDecryptContent(UnableToDecryptContent.Data.MegolmV1AesSha2("session", UtdCause.SentBeforeWeJoined), threadInfo = null)
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), threads = listOf(threadItem(thread, "", content = content)))
+        settle()
+        assertThat(store.snapshot.value.unreadable).isFalse()
+        assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.NoAccess)
+    }
+
+    @Test
+    fun `the stored pointer is re-read on demand, and a failed read is never taken for an empty one`() = runTest {
+        var pointer: Result<Map<String, String>> = Result.failure(IllegalStateException("offline"))
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), boardPointerResult = { pointer })
+        settle()
+        assertThat(store.readBoardPointer().isFailure).isTrue()
+
+        pointer = Result.success(emptyMap())
+        assertThat(store.readBoardPointer().getOrThrow()).isNull()
+
+        pointer = Result.failure(IllegalStateException("offline"))
+        assertThat(store.readBoardPointer().isFailure).isTrue()
+
+        pointer = Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
+        assertThat(store.readBoardPointer().getOrThrow()).isEqualTo(boardRoot)
+        settle()
+        assertThat(store.snapshot.value.board?.rootId).isEqualTo(boardRoot)
+    }
+
+    @Test
+    fun `a missing board is only resolved once the history is read back to the start`() = runTest {
+        // Ten pages are read up front; the pointer is in the twelfth.
+        val olderPages = List(11) { emptyList<MatrixTimelineItem>() } + listOf(listOf(aBoardPointerItem(1, boardRoot)))
+        val store = aMatchaRoomStore(backgroundScope, olderPages = olderPages)
+        settle()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        assertThat(store.snapshot.value.board).isNull()
+        assertThat(store.snapshot.value.isBoardResolved).isFalse()
+
+        assertThat(store.loadHistoryUntil { it.board != null }.isSuccess).isTrue()
+        settle()
+        assertThat(store.snapshot.value.board?.rootId).isEqualTo(boardRoot)
+        assertThat(store.snapshot.value.isBoardResolved).isTrue()
+
+        val empty = aMatchaRoomStore(backgroundScope, olderPages = List(12) { emptyList() })
+        settle()
+        assertThat(empty.loadHistoryUntil { it.board != null }.isSuccess).isTrue()
+        assertThat(empty.snapshot.value.board).isNull()
+        assertThat(empty.snapshot.value.isBoardResolved).isTrue()
+        assertThat(empty.snapshot.value.hasMoreHistory).isFalse()
+    }
+
+    @Test
+    fun `reading the history stops at a page that can't be read`() = runTest {
+        var fail = false
+        val store = aMatchaRoomStore(backgroundScope, olderPages = List(12) { emptyList() }, paginateResult = {
+            if (fail) Result.failure(IllegalStateException("offline")) else Result.success(Unit)
+        })
+        settle()
+        fail = true
+        assertThat(store.loadHistoryUntil { false }.isFailure).isTrue()
+        settle()
+        assertThat(store.snapshot.value.isBoardResolved).isFalse()
+        assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.Network)
+    }
+
+    @Test
+    fun `a board root that no pointer refers to is not a board, but the board cards refer to is`() = runTest {
+        val strayRoot = aMatchaEventItem(1, MatchaConfig.EVENT_KANBAN_BOARD, """{"version": 1}""")
+        val stray = aMatchaRoomStore(backgroundScope, items = listOf(strayRoot))
+        settle()
+        assertThat(stray.snapshot.value.board).isNull()
+
+        val card = aMatchaEventItem(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("c-1", "Card", null), boardRoot))
+        val withCards = aMatchaRoomStore(backgroundScope, items = listOf(strayRoot, card))
+        settle()
+        assertThat(withCards.snapshot.value.board?.rootId).isEqualTo(boardRoot)
+    }
+
+    @Test
+    fun `every task has its own id, even a card named like a list row or unlinked from its thread`() = runTest {
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            items = listOf(
+                event(1, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("archived", "Named like a row", null), boardRoot)),
+                // The newest revision of the thread's card no longer links it.
+                event(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Unlinked", null), boardRoot)),
+            ),
+            threads = listOf(threadItem(thread, "Thread")),
+        )
+        settle()
+        val ids = store.snapshot.value.board!!.cards.map { it.id }
+        assertThat(ids).containsExactly(KanbanProtocol.threadCardId(thread), "archived")
+    }
+
+    @Test
+    fun `a timeline that could not be opened is reported and can be retried`() = runTest {
+        var result: Result<Timeline> = Result.failure(IllegalStateException("offline"))
+        val timeline = FakeTimeline(
+            timelineItems = MutableStateFlow(emptyList()),
+            backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = false)),
+        )
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), createTimelineResult = { result })
+        settle()
+        assertThat(store.snapshot.value.loadFailed).isTrue()
+
+        result = Result.success(timeline)
+        store.retryLoad()
+        settle()
+        assertThat(store.snapshot.value.loadFailed).isFalse()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+    }
+
+    @Test
+    fun `a failed history read warns about the network`() = runTest {
+        val timeline = FakeTimeline(
+            timelineItems = MutableStateFlow(emptyList()),
+            backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = true)),
+        ).apply { paginateLambda = { Result.failure(IllegalStateException("offline")) } }
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), createTimelineResult = { Result.success(timeline) })
+        settle()
+        assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.Network)
+    }
+
+    /** An undecryptable event whose clear relation refers to [target]. */
+    private fun utd(index: Int, target: String, cause: UtdCause) = MatrixTimelineItem.Event(
+        uniqueId = UniqueId("utd-$index"),
+        event = anEventTimelineItem(
+            eventId = EventId("\$u$index"),
+            content = UnableToDecryptContent(UnableToDecryptContent.Data.MegolmV1AesSha2("session", cause), threadInfo = null),
+            debugInfoProvider = TimelineItemDebugInfoProvider {
+                aTimelineItemDebugInfo(
+                    originalJson = """{"type": "m.room.encrypted", "event_id": "${'$'}u$index", "sender": "@bob:x", "origin_server_ts": $index,
+                        "content": {"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "x",
+                        "m.relates_to": {"rel_type": "m.reference", "event_id": "$target"}}}""".trimIndent()
+                )
+            },
+        ),
+    )
 
     private fun aCard(id: String, title: String, threadId: String?) = io.element.android.features.matcha.impl.protocol.CardRevision(
         cardId = id,

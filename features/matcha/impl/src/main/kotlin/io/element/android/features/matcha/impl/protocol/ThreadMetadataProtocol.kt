@@ -18,12 +18,25 @@ data class ThreadMetadataPatch(
     val archived: Boolean?,
 )
 
+/** Where a thread's name comes from. */
+enum class ThreadNameSource {
+    /** A member named the thread. */
+    Explicit,
+
+    /** Nobody named it; the root message text stands in. */
+    RootBody,
+
+    /** Neither a name nor a readable root message exists; the name is the root event id. */
+    EventId,
+}
+
 /** A thread's resolved shared metadata. */
 data class ThreadMetadata(
     val name: String,
     val archived: Boolean,
     /** True when a member explicitly archived or restored the thread, as opposed to the default active state. */
     val archiveExplicit: Boolean,
+    val nameSource: ThreadNameSource = ThreadNameSource.Explicit,
 )
 
 /**
@@ -47,8 +60,9 @@ object ThreadMetadataProtocol {
     /**
      * The latest value of each field wins independently, so a rename never undoes a concurrent archive.
      *
-     * @param patchesNewestFirst the valid patches for this thread in server order, newest first.
+     * @param rootId the thread root event id, the name of last resort.
      * @param rootBody the root message body, used as the name until someone names the thread.
+     * @param patchesNewestFirst the valid patches for this thread in server order, newest first.
      * @param legacyArchived the archive flag of the legacy state event, read only as a fallback.
      */
     fun resolve(
@@ -59,10 +73,16 @@ object ThreadMetadataProtocol {
     ): ThreadMetadata {
         val name = patchesNewestFirst.firstNotNullOfOrNull { it.name }
         val archived = patchesNewestFirst.firstNotNullOfOrNull { it.archived }
+        val shownName = name ?: fallbackName(rootBody, rootId)
         return ThreadMetadata(
-            name = name ?: fallbackName(rootBody, rootId),
+            name = shownName,
             archived = archived ?: (legacyArchived == true),
             archiveExplicit = archived != null || legacyArchived != null,
+            nameSource = when {
+                name != null -> ThreadNameSource.Explicit
+                shownName == rootId -> ThreadNameSource.EventId
+                else -> ThreadNameSource.RootBody
+            },
         )
     }
 

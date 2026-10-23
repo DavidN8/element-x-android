@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2026 Element Creations Ltd.
+  ~
+  ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+  ~ Please see LICENSE files in the repository root for full details.
+  -->
+
+<resources>
+    <!-- Track B: chip bar. The common_/action_ keys belong in libraries/ui-strings per WHATSAPP_DESIGN.md §5; move them at integration. -->
+    <string name="common_matcha_tasks">"Tasks"</string>
+    <string name="common_matcha_more">"More"</string>
+    <string name="common_matcha_error_name_empty">"Enter a name"</string>
+    <string name="common_matcha_error_max_chars">"Use up to %1$s characters"</string>
+    <string name="action_matcha_remind_me">"Remind me"</string>
+    <string name="action_matcha_archive">"Archive"</string>
+    <string name="action_matcha_unarchive">"Unarchive"</string>
+    <string name="action_matcha_undo">"Undo"</string>
+    <string name="screen_matcha_threads_general">"General"</string>
+    <string name="common_matcha_new_thread">"New thread"</string>
+    <string name="common_matcha_all_threads">"All threads"</string>
+    <string name="common_matcha_space_docs">"Space docs"</string>
+    <string name="common_matcha_thread_untitled">"Untitled thread"</string>
+    <string name="common_matcha_write_failed">"Couldn't save. Check your connection and try again."</string>
+    <string name="screen_matcha_threads_name_hint">"Thread name"</string>
+    <string name="screen_matcha_threads_name_helper">"Everyone in this chat can see the name."</string>
+    <string name="screen_matcha_threads_create">"Create thread"</string>
+    <string name="screen_matcha_threads_rename_title">"Rename thread"</string>
+    <string name="screen_matcha_threads_setup_failed">"Message sent, but the thread couldn't be set up. Try again."</string>
+    <string name="screen_matcha_threads_create_failed">"Couldn't create the thread. Check your connection and try again."</string>
+    <string name="screen_matcha_threads_archived_snackbar">"Thread archived"</string>
+    <string name="screen_matcha_threads_unarchived_snackbar">"Thread unarchived"</string>
+    <string name="screen_matcha_threads_view_task">"View task"</string>
+    <string name="screen_matcha_threads_warning_undecryptable">"Some thread names can't be read on this device yet."</string>
+    <string name="screen_matcha_threads_warning_history">"Older thread names aren't available on this device."</string>
+    <string name="screen_matcha_threads_warning_access">"You can't see thread names from before you joined."</string>
+    <string name="screen_matcha_threads_warning_network">"Thread names may be out of date. Check your connection."</string>
+    <string name="a11y_matcha_thread_archived">"Archived thread"</string>
+    <plurals name="a11y_matcha_open_tasks">
+        <item quantity="one">"%1$d open task"</item>
+        <item quantity="other">"%1$d open tasks"</item>
+    </plurals>
+    <!-- End of track B: chip bar. -->
+    <!-- Track B: task board. -->
+    <string name="common_matcha_archived">"Archived"</string>
+    <string name="action_matcha_keep_editing">"Keep editing"</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: joins a relative day and a time, e.g. "Tomorrow 09:00". -->
+    <string name="common_matcha_day_and_time">"%1$s %2$s"</string>
+    <string name="screen_matcha_tasks_status_todo">"To do"</string>
+    <string name="screen_matcha_tasks_status_doing">"In progress"</string>
+    <string name="screen_matcha_tasks_status_done">"Done"</string>
+    <string name="screen_matcha_tasks_new">"New task"</string>
+    <string name="screen_matcha_tasks_edit">"Edit task"</string>
+    <string name="screen_matcha_tasks_add">"Add task"</string>
+    <string name="screen_matcha_tasks_name_hint">"Task name"</string>
+    <string name="screen_matcha_tasks_description_hint">"Add a description"</string>
+    <string name="screen_matcha_tasks_status_label">"Status"</string>
+    <string name="screen_matcha_tasks_deadline_label">"Deadline"</string>
+    <string name="screen_matcha_tasks_deadline_add">"Add deadline"</string>
+    <string name="screen_matcha_tasks_deadline_past">"This time has already passed"</string>
+    <string name="screen_matcha_tasks_deadline_range">"Pick a date before the year 10,000"</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: a deadline inside a clock change is refused rather than moved. -->
+    <string name="screen_matcha_tasks_deadline_skipped">"This time doesn't exist here because the clocks change. Pick another time."</string>
+    <string name="screen_matcha_tasks_reminder_requested">"Reminder requested for %1$s"</string>
+    <string name="screen_matcha_tasks_thread_note_new">"A thread with this name will be created in this chat."</string>
+    <string name="screen_matcha_tasks_thread_note_linked">"Renaming the task also renames its thread."</string>
+    <string name="screen_matcha_tasks_rename_not_allowed">"You can't rename threads in this chat, so this name can't change."</string>
+    <string name="screen_matcha_tasks_open_thread">"Open thread"</string>
+    <string name="screen_matcha_tasks_move_to">"Move to"</string>
+    <string name="screen_matcha_tasks_overdue">"Overdue"</string>
+    <string name="screen_matcha_tasks_no_replies">"No replies yet"</string>
+    <string name="screen_matcha_tasks_archived_title">"Archived tasks"</string>
+    <string name="screen_matcha_tasks_archived_empty">"No archived tasks"</string>
+    <string name="screen_matcha_tasks_archived_snackbar">"Task archived"</string>
+    <string name="screen_matcha_tasks_unarchived_snackbar">"Task unarchived"</string>
+    <string name="screen_matcha_tasks_load_older">"Load older tasks"</string>
+    <plurals name="screen_matcha_tasks_earlier_cards">
+        <item quantity="one">"%1$d earlier card for this thread"</item>
+        <item quantity="other">"%1$d earlier cards for this thread"</item>
+    </plurals>
+    <string name="screen_matcha_tasks_looking">"Looking for this chat's task board…"</string>
+    <string name="screen_matcha_tasks_setup_title">"Track work in this chat"</string>
+    <string name="screen_matcha_tasks_setup_body">"Every thread in this chat becomes a task, and each new task gets its own thread."</string>
+    <string name="screen_matcha_tasks_setup_action">"Create task board"</string>
+    <string name="screen_matcha_tasks_setup_failed">"Couldn't create the task board. Try again."</string>
+    <string name="screen_matcha_tasks_setup_no_permission">"Ask an admin to create the task board."</string>
+    <string name="screen_matcha_tasks_already_has_board">"This chat already has a task board."</string>
+    <string name="screen_matcha_tasks_board_changed">"The task board changed. Try again."</string>
+    <string name="screen_matcha_tasks_thread_has_task">"This thread already has a task."</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: a task whose earlier changes couldn't be loaded isn't saved over them. -->
+    <string name="screen_matcha_tasks_history_incomplete">"Couldn't load this task's earlier changes. Check your connection and try again."</string>
+    <string name="screen_matcha_tasks_board_empty_title">"No tasks yet"</string>
+    <string name="screen_matcha_tasks_board_empty_body">"Tap + to add the first one."</string>
+    <string name="screen_matcha_tasks_read_only">"You can see these tasks but can't change them."</string>
+    <string name="screen_matcha_tasks_unreadable">"Some task updates can't be decrypted. This list may be out of date."</string>
+    <string name="screen_matcha_tasks_discard_title">"Discard changes?"</string>
+    <string name="a11y_matcha_task_status">"Status: %1$s"</string>
+    <string name="a11y_matcha_task_due">"Due %1$s"</string>
+    <string name="a11y_matcha_task_reminder">"Reminder requested"</string>
+    <string name="a11y_matcha_clear_deadline">"Clear deadline"</string>
+    <!-- End of track B: task board. -->
+    <!-- Track B: Tasks tab. -->
+    <string name="common_matcha_all">"All"</string>
+    <string name="screen_matcha_tasks_open_chat">"Open chat"</string>
+    <string name="screen_matcha_tasks_in_chat">"In %1$s"</string>
+    <!-- Not in WHATSAPP_DESIGN.md §5: a Tasks-tab row's second line, the chat name then the description. -->
+    <string name="screen_matcha_tasks_chat_and_summary">"%1$s · %2$s"</string>
+    <string name="screen_matcha_tasks_section_today">"Today"</string>
+    <string name="screen_matcha_tasks_section_tomorrow">"Tomorrow"</string>
+    <string name="screen_matcha_tasks_section_upcoming">"Upcoming"</string>
+    <string name="screen_matcha_tasks_section_no_deadline">"No deadline"</string>
+    <plurals name="screen_matcha_tasks_done_section">
+        <item quantity="one">"Done · %1$d"</item>
+        <item quantity="other">"Done · %1$d"</item>
+    </plurals>
+    <string name="screen_matcha_tasks_filter_chat">"Chat"</string>
+    <string name="screen_matcha_tasks_tab_empty_title">"No tasks yet"</string>
+    <string name="screen_matcha_tasks_tab_empty_body">"Tasks from your chats show up here."</string>
+    <string name="screen_matcha_tasks_tab_unreadable">"Some tasks can't be decrypted on this device yet."</string>
+    <string name="screen_matcha_tasks_pick_chat_title">"Choose a chat"</string>
+    <string name="screen_matcha_tasks_pick_chat_empty">"None of your chats has a task board yet."</string>
+    <plurals name="screen_matcha_tasks_checking_chats">
+        <item quantity="one">"Checking %1$d more chat…"</item>
+        <item quantity="other">"Checking %1$d more chats…"</item>
+    </plurals>
+    <plurals name="screen_matcha_tasks_check_failed">
+        <item quantity="one">"Couldn't check %1$d chat"</item>
+        <item quantity="other">"Couldn't check %1$d chats"</item>
+    </plurals>
+    <!-- End of track B: Tasks tab. -->
+</resources>

@@ -1,0 +1,126 @@
+/*
+ * Copyright (c) 2026 Element Creations Ltd.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+package io.element.android.features.matcha.impl.taskstab
+
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.tasks.TaskItem
+import io.element.android.features.matcha.impl.tasks.aTaskItem
+import io.element.android.libraries.designsystem.components.avatar.AvatarData
+import io.element.android.libraries.designsystem.components.avatar.AvatarSize
+import io.element.android.libraries.matrix.api.core.RoomId
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
+
+open class TasksTabStatePreviewParam : PreviewParameterProvider<TasksTabState> {
+    override val values: Sequence<TasksTabState>
+        get() = sequenceOf(
+            aTasksTabState(),
+            aTasksTabState(content = TasksTabContent.Loading, checkingCount = 12),
+            aTasksTabState(content = TasksTabContent.Empty),
+            aTasksTabState(content = aTasksContent(isDoneExpanded = true)),
+            aTasksTabState(
+                filter = TasksTabFilter.Done,
+                content = TasksTabContent.Tasks(
+                    groups = persistentListOf(TaskGroup(section = null, tasks = aDoneTasks())),
+                    done = persistentListOf(),
+                    isDoneExpanded = false,
+                ),
+            ),
+            aTasksTabState(
+                filter = TasksTabFilter.Archived,
+                chatFilter = aDesignChat,
+                content = TasksTabContent.Tasks(groups = persistentListOf(), done = persistentListOf(), isDoneExpanded = false),
+            ),
+            aTasksTabState(checkingCount = 3, failedCount = 2, isUnreadable = true, hasMore = true),
+            aTasksTabState(hasMore = true, isLoadingMore = true),
+            aTasksTabState(sheet = TasksTabSheet.ChooseChat(ChooseChatPurpose.NewTask, persistentListOf(aDesignChat, aLaunchChat), TextFieldState())),
+            aTasksTabState(sheet = TasksTabSheet.ChooseChat(ChooseChatPurpose.NewTask, persistentListOf(), TextFieldState())),
+            aTasksTabState(
+                chatFilter = null,
+                sheet = TasksTabSheet.ChooseChat(ChooseChatPurpose.Filter, persistentListOf(aDesignChat, aLaunchChat), TextFieldState("zzz")),
+            ),
+            aTasksTabState(sheet = TasksTabSheet.Actions(task = aTabTask(aTaskItem(id = "t1", title = "Book the venue")), canEdit = true, canArchive = true)),
+            aTasksTabState(sheet = TasksTabSheet.Actions(task = aTabTask(aTaskItem(id = "t1", title = "Book the venue")), canEdit = false, canArchive = false)),
+        )
+}
+
+internal fun aTasksTabState(
+    filter: TasksTabFilter = TasksTabFilter.All,
+    chatFilter: TasksTabChat? = null,
+    content: TasksTabContent = aTasksContent(),
+    checkingCount: Int = 0,
+    failedCount: Int = 0,
+    isUnreadable: Boolean = false,
+    hasMore: Boolean = false,
+    isLoadingMore: Boolean = false,
+    sheet: TasksTabSheet? = null,
+) = TasksTabState(
+    isVisible = true,
+    filter = filter,
+    chatFilter = chatFilter,
+    content = content,
+    checkingCount = checkingCount,
+    failedCount = failedCount,
+    isUnreadable = isUnreadable,
+    hasMore = hasMore,
+    isLoadingMore = isLoadingMore,
+    sheet = sheet,
+    editor = null,
+    eventSink = {},
+)
+
+private val aDesignChat = aTasksTabChat("!design:matrix.org", "Design team")
+private val aLaunchChat = aTasksTabChat("!launch:matrix.org", "Launch")
+
+private fun aTasksTabChat(roomId: String, name: String) = TasksTabChat(
+    roomId = RoomId(roomId),
+    name = name,
+    avatar = AvatarData(id = roomId, name = name, size = AvatarSize.RoomListItem),
+)
+
+private fun aTabTask(task: TaskItem, chat: TasksTabChat = aDesignChat, isSelected: Boolean = false) =
+    TabTask(chat = chat, task = task, createdAt = 0, isSelected = isSelected)
+
+private fun aDoneTasks() = persistentListOf(
+    aTabTask(aTaskItem(id = "d1", title = "Pick the date", status = TaskStatus.Done, replyCount = 12)),
+    aTabTask(aTaskItem(id = "d2", title = "Send the invites", status = TaskStatus.Done), chat = aLaunchChat),
+)
+
+private fun aTasksContent(isDoneExpanded: Boolean = false) = TasksTabContent.Tasks(
+    groups = listOf(
+        TaskGroup(
+            section = TaskSection.Overdue,
+            tasks = persistentListOf(aTabTask(aTaskItem(id = "t1", title = "Book the venue", deadline = "Yesterday", isOverdue = true, hasReminder = true))),
+        ),
+        TaskGroup(
+            section = TaskSection.Today,
+            tasks = persistentListOf(
+                aTabTask(
+                    aTaskItem(id = "t2", title = "Draft the press release", summary = "Two paragraphs, then quotes", deadline = "Today 17:00"),
+                    chat = aLaunchChat,
+                    isSelected = true,
+                ),
+            ),
+        ),
+        TaskGroup(
+            section = TaskSection.Upcoming,
+            tasks = persistentListOf(aTabTask(aTaskItem(id = "t3", title = "Order the banners", status = TaskStatus.Doing, deadline = "Tue 17:00"))),
+        ),
+        TaskGroup(
+            section = TaskSection.NoDeadline,
+            tasks = persistentListOf(
+                aTabTask(aTaskItem(id = "t4", title = null, replyCount = 0)),
+                aTabTask(aTaskItem(id = "legacy", title = "An older card without a thread", threadId = null), chat = aLaunchChat),
+            ),
+        ),
+    ).toImmutableList(),
+    done = aDoneTasks(),
+    isDoneExpanded = isDoneExpanded,
+)
