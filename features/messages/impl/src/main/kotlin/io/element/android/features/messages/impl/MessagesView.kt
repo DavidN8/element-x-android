@@ -32,8 +32,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -126,6 +126,7 @@ import io.element.android.libraries.designsystem.utils.HideKeyboardWhenDisposed
 import io.element.android.libraries.designsystem.utils.KeepScreenOn
 import io.element.android.libraries.designsystem.utils.OnLifecycleEvent
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.designsystem.utils.screenSystemBarsInsets
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarHost
 import io.element.android.libraries.designsystem.utils.snackbar.rememberSnackbarHostState
 import io.element.android.libraries.matrix.api.core.EventId
@@ -244,7 +245,7 @@ fun MessagesView(
         modifier = modifier
             .fillMaxSize()
             .imePadding()
-            .systemBarsPadding()
+            .windowInsetsPadding(screenSystemBarsInsets)
             .onSizeChanged { size ->
                 // Let the composer takes at max half of the available height.
                 // The value will be different if the soft keyboard is displayed

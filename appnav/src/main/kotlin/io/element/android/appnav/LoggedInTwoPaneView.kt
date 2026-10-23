@@ -12,23 +12,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import io.element.android.appnav.twopane.NoRoomSelectedView
+import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.architecture.appyx.SafeChildren
+import io.element.android.libraries.designsystem.theme.components.ElementDividerDefaults
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 
-// Room list / detail split, Material list-detail proportions.
+// Room list / detail split, Material list-detail proportions (WhatsApp uses the same 40/60 on tablets).
 private const val LIST_PANE_WEIGHT = 2f
 private const val DETAIL_PANE_WEIGHT = 3f
-private val LIST_PANE_SHADOW_WIDTH = 12.dp
-private val LIST_PANE_SHADOW_COLOR = Color.Black.copy(alpha = 0.35f)
 
 /**
  * Two-pane rendering of [LoggedInFlowNode] for wide windows (tablets, unfolded foldables): the Home node
@@ -59,27 +59,32 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
                 .weight(DETAIL_PANE_WEIGHT)
                 .fillMaxHeight(),
         ) {
-            if (homeElement.targetState == BackStack.State.ACTIVE) {
-                NoRoomSelectedView()
-            }
-            // No transition: the phone slide animation would sweep across the whole pane on every room switch.
-            SafeChildren(
-                navModel = backstack,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                children<LoggedInFlowNode.NavTarget> { child, descriptor ->
-                    // Home is drawn in the start pane.
-                    if (descriptor.element !is LoggedInFlowNode.NavTarget.Home) {
-                        child()
+            // The screens of this pane continue the list pane's header band in their top bars.
+            CompositionLocalProvider(LocalIsInDetailPane provides true) {
+                if (homeElement.targetState == BackStack.State.ACTIVE) {
+                    NoRoomSelectedView()
+                }
+                // No transition: the phone slide animation would sweep across the whole pane on every room switch.
+                SafeChildren(
+                    navModel = backstack,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    children<LoggedInFlowNode.NavTarget> { child, descriptor ->
+                        // Home is drawn in the start pane.
+                        if (descriptor.element !is LoggedInFlowNode.NavTarget.Home) {
+                            child()
+                        }
                     }
                 }
             }
-            // Shadow cast by the list pane, drawn by hand: an elevation shadow is invisible on dark backgrounds.
+            // Hairline between the panes. It starts below the status bar so the header band reads as one strip, and it is drawn
+            // over this pane rather than between the panes, which would leave a gap in the band.
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(LIST_PANE_SHADOW_WIDTH)
-                    .background(Brush.horizontalGradient(listOf(LIST_PANE_SHADOW_COLOR, Color.Transparent))),
+                    .statusBarsPadding()
+                    .width(ElementDividerDefaults.thickness)
+                    .background(ElementTheme.colors.separatorPrimary),
             )
         }
     }

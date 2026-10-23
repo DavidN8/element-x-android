@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import io.element.android.libraries.designsystem.theme.components.Scaffold
@@ -38,3 +39,16 @@ val lazyColumnContentPadding @Composable
 val scaffoldScrollableContentInsets @Composable
     get() = WindowInsets.safeDrawing
         .only(WindowInsetsSides.Top)
+
+/**
+ * System bar insets for screens that pad the system bars around their whole layout, top bar included.
+ *
+ * Inside the detail pane of the two-pane layout ([LocalIsInDetailPane]) the top inset is left out: the screen's top bar pads
+ * the status bar itself there, so its header band runs under the status bar like the room list's.
+ */
+val screenSystemBarsInsets: WindowInsets @Composable
+    get() = if (LocalIsInDetailPane.current) {
+        WindowInsets.systemBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)
+    } else {
+        WindowInsets.systemBars
+    }

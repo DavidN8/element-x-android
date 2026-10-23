@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -50,6 +51,7 @@ import io.element.android.libraries.designsystem.preview.ROOM_NAME
 import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 import io.element.android.libraries.designsystem.utils.hasTwoPaneWindowSize
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.user.DisplayedStatus
@@ -144,7 +146,8 @@ internal fun MessagesViewTopBar(
             }
         },
         actions = menuActions,
-        windowInsets = WindowInsets(0.dp)
+        // The room screen pads the status bar itself, except in the detail pane where the bar's header band runs under it.
+        windowInsets = if (LocalIsInDetailPane.current) WindowInsets.statusBars else WindowInsets(0.dp),
     )
 }
 

@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -34,6 +34,7 @@ import io.element.android.libraries.designsystem.components.list.SwitchListItem
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.designsystem.utils.screenSystemBarsInsets
 
 /**
  * The contents of the Labs screen.
@@ -57,7 +58,7 @@ fun LabsView(
     HeaderFooterPage(
         modifier = modifier
             .fillMaxSize()
-            .systemBarsPadding()
+            .windowInsetsPadding(screenSystemBarsInsets)
             .imePadding(),
         topBar = {
             TopAppBar(

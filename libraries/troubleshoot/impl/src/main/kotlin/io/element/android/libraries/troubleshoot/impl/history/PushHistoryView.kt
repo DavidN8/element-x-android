@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -48,6 +48,7 @@ import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.designsystem.utils.screenSystemBarsInsets
 import io.element.android.libraries.push.api.history.PushHistoryItem
 import io.element.android.libraries.troubleshoot.impl.R
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -63,7 +64,7 @@ fun PushHistoryView(
     Scaffold(
         modifier = modifier
             .fillMaxSize()
-            .systemBarsPadding()
+            .windowInsetsPadding(screenSystemBarsInsets)
             .imePadding(),
         contentWindowInsets = scaffoldScrollableContentInsets,
         topBar = {

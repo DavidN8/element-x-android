@@ -12,6 +12,13 @@ import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.windowsizeclass.WindowHeightSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.staticCompositionLocalOf
+
+/**
+ * True inside the detail (end) pane of the two-pane layout, where the screens' top bars continue the room list's header band.
+ * Only the two-pane layout provides it, so phones and single-pane windows always read false.
+ */
+val LocalIsInDetailPane = staticCompositionLocalOf { false }
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable

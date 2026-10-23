@@ -12,4 +12,5 @@
     <string name="a11y_inactive">Inactive</string>
     <string name="common_switch_account">Switch accounts</string>
     <string name="common_no_room_selected">Select a chat to start messaging</string>
+    <string name="common_no_chat_selected">No chat selected</string>
 </resources>
