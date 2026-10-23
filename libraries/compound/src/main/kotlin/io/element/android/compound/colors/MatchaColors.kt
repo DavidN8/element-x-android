@@ -5,6 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
+// The file holds the palette and the two SemanticColors built from it, hence its name.
+@file:Suppress("MatchingDeclarationName")
+
 package io.element.android.compound.colors
 
 import androidx.compose.ui.graphics.Color

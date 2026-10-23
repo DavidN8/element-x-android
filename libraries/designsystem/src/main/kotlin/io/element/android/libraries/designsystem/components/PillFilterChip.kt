@@ -47,8 +47,12 @@ import io.element.android.libraries.designsystem.theme.components.Text
  * a 32dp pill, tonal green when selected, outlined when not, no checkmark.
  *
  * @param label the chip text, or null for an icon-only chip (then [contentDescription] is required).
+ * @param selected whether the chip is the selected one; announced as a selected state.
+ * @param onClick called when the chip is tapped.
+ * @param modifier the [Modifier] to apply to the chip.
  * @param leadingIcon an optional 18dp icon before the label.
  * @param trailingText optional trailing text, e.g. a count.
+ * @param contentDescription the accessibility label, required for an icon-only chip.
  * @param maxLabelWidth caps long labels (thread names) with an ellipsis.
  * @param onLongClick optional long-press action, e.g. a thread's actions.
  */
