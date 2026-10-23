@@ -77,13 +77,16 @@ internal data class TabChats(
 /**
  * The chats the Tasks tab reads. [run] checks every joined chat that isn't a space for a task board, a few at a time, keeps a
  * [MatchaRoomStore] open for each chat that has one, and destroys every room it opened once the user leaves that chat or [run] ends.
- * A chat has a board when its board pointer is set, as on the web client.
+ * A chat has a board when its board pointer is set, as on the web client. A pointer in the stored room state proves it, but the
+ * sync only stores the custom state it asked for, so a chat without one is read like the board does: it has a board when its
+ * store finds one in the history it reads first.
  *
  * It runs on the caller's dispatcher (the main thread, for a composition), which is the only one that changes its state.
  *
- * ponytail: at most [MAX_CONCURRENT_CHECKS] chats are opened and read at once, but every chat with a board stays open while the tab is
- * shown, and a chat without one is only checked again the next time the tab is shown. A session-wide cache of board presence and
- * stores would lift both ceilings if users with many boards find the tab slow.
+ * ponytail: at most [MAX_CONCURRENT_CHECKS] chats are opened and read at once, but every chat without a stored pointer has its
+ * recent history read each time the tab is shown, a board older than that history is missed (the chat's own board finds it),
+ * every chat with a board stays open while the tab is shown, and a chat without one is only checked again the next time.
+ * A session-wide cache of board presence and stores, and reading the pointer from the server (Path B), would lift these ceilings.
  */
 internal class TasksTabRooms(private val client: MatrixClient) {
     private sealed interface Check {
@@ -180,24 +183,31 @@ internal class TasksTabRooms(private val client: MatrixClient) {
         }
         var isKept = false
         try {
-            val pointer = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
+            val hasStoredPointer = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
                 .onFailure { Timber.w(it, "Could not read the board pointer of %s", roomId) }
                 .getOrNull()
+                ?.get("")
+                ?.let(::boardRootId) != null
+            val store = MatchaRoomStore(room, room.roomCoroutineScope)
+            fun keep() = record(roomId, Check.Board(TabRoom(room, store, newWriteScope())))
+            // Either way, keep the permit while the store reads the chat's history, so only a few chats read at once.
+            if (hasStoredPointer) {
+                isKept = keep()
+                if (isKept) withTimeoutOrNull(STORE_LOAD_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed } }
+                return
+            }
+            val loaded = withTimeoutOrNull(STORE_LOAD_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed } }
             when {
-                pointer == null -> record(roomId, Check.Failed)
-                pointer[""]?.let(::boardRootId) == null -> record(roomId, Check.NoBoard)
-                else -> {
-                    val store = MatchaRoomStore(room, room.roomCoroutineScope)
-                    val writeScope = client.sessionCoroutineScope + SupervisorJob(client.sessionCoroutineScope.coroutineContext[Job])
-                    isKept = record(roomId, Check.Board(TabRoom(room, store, writeScope)))
-                    // Keep the permit while the store reads the chat's history, so only a few chats read at once.
-                    if (isKept) withTimeoutOrNull(STORE_LOAD_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed } }
-                }
+                loaded == null || loaded.loadFailed -> record(roomId, Check.Failed)
+                loaded.board == null -> record(roomId, Check.NoBoard)
+                else -> isKept = keep()
             }
         } finally {
             if (!isKept) room.destroy()
         }
     }
+
+    private fun newWriteScope() = client.sessionCoroutineScope + SupervisorJob(client.sessionCoroutineScope.coroutineContext[Job])
 
     private fun boardRootId(pointerJson: String): String? =
         runCatchingExceptions { json.parseToJsonElement(pointerJson).jsonObject }.getOrNull()?.let(KanbanProtocol::parseBoardPointer)
@@ -217,9 +227,13 @@ internal class TasksTabRooms(private val client: MatrixClient) {
         checks.update { it - roomId }
         val room = (check as? Check.Board)?.room ?: return
         val writes = room.writeScope.coroutineContext.job
-        // A write the user started still finishes; the room goes once nothing uses it.
+        // A write the user started still finishes, and lasts while its snackbar shows; the room goes once nothing uses it, so an
+        // Undo or Retry tapped after the user left the tab still writes.
         client.sessionCoroutineScope.launch {
-            writes.children.toList().joinAll()
+            while (true) {
+                val running = writes.children.toList().takeIf { it.isNotEmpty() } ?: break
+                running.joinAll()
+            }
             writes.cancel()
             room.room.destroy()
         }

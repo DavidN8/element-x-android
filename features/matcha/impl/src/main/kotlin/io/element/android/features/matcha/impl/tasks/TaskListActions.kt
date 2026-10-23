@@ -15,11 +15,15 @@ import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatch
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.minutes
 
 /**
  * Moves, archives and restores the tasks of one chat from a list of tasks, for the board and the Tasks tab: archiving offers Undo
- * and a failed write offers Retry. Writes run in [scope], so they finish when the list is gone.
+ * and a failed write offers Retry. Writes run in [scope], so they finish when the list is gone; a write's job lasts until its
+ * snackbar is gone, so whoever owns [scope] can keep it while Undo or Retry may still use it.
  */
 internal class TaskListActions(
     private val store: MatchaRoomStore,
@@ -45,7 +49,7 @@ internal class TaskListActions(
             val error = writer.update(board.rootId, taskId, archiveThread = card.threadId != null) { it.copy(archived = archived) }
             when {
                 error != null -> postWriteError(error) { setArchived(taskId, archived, announce) }
-                announce -> snackbarDispatcher.post(
+                announce -> postAndHold(
                     SnackbarMessage(
                         messageResId = if (archived) R.string.screen_matcha_tasks_archived_snackbar else R.string.screen_matcha_tasks_unarchived_snackbar,
                         duration = SnackbarDuration.Long,
@@ -57,8 +61,8 @@ internal class TaskListActions(
         }
     }
 
-    private fun postWriteError(error: TaskWriteError, retry: () -> Unit) {
-        snackbarDispatcher.post(
+    private suspend fun postWriteError(error: TaskWriteError, retry: () -> Unit) {
+        postAndHold(
             SnackbarMessage(
                 messageResId = error.messageResId(),
                 duration = SnackbarDuration.Long,
@@ -66,5 +70,18 @@ internal class TaskListActions(
                 action = retry,
             )
         )
+    }
+
+    /** Posts [message] and waits until it has been shown and dismissed, or for [SNACKBAR_HOLD] when no screen shows it. */
+    private suspend fun postAndHold(message: SnackbarMessage) {
+        snackbarDispatcher.post(message)
+        withTimeoutOrNull(SNACKBAR_HOLD) {
+            snackbarDispatcher.snackbarMessage.first { it?.id == message.id }
+            snackbarDispatcher.snackbarMessage.first { it?.id != message.id }
+        }
+    }
+
+    private companion object {
+        val SNACKBAR_HOLD = 1.minutes
     }
 }

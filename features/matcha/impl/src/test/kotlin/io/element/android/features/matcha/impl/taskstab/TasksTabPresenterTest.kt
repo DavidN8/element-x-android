@@ -13,11 +13,13 @@ import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
+import io.element.android.features.matcha.impl.store.aMatchaTimeline
 import io.element.android.features.matcha.impl.store.aThreadListItem
 import io.element.android.features.matcha.impl.tasks.A_NOW
 import io.element.android.features.matcha.impl.tasks.TaskEditorEvent
@@ -35,6 +37,7 @@ import io.element.android.libraries.matrix.api.room.MessageEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomSummary
+import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
@@ -46,6 +49,7 @@ import io.element.android.services.appnavstate.test.aNavigationState
 import io.element.android.services.appnavstate.test.anAppNavigationState
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -312,16 +316,50 @@ class TasksTabPresenterTest {
 
     @Test
     fun `chats that can't be checked are counted, and Retry checks them again`() = runTest {
-        var pointer = Result.failure<Map<String, String>>(IllegalStateException("offline"))
-        val room = aMatchaJoinedRoom(design, backgroundScope, boardPointerResult = { pointer })
+        var timeline: Result<Timeline> = Result.failure(IllegalStateException("offline"))
+        val room = aMatchaJoinedRoom(design, backgroundScope, createTimelineResult = { timeline })
         aPresenter(aClient(listOf(design to room))).test {
             val failed = awaitUntil { it.failedCount == 1 }
             assertThat(failed.content).isEqualTo(TasksTabContent.Empty)
-            pointer = Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
+            timeline = Result.success(aMatchaTimeline())
             failed.eventSink(TasksTabEvent.Retry)
             assertThat(awaitUntil { it.failedCount == 0 && it.checkingCount == 0 }.content).isEqualTo(TasksTabContent.Empty)
             cancelAndIgnoreRemainingEvents()
         }
+    }
+
+    @Test
+    fun `a chat whose board isn't in the stored state is found from its history`() = runTest {
+        val client = aClient(listOf(design to aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue"), isPointerStored = false)))
+        aPresenter(client).test {
+            assertThat(awaitUntil { it.titles().isNotEmpty() }.titles()).containsExactly("Book the venue")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `Undo still works after leaving the tab, and the chat goes once its snackbar is gone`() = runTest {
+        val sent = mutableListOf<String>()
+        val snackbarDispatcher = SnackbarDispatcher()
+        val designRoom = aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue")) { _, content ->
+            sent += content
+            Result.success(EventId("\$e${sent.size}"))
+        }
+        val taskId = KanbanProtocol.threadCardId("\$t1")
+        aPresenter(aClient(listOf(design to designRoom)), snackbarDispatcher = snackbarDispatcher).test {
+            awaitUntil { it.titles().isNotEmpty() }.eventSink(TasksTabEvent.SetArchived(design, taskId, archived = true))
+            settle()
+            cancelAndIgnoreRemainingEvents()
+        }
+        val snackbar = snackbarDispatcher.snackbarMessage.first { it != null }!!
+        assertThat(snackbar.actionResId).isEqualTo(R.string.action_matcha_undo)
+        snackbar.action()
+        settle()
+        assertThat(sent).hasSize(4)
+        assertThat(sent.drop(2).all { it.contains("\"archived\":false") }).isTrue()
+        snackbarDispatcher.clear()
+        settle()
+        designRoom.baseRoom.assertDestroyed()
     }
 
     @Test
@@ -367,11 +405,13 @@ class TasksTabPresenterTest {
         roomId: RoomId,
         vararg cards: TestCard,
         canSendMessage: (MessageEventType) -> Boolean = { true },
+        /** False when the sync didn't store the board pointer, so only the cards tell the board. */
+        isPointerStored: Boolean = true,
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
     ) = aMatchaJoinedRoom(
         roomId = roomId,
         roomCoroutineScope = backgroundScope,
-        boardRoot = boardRoot,
+        boardRoot = boardRoot.takeIf { isPointerStored },
         items = cards.map { it.item() },
         threads = cards.mapNotNull { card -> card.threadId?.let { aThreadListItem(it, body = card.title, timestamp = card.index.toLong()) } },
         canSendMessage = canSendMessage,
@@ -427,8 +467,8 @@ class TasksTabPresenterTest {
         navigation: FakeAppNavigationStateService = FakeAppNavigationStateService(),
         onOpenRoom: (RoomId) -> Unit = {},
         onOpenThread: (RoomId, ThreadId) -> Unit = { _, _ -> },
+        snackbarDispatcher: SnackbarDispatcher = SnackbarDispatcher(),
     ): PresenterUnderTest {
-        val snackbarDispatcher = SnackbarDispatcher()
         val presenter = TasksTabPresenter(
             client = client,
             featureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to isEnabled)),
