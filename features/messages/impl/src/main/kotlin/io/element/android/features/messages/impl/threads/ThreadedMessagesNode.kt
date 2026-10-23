@@ -374,6 +374,7 @@ class ThreadedMessagesNode(
                         matchaChatBarRenderer.value.Render(selection = selection, actions = callback.matchaChatBarActions, modifier = Modifier)
                     },
                     matchaReminderSheet = { target, onDismiss -> matchaReminderRenderer.value.Render(target = target, onDismiss = onDismiss) },
+                    matchaActions = callback.matchaChatBarActions,
                 )
 
                 roomMemberModerationRenderer.Render(

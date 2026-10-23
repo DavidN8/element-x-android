@@ -228,6 +228,45 @@ class MessagesPresenterTest {
     }
 
     @Test
+    fun `present - the Matcha menu opens the New thread sheet and the reminder sheet`() = runTest {
+        val openNewThread = lambdaRecorder<Unit> {}
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+            matchaRoomController = FakeMatchaRoomController(openNewThreadLambda = openNewThread),
+        )
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilPredicate { it.matcha?.canRemind == true }.last()
+            state.eventSink(MessagesEvent.MatchaNewThread)
+            openNewThread.assertions().isCalledOnce()
+            state.eventSink(MessagesEvent.MatchaRemindMe)
+            val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
+            assertThat(target).isEqualTo(MatchaReminderTarget())
+        }
+    }
+
+    @Test
+    fun `present - in a DM, reminders need the reminder bot to have joined`() = runTest {
+        val room = FakeJoinedRoom(
+            baseRoom = FakeBaseRoom(
+                roomPermissions = FakeRoomPermissions(canSendMessage = { true }),
+                initialRoomInfo = aRoomInfo(isDm = true),
+                getUpdatedMemberResult = { userId -> Result.success(aRoomMember(userId = userId, membership = RoomMembershipState.INVITE)) },
+            ),
+            typingNoticeResult = { Result.success(Unit) },
+        )
+        val presenter = createMessagesPresenter(
+            joinedRoom = room,
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+        )
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.matcha?.canRemind).isFalse()
+            state.eventSink(MessagesEvent.MatchaRemindMe)
+            assertThat(consumeItemsUntilTimeout().lastOrNull()?.matcha?.reminderTarget).isNull()
+        }
+    }
+
+    @Test
     fun `present - exposes live location sharing banner visibility for current room`() = runTest {
         val liveLocationShareManager = FakeActiveLiveLocationShareManager(
             startShareLambda = { _, _ -> Result.success(Unit) },
@@ -1693,7 +1732,8 @@ class MessagesPresenterTest {
             aRoomMemberModerationState()
         },
         encryptionService: FakeEncryptionService = FakeEncryptionService(),
-        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        // The Matcha workspaces are tested on their own; they would read the room's Matcha data in every test.
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
         actionListEventSink: (ActionListEvent) -> Unit = {},
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),

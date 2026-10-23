@@ -23,14 +23,18 @@ data class MatchaChatState(
     val threads: ImmutableMap<ThreadId, MatchaThreadInfo>,
     /** What the open "Remind me" sheet is about, or null while it is closed. */
     val reminderTarget: MatchaReminderTarget?,
+    /** "Remind me" is offered: the user can post here and, in a DM, the reminder bot has already joined. */
+    val canRemind: Boolean,
 )
 
 fun aMatchaChatState(
     hasChatBar: Boolean = true,
     threads: ImmutableMap<ThreadId, MatchaThreadInfo> = persistentMapOf(),
     reminderTarget: MatchaReminderTarget? = null,
+    canRemind: Boolean = true,
 ) = MatchaChatState(
     hasChatBar = hasChatBar,
     threads = threads,
     reminderTarget = reminderTarget,
+    canRemind = canRemind,
 )

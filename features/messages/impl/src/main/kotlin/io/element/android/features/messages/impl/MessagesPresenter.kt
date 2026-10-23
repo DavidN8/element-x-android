@@ -25,6 +25,7 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.PinUnpinAction
+import io.element.android.appconfig.MatchaConfig
 import io.element.android.appconfig.MessageComposerConfig
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
 import io.element.android.features.location.api.live.isCurrentlySharing
@@ -88,6 +89,7 @@ import io.element.android.libraries.matrix.api.permalink.PermalinkParser
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMembersState
+import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import io.element.android.libraries.matrix.api.room.history.RoomHistoryVisibility
 import io.element.android.libraries.matrix.api.room.powerlevels.permissionsAsState
 import io.element.android.libraries.matrix.api.timeline.Timeline
@@ -193,12 +195,12 @@ class MessagesPresenter(
 
         val canOpenThreadList by featureFlagService.isFeatureEnabledFlow(FeatureFlags.Threads).collectAsState(initial = false)
         val isMatchaEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
-        val matchaState = if (isMatchaEnabled) presentMatcha() else null
         val isCurrentlySharingLiveLocationInRoom by remember { liveLocationShareManager.isCurrentlySharing(room.roomId) }.collectAsState()
 
         val userEventPermissions by room.permissionsAsState(UserEventPermissions.DEFAULT) { perms ->
             perms.userEventPermissions()
         }
+        val matchaState = if (isMatchaEnabled) presentMatcha(canSendMessages = userEventPermissions.canSendMessage, isDm = roomInfo.isDm) else null
 
         val roomAvatar by remember {
             derivedStateOf { roomInfo.avatarData() }
@@ -322,6 +324,10 @@ class MessagesPresenter(
                     navigator.navigateToCurrentLiveLocation()
                 }
                 MessagesEvent.DismissMatchaReminder -> matchaReminderTarget = null
+                MessagesEvent.MatchaNewThread -> if (matchaState != null) matchaRoomController.value.openNewThread()
+                MessagesEvent.MatchaRemindMe -> if (matchaState?.canRemind == true) {
+                    matchaReminderTarget = MatchaReminderTarget(threadId = (timelineState.timelineMode as? Timeline.Mode.Thread)?.threadRootId)
+                }
                 is MessagesEvent.MarkAsFullyReadAndExit -> if (!markingAsReadAndExiting.getAndSet(true)) {
                     coroutineScope.launch {
                         val latestEventId = room.liveTimeline.getLatestEventId().getOrElse {
@@ -383,16 +389,24 @@ class MessagesPresenter(
     }
 
     @Composable
-    private fun presentMatcha(): MatchaChatState {
+    private fun presentMatcha(canSendMessages: Boolean, isDm: Boolean): MatchaChatState {
         val controller = remember { matchaRoomController.value }
         val hasChatBar by controller.hasChatBar.collectAsState()
         val threads by controller.threads.collectAsState()
+        // The reminder bot posts the reminders; in a DM it must already be there, since inviting it would turn the DM into a group.
+        val isReminderBotJoined by produceState(initialValue = false, isDm) {
+            if (isDm) value = isReminderBotJoined()
+        }
         return MatchaChatState(
             hasChatBar = hasChatBar,
             threads = threads,
             reminderTarget = matchaReminderTarget,
+            canRemind = canSendMessages && (!isDm || isReminderBotJoined),
         )
     }
+
+    private suspend fun isReminderBotJoined(): Boolean =
+        room.getUpdatedMember(MatchaConfig.reminderBotUserId(room.sessionId)).getOrNull()?.membership == RoomMembershipState.JOIN
 
     /**
      * Opens "Seen by" for one of your messages. A read receipt sits on the newest event its user has read, so everyone with a receipt on this

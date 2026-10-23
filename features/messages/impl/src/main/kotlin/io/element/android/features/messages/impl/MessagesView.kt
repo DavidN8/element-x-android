@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.location.api.LiveLocationSharingBanner
+import io.element.android.features.matcha.api.MatchaChatBarActions
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.messages.api.timeline.voicemessages.composer.VoiceMessageComposerEvent
@@ -75,6 +76,8 @@ import io.element.android.features.messages.impl.crypto.identity.IdentityChangeS
 import io.element.android.features.messages.impl.link.LinkEvent
 import io.element.android.features.messages.impl.link.LinkView
 import io.element.android.features.messages.impl.matcha.LocalMatchaThreads
+import io.element.android.features.messages.impl.matcha.MatchaOverflowMenu
+import io.element.android.features.messages.impl.matcha.NoopMatchaChatBarActions
 import io.element.android.features.messages.impl.messagecomposer.AttachmentsBottomSheet
 import io.element.android.features.messages.impl.messagecomposer.ComposerSlotPill
 import io.element.android.features.messages.impl.messagecomposer.DisabledComposerView
@@ -180,6 +183,7 @@ fun MessagesView(
     knockRequestsBannerView: @Composable () -> Unit,
     matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit,
     matchaReminderSheet: @Composable (target: MatchaReminderTarget?, onDismiss: () -> Unit) -> Unit,
+    matchaActions: MatchaChatBarActions,
     modifier: Modifier = Modifier,
     forceJumpToBottomVisibility: Boolean = false,
     customReactionBottomSheet: @Composable () -> Unit,
@@ -299,6 +303,7 @@ fun MessagesView(
                                 onRoomDetailsClick = { hidingKeyboard { onRoomDetailsClick() } },
                                 onJoinCallClick = onJoinCallClick,
                                 onThreadsListClick = onThreadsListClick,
+                                matchaActions = matchaActions,
                                 hidingKeyboard = ::hidingKeyboard,
                             )
                             if (state.matcha != null) {
@@ -545,6 +550,7 @@ private fun MessagesViewTopBars(
     onRoomDetailsClick: () -> Unit,
     onJoinCallClick: (isAudioCall: Boolean) -> Unit,
     onThreadsListClick: () -> Unit,
+    matchaActions: MatchaChatBarActions,
     hidingKeyboard: (() -> Unit) -> Unit,
 ) {
     val threadMode = state.timelineState.timelineMode as? Timeline.Mode.Thread
@@ -597,7 +603,23 @@ private fun MessagesViewTopBars(
                 displayThreads = threadMode == null && state.matcha == null && state.threads.hasThreads,
                 roomCallState = state.roomCallState,
                 onJoinCallClick = onJoinCallClick,
-                onThreadsListClick = onThreadsListClick
+                onThreadsListClick = onThreadsListClick,
+                overflowMenu = {
+                    // Until the chat uses named threads or a board, the chip bar's entries are here.
+                    if (state.matcha != null && !state.matcha.hasChatBar) {
+                        MatchaOverflowMenu(
+                            canCreateThread = state.userEventPermissions.canSendMessage,
+                            hasThreads = state.threads.hasThreads,
+                            canRemind = state.matcha.canRemind,
+                            canOpenSpaceDocs = matchaActions.openSpaceDocs != null,
+                            onNewThreadClick = { state.eventSink(MessagesEvent.MatchaNewThread) },
+                            onTasksClick = matchaActions::openTasks,
+                            onAllThreadsClick = matchaActions::openAllThreads,
+                            onRemindMeClick = { state.eventSink(MessagesEvent.MatchaRemindMe) },
+                            onSpaceDocsClick = { matchaActions.openSpaceDocs?.invoke() },
+                        )
+                    }
+                },
             )
         }
     )
@@ -609,6 +631,7 @@ internal fun RowScope.MessagesMenuActions(
     roomCallState: RoomCallState,
     onJoinCallClick: (isAudioCall: Boolean) -> Unit,
     onThreadsListClick: () -> Unit,
+    overflowMenu: @Composable () -> Unit = {},
 ) {
     if (displayThreads) {
         IconButton(onClick = onThreadsListClick) {
@@ -622,6 +645,7 @@ internal fun RowScope.MessagesMenuActions(
         roomCallState = roomCallState,
         onJoinCallClick = onJoinCallClick,
     )
+    overflowMenu()
     Spacer(Modifier.width(8.dp))
 }
 
@@ -861,6 +885,7 @@ internal fun MessagesViewPreview(@PreviewParameter(MessagesStatePreviewParam::cl
         knockRequestsBannerView = {},
         matchaChatBar = {},
         matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -897,6 +922,7 @@ internal fun MessagesViewSelectionModePreview() = ElementPreview {
         knockRequestsBannerView = {},
         matchaChatBar = {},
         matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -957,6 +983,7 @@ internal fun MessagesViewA11yPreview() = ElementPreview {
         knockRequestsBannerView = {},
         matchaChatBar = {},
         matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
     )
 }

@@ -32,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 import com.google.common.truth.Truth.assertThat
 import io.element.android.emojibasebindings.Emoji
 import io.element.android.emojibasebindings.EmojibaseCategory
+import io.element.android.features.matcha.api.MatchaChatBarActions
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.api.MatchaThreadInfo
@@ -41,6 +42,7 @@ import io.element.android.features.messages.impl.actionlist.anActionListState
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.crypto.sendfailure.VerifiedUserSendFailure
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.aChangedIdentitySendFailure
+import io.element.android.features.messages.impl.matcha.NoopMatchaChatBarActions
 import io.element.android.features.messages.impl.matcha.aMatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.aMessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerItem
@@ -731,6 +733,35 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `until the chat has a chip bar, its entries are in the top bar's menu`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<MessagesEvent>()
+        val openTasks = lambdaRecorder<Unit> {}
+        val actions = object : MatchaChatBarActions by NoopMatchaChatBarActions {
+            override fun openTasks() = openTasks()
+        }
+        setMessagesView(
+            state = aMessagesState(matcha = aMatchaChatState(hasChatBar = false), eventSink = eventsRecorder),
+            matchaActions = actions,
+        )
+        val more = activity!!.getString(CommonStrings.common_matcha_more)
+        onNodeWithContentDescription(more).performClick()
+        clickOn(CommonStrings.common_matcha_tasks)
+        openTasks.assertions().isCalledOnce()
+
+        onNodeWithContentDescription(more).performClick()
+        clickOn(CommonStrings.common_matcha_new_thread)
+        onNodeWithContentDescription(more).performClick()
+        clickOn(CommonStrings.action_matcha_remind_me)
+        eventsRecorder.assertList(listOf(MessagesEvent.MatchaNewThread, MessagesEvent.MatchaRemindMe))
+    }
+
+    @Test
+    fun `once the chat has a chip bar, the top bar has no Matcha menu`() = runAndroidComposeUiTest {
+        setMessagesView(state = aMessagesState(matcha = aMatchaChatState(hasChatBar = true)))
+        onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_more)).assertDoesNotExist()
+    }
+
+    @Test
     fun `without the Matcha workspaces, there is no chip bar`() = runAndroidComposeUiTest {
         val selections = mutableListOf<MatchaChatBarSelection>()
         setMessagesView(state = aMessagesState(matcha = null), matchaChatBar = { selections += it })
@@ -832,6 +863,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
     onThreadsListClicked: () -> Unit = EnsureNeverCalled(),
     matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit = {},
     matchaReminderSheet: @Composable (MatchaReminderTarget?, () -> Unit) -> Unit = { _, _ -> },
+    matchaActions: MatchaChatBarActions = NoopMatchaChatBarActions,
 ) {
     val emojiPickerRenderer = DefaultEmojiPickerRenderer()
     setSafeContent {
@@ -852,6 +884,7 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
                 knockRequestsBannerView = {},
                 matchaChatBar = matchaChatBar,
                 matchaReminderSheet = matchaReminderSheet,
+                matchaActions = matchaActions,
                 customReactionBottomSheet = {
                     CustomReactionBottomSheet(
                         state = state.customReactionState,
