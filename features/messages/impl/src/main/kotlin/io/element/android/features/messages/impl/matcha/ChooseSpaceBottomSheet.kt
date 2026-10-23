@@ -42,10 +42,12 @@ fun ChooseSpaceBottomSheet(
     spaces: ImmutableList<SpaceRoom>,
     onSelectSpace: (RoomId) -> Unit,
     onDismiss: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     SimpleModalBottomSheet(
         title = stringResource(CommonStrings.common_matcha_choose_space),
         onDismiss = onDismiss,
+        modifier = modifier,
     ) {
         spaces.forEach { space ->
             Row(

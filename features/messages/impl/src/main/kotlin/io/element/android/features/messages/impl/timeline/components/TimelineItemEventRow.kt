@@ -390,8 +390,8 @@ private fun rememberTimelineItemAccessibilityActions(
 
 /**
  * The footer of a thread root's bubble: a hairline, then the thread icon, its name, the reply count and the latest replier's avatar.
- *
- * @param threadInfo the thread's Matcha name, while the Matcha workspaces are on and the thread is known; otherwise it reads "Thread".
+ * The name is the thread's Matcha name from [threadInfo], while the Matcha workspaces are on and the thread is known; otherwise it
+ * reads "Thread".
  */
 @Composable
 private fun ThreadFooter(

@@ -234,6 +234,7 @@ Compose:
       - LocalCameraPositionState
       - LocalMapTilerConfig
       - LocalMediaItemPresenterFactories
+      - LocalMatchaThreads
       - LocalTimelineItemPresenterFactories
       - LocalRoomMemberProfilesCache
       - LocalMentionSpanUpdater

@@ -39,7 +39,7 @@ internal suspend fun Room.fetchRelatedEventsJson(eventId: String, relation: RawR
     } ?: error("No relations page")
     @Suppress("UNCHECKED_CAST")
     val events = page.javaClass.getMethod("getEvents").invoke(page) as List<String>
-    val nextBatch = page.javaClass.getMethod("getNextBatch").invoke(page) as String?
+    val nextBatch = page.javaClass.getMethod("getNextBatch").invoke(page) as? String
     return RawEventsPage(events = events, nextBatch = nextBatch)
 }
 

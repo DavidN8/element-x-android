@@ -180,7 +180,6 @@ class MatchaRoomStore(
     private val pagination = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = true))
     private val historyPagesRead = MutableStateFlow(0)
     private val loadingMore = MutableStateFlow(false)
-    private val loadMoreMutex = Mutex()
     private val writeMutex = Mutex()
     private val historyMutex = Mutex()
 
