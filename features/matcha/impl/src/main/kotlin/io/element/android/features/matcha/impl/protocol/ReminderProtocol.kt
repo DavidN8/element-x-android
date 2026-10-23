@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.impl.protocol
 
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.libraries.core.data.tryOrNull
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -76,7 +77,7 @@ object ReminderProtocol {
     /** Parses the bot's `Scheduled r-… for <instant>.` notice. */
     fun parseAcknowledgement(body: String?): ReminderAcknowledgement? {
         val match = acknowledgementRegex.find(body ?: return null) ?: return null
-        val dueAt = runCatching { Instant.parse(match.groupValues[2]).toEpochMilli() }.getOrNull() ?: return null
+        val dueAt = tryOrNull { Instant.parse(match.groupValues[2]).toEpochMilli() } ?: return null
         return ReminderAcknowledgement(reminderId = match.groupValues[1], dueAt = dueAt)
     }
 }
