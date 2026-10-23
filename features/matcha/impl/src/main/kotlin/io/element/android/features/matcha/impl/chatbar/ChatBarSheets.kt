@@ -66,7 +66,7 @@ internal fun ThreadNameSheet(
     eventSink: (ChatBarEvent) -> Unit,
 ) {
     val isRename = sheet.threadId != null
-    val title = stringResource(if (isRename) R.string.screen_matcha_threads_rename_title else R.string.common_matcha_new_thread)
+    val title = stringResource(if (isRename) R.string.screen_matcha_threads_rename_title else CommonStrings.common_matcha_new_thread)
     ModalBottomSheet(
         onDismissRequest = { eventSink(ChatBarEvent.DismissSheet) },
         scrollable = true,
@@ -74,13 +74,13 @@ internal fun ThreadNameSheet(
     ) {
         // Name errors sit under the field; a failed send sits above the pill, and the sheet stays open.
         val errorText = when (sheet.error) {
-            ThreadNameError.Empty -> stringResource(R.string.common_matcha_error_name_empty)
-            ThreadNameError.TooLong -> stringResource(R.string.common_matcha_error_max_chars, MatchaConfig.THREAD_NAME_MAX_LENGTH.toString())
+            ThreadNameError.Empty -> stringResource(CommonStrings.common_matcha_error_name_empty)
+            ThreadNameError.TooLong -> stringResource(CommonStrings.common_matcha_error_max_chars, MatchaConfig.THREAD_NAME_MAX_LENGTH.toString())
             else -> null
         }
         val sendErrorText = when (sheet.error) {
             ThreadNameError.CreateFailed -> stringResource(R.string.screen_matcha_threads_create_failed)
-            ThreadNameError.RenameFailed -> stringResource(R.string.common_matcha_write_failed)
+            ThreadNameError.RenameFailed -> stringResource(CommonStrings.common_matcha_write_failed)
             else -> null
         }
         val focusRequester = remember { FocusRequester() }
@@ -148,7 +148,7 @@ internal fun ThreadActionsSheet(
     canRemind: Boolean,
     eventSink: (ChatBarEvent) -> Unit,
 ) {
-    val title = thread.name ?: stringResource(R.string.common_matcha_thread_untitled)
+    val title = thread.name ?: stringResource(CommonStrings.common_matcha_thread_untitled)
     ModalBottomSheet(
         onDismissRequest = { eventSink(ChatBarEvent.DismissSheet) },
         scrollable = true,
@@ -163,14 +163,14 @@ internal fun ThreadActionsSheet(
                     onClick = { eventSink(ChatBarEvent.RenameThread(thread.id)) },
                 )
                 ActionRow(
-                    text = stringResource(if (thread.isArchived) R.string.action_matcha_unarchive else R.string.action_matcha_archive),
+                    text = stringResource(if (thread.isArchived) CommonStrings.action_matcha_unarchive else CommonStrings.action_matcha_archive),
                     icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive),
                     onClick = { eventSink(ChatBarEvent.SetArchived(thread.id, archived = !thread.isArchived)) },
                 )
             }
             if (canRemind) {
                 ActionRow(
-                    text = stringResource(R.string.action_matcha_remind_me),
+                    text = stringResource(CommonStrings.action_matcha_remind_me),
                     icon = CompoundIcons.Notifications(),
                     onClick = { eventSink(ChatBarEvent.RemindMe(thread.id)) },
                 )

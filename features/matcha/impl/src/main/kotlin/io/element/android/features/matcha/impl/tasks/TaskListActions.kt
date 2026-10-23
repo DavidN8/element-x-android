@@ -53,7 +53,7 @@ internal class TaskListActions(
                     SnackbarMessage(
                         messageResId = if (archived) R.string.screen_matcha_tasks_archived_snackbar else R.string.screen_matcha_tasks_unarchived_snackbar,
                         duration = SnackbarDuration.Long,
-                        actionResId = R.string.action_matcha_undo,
+                        actionResId = CommonStrings.action_matcha_undo,
                         action = { setArchived(taskId, !archived, announce = false) },
                     )
                 )

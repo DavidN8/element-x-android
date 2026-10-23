@@ -168,7 +168,7 @@ private fun TaskBoardView(
                     }
                     TaskBoardContent.LoadFailed -> BoardMessage(
                         icon = BigIcon.Style.Default(CompoundIcons.Warning()),
-                        title = stringResource(R.string.common_matcha_write_failed),
+                        title = stringResource(CommonStrings.common_matcha_write_failed),
                         body = null,
                         action = stringResource(CommonStrings.action_retry),
                         onAction = { eventSink(TaskBoardEvent.RetryLoad) },
@@ -226,7 +226,7 @@ private fun TaskBoardTopBar(roomName: String?, roomAvatar: AvatarData, onBack: (
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = stringResource(R.string.common_matcha_tasks),
+                        text = stringResource(CommonStrings.common_matcha_tasks),
                         style = ElementTheme.typography.fontBodyMdRegular,
                         color = ElementTheme.colors.textSecondary,
                         maxLines = 1,

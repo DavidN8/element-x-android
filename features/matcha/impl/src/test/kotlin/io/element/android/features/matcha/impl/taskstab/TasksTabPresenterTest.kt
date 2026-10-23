@@ -13,7 +13,6 @@ import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
@@ -44,6 +43,7 @@ import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomSummary
 import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
 import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.services.appnavstate.test.FakeAppNavigationStateService
 import io.element.android.services.appnavstate.test.aNavigationState
 import io.element.android.services.appnavstate.test.anAppNavigationState
@@ -352,7 +352,7 @@ class TasksTabPresenterTest {
             cancelAndIgnoreRemainingEvents()
         }
         val snackbar = snackbarDispatcher.snackbarMessage.first { it != null }!!
-        assertThat(snackbar.actionResId).isEqualTo(R.string.action_matcha_undo)
+        assertThat(snackbar.actionResId).isEqualTo(CommonStrings.action_matcha_undo)
         snackbar.action()
         settle()
         assertThat(sent).hasSize(4)

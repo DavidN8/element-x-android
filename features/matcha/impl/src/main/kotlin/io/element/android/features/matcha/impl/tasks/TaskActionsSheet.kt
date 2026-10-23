@@ -33,6 +33,7 @@ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.ListItem
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
@@ -57,7 +58,7 @@ internal fun TaskActionsSheet(
     chatName: String? = null,
     onOpenChat: (() -> Unit)? = null,
 ) {
-    val title = task.title ?: stringResource(R.string.common_matcha_thread_untitled)
+    val title = task.title ?: stringResource(CommonStrings.common_matcha_thread_untitled)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         scrollable = true,
@@ -91,7 +92,7 @@ internal fun TaskActionsSheet(
             }
             if (canArchive && task.isArchived) {
                 ActionRow(
-                    text = stringResource(R.string.action_matcha_unarchive),
+                    text = stringResource(CommonStrings.action_matcha_unarchive),
                     icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive),
                     onClick = onUnarchive,
                 )
@@ -112,7 +113,7 @@ internal fun TaskActionsSheet(
             }
             if (canRemind && !task.isArchived) {
                 ActionRow(
-                    text = stringResource(R.string.action_matcha_remind_me),
+                    text = stringResource(CommonStrings.action_matcha_remind_me),
                     icon = CompoundIcons.Notifications(),
                     onClick = onRemind,
                 )
@@ -126,7 +127,7 @@ internal fun TaskActionsSheet(
             }
             if (canArchive && !task.isArchived) {
                 ActionRow(
-                    text = stringResource(R.string.action_matcha_archive),
+                    text = stringResource(CommonStrings.action_matcha_archive),
                     icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive),
                     onClick = onArchive,
                 )

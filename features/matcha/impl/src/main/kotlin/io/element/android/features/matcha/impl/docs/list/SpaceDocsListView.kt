@@ -100,7 +100,7 @@ fun SpaceDocsListView(
 private fun DocsListTitle(spaceName: String?) {
     Column {
         Text(
-            text = stringResource(R.string.screen_matcha_docs_title),
+            text = stringResource(CommonStrings.common_matcha_docs),
             style = ElementTheme.typography.aliasScreenTitle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -120,7 +120,7 @@ private fun DocsListTitle(spaceName: String?) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DocumentRows(state: SpaceDocsListState, content: SpaceDocsListContent.Documents) {
-    val renameLabel = stringResource(R.string.screen_matcha_docs_rename)
+    val renameLabel = stringResource(CommonStrings.action_matcha_rename)
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         items(content.documents, key = { it.id }) { row ->
             DocRowContent(

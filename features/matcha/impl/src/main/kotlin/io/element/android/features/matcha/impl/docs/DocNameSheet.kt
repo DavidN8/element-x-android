@@ -100,9 +100,9 @@ private fun DocNameSheetContent(
     Column(modifier = Modifier.semantics { paneTitle = title }) {
         SheetHeader(title = title, isBack = false, onNavigationClick = onClose)
         val error = when (state.error) {
-            DocNameError.Empty -> stringResource(R.string.screen_matcha_docs_error_name_empty)
-            DocNameError.TooLong -> stringResource(R.string.screen_matcha_docs_error_name_too_long, MatchaConfig.DOCUMENT_NAME_MAX_LENGTH)
-            DocNameError.SaveFailed -> stringResource(R.string.screen_matcha_docs_write_failed)
+            DocNameError.Empty -> stringResource(CommonStrings.common_matcha_error_name_empty)
+            DocNameError.TooLong -> stringResource(CommonStrings.common_matcha_error_max_chars, MatchaConfig.DOCUMENT_NAME_MAX_LENGTH)
+            DocNameError.SaveFailed -> stringResource(CommonStrings.common_matcha_write_failed)
             null -> null
         }
         TextField(

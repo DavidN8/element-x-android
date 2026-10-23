@@ -481,7 +481,7 @@ class TaskBoardPresenterTest {
             assertThat(sent.map { it.second }.all { it.contains("\"archived\":true") }).isTrue()
             val snackbar = snackbarDispatcher.snackbarMessage.first { it != null }!!
             assertThat(snackbar.messageResId).isEqualTo(R.string.screen_matcha_tasks_archived_snackbar)
-            assertThat(snackbar.actionResId).isEqualTo(R.string.action_matcha_undo)
+            assertThat(snackbar.actionResId).isEqualTo(CommonStrings.action_matcha_undo)
 
             snackbarDispatcher.clear()
             snackbar.action()
@@ -510,7 +510,7 @@ class TaskBoardPresenterTest {
             awaitUntil { it.board()?.todo?.isNotEmpty() == true }
             val snackbar = snackbarDispatcher.snackbarMessage.first { it != null }!!
             assertThat(snackbar.messageResId).isEqualTo(R.string.screen_matcha_tasks_unarchived_snackbar)
-            assertThat(snackbar.actionResId).isEqualTo(R.string.action_matcha_undo)
+            assertThat(snackbar.actionResId).isEqualTo(CommonStrings.action_matcha_undo)
             archived.eventSink(TaskBoardEvent.HideArchived)
             assertThat(awaitUntil { !it.showArchived }.showArchived).isFalse()
         }
@@ -528,7 +528,7 @@ class TaskBoardPresenterTest {
         aPresenter(store, snackbarDispatcher = snackbarDispatcher).test {
             awaitUntil { it.board()?.todo?.isNotEmpty() == true }.eventSink(TaskBoardEvent.Move(threadCardId, TaskStatus.Doing))
             val failure: SnackbarMessage = snackbarDispatcher.snackbarMessage.first { it != null }!!
-            assertThat(failure.messageResId).isEqualTo(R.string.common_matcha_write_failed)
+            assertThat(failure.messageResId).isEqualTo(CommonStrings.common_matcha_write_failed)
             assertThat(failure.actionResId).isEqualTo(CommonStrings.action_retry)
             fail = false
             failure.action()

@@ -207,7 +207,7 @@ private fun DocActions(state: DocEditorState, onShare: () -> Unit) {
                 DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                     if (state.canRename) {
                         DropdownMenuItem(
-                            text = { Text(stringResource(R.string.screen_matcha_docs_rename)) },
+                            text = { Text(stringResource(CommonStrings.action_matcha_rename)) },
                             onClick = {
                                 showMenu = false
                                 state.eventSink(DocEditorEvent.Rename)

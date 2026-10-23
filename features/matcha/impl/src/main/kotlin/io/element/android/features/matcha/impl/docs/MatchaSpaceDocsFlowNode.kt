@@ -30,7 +30,6 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.annotations.ContributesNode
 import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
-import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.docs.editor.DocEditorPresenter
 import io.element.android.features.matcha.impl.docs.editor.DocEditorView
 import io.element.android.features.matcha.impl.docs.list.SpaceDocsListPresenter
@@ -49,6 +48,7 @@ import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
+import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
 import timber.log.Timber
@@ -162,7 +162,7 @@ class MatchaSpaceDocsFlowNode(
             modifier = modifier,
             topBar = {
                 TopAppBar(
-                    titleStr = stringResource(R.string.screen_matcha_docs_title),
+                    titleStr = stringResource(CommonStrings.common_matcha_docs),
                     navigationIcon = { BackButton(onClick = ::close) },
                 )
             },

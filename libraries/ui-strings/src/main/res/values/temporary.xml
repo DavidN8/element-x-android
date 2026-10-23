@@ -32,4 +32,22 @@
     <string name="common_matcha_select_task">Select a task to open its thread</string>
     <string name="common_matcha_no_space_selected">No space selected</string>
     <string name="common_matcha_select_space">Select a space to see its rooms</string>
+    <string name="common_matcha_tasks">Tasks</string>
+    <string name="common_matcha_more">More</string>
+    <string name="common_matcha_error_name_empty">Enter a name</string>
+    <string name="common_matcha_error_max_chars">Use up to %1$s characters</string>
+    <string name="action_matcha_remind_me">Remind me</string>
+    <string name="action_matcha_archive">Archive</string>
+    <string name="action_matcha_unarchive">Unarchive</string>
+    <string name="action_matcha_undo">Undo</string>
+    <string name="common_matcha_new_thread">New thread</string>
+    <string name="common_matcha_space_docs">Space docs</string>
+    <string name="common_matcha_write_failed">Couldn\'t save. Check your connection and try again.</string>
+    <string name="common_matcha_archived">Archived</string>
+    <string name="action_matcha_keep_editing">Keep editing</string>
+    <string name="common_matcha_active">Active</string>
+    <string name="common_matcha_docs">Docs</string>
+    <string name="common_matcha_docs_row_subtitle">Notes and plans for this space</string>
+    <string name="common_matcha_choose_space">Choose a space</string>
+    <string name="action_matcha_rename">Rename</string>
 </resources>

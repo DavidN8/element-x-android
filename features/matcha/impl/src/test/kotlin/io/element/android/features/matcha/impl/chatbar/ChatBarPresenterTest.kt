@@ -281,7 +281,7 @@ class ChatBarPresenterTest {
             assertThat(actions.calls).containsExactly("general")
             val snackbar = snackbarDispatcher.snackbarMessage.first()!!
             assertThat(snackbar.messageResId).isEqualTo(R.string.screen_matcha_threads_archived_snackbar)
-            assertThat(snackbar.actionResId).isEqualTo(R.string.action_matcha_undo)
+            assertThat(snackbar.actionResId).isEqualTo(CommonStrings.action_matcha_undo)
 
             snackbar.action()
             awaitUntil { it.threads.singleOrNull()?.isArchived == false }
@@ -301,7 +301,7 @@ class ChatBarPresenterTest {
         aPresenter(store, snackbarDispatcher = snackbarDispatcher).test {
             awaitUntil { it.threads.isNotEmpty() }.eventSink(ChatBarEvent.SetArchived(ThreadId("\$t1"), archived = true))
             val failure = snackbarDispatcher.snackbarMessage.first { it != null }!!
-            assertThat(failure.messageResId).isEqualTo(R.string.common_matcha_write_failed)
+            assertThat(failure.messageResId).isEqualTo(CommonStrings.common_matcha_write_failed)
             assertThat(failure.actionResId).isEqualTo(CommonStrings.action_retry)
 
             fail = false
@@ -316,7 +316,7 @@ class ChatBarPresenterTest {
             awaitUntil { it.threads.singleOrNull()?.isArchived == false }
             val unarchived = snackbarDispatcher.snackbarMessage.first { it != null }!!
             assertThat(unarchived.messageResId).isEqualTo(R.string.screen_matcha_threads_unarchived_snackbar)
-            assertThat(unarchived.actionResId).isEqualTo(R.string.action_matcha_undo)
+            assertThat(unarchived.actionResId).isEqualTo(CommonStrings.action_matcha_undo)
         }
     }
 

@@ -127,7 +127,7 @@ fun TaskEditorSheet(state: TaskEditorState) {
         ConfirmationDialog(
             content = stringResource(R.string.screen_matcha_tasks_discard_title),
             submitText = stringResource(CommonStrings.action_discard),
-            cancelText = stringResource(R.string.action_matcha_keep_editing),
+            cancelText = stringResource(CommonStrings.action_matcha_keep_editing),
             destructiveSubmit = true,
             onSubmitClick = { eventSink(TaskEditorEvent.Discard) },
             onDismiss = { eventSink(TaskEditorEvent.KeepEditing) },
@@ -422,7 +422,7 @@ private enum class DeadlinePick { Date, Time }
 private fun ReminderRow(state: TaskEditorState) {
     IconRow(icon = CompoundIcons.Notifications(), onClick = { state.eventSink(TaskEditorEvent.RemindMe) }) {
         Text(
-            text = stringResource(R.string.action_matcha_remind_me),
+            text = stringResource(CommonStrings.action_matcha_remind_me),
             style = ElementTheme.typography.fontBodyLgRegular,
             color = ElementTheme.colors.textActionAccent,
         )
@@ -475,8 +475,8 @@ private fun EarlierCardsRow(state: TaskEditorState) {
 
 @Composable
 private fun TaskFieldError.message(): String = when (this) {
-    TaskFieldError.Empty -> stringResource(R.string.common_matcha_error_name_empty)
-    is TaskFieldError.TooLong -> stringResource(R.string.common_matcha_error_max_chars, NumberFormat.getIntegerInstance().format(maxLength))
+    TaskFieldError.Empty -> stringResource(CommonStrings.common_matcha_error_name_empty)
+    is TaskFieldError.TooLong -> stringResource(CommonStrings.common_matcha_error_max_chars, NumberFormat.getIntegerInstance().format(maxLength))
 }
 
 private fun TaskDeadlineError.messageResId() = when (this) {
@@ -490,7 +490,7 @@ internal fun TaskWriteError.messageResId() = when (this) {
     TaskWriteError.ThreadHasTask -> R.string.screen_matcha_tasks_thread_has_task
     TaskWriteError.HistoryIncomplete -> R.string.screen_matcha_tasks_history_incomplete
     TaskWriteError.ThreadSetupFailed -> R.string.screen_matcha_threads_setup_failed
-    TaskWriteError.Failed -> R.string.common_matcha_write_failed
+    TaskWriteError.Failed -> CommonStrings.common_matcha_write_failed
 }
 
 /** "84/100" once [length] reaches [from]. */

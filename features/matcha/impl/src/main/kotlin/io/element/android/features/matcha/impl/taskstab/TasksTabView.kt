@@ -427,11 +427,11 @@ private fun TabTask.key() = "${chat.roomId.value}/${task.id}"
 @Composable
 private fun TasksTabFilter.label(): String = stringResource(
     when (this) {
-        TasksTabFilter.All -> R.string.common_matcha_all
+        TasksTabFilter.All -> CommonStrings.common_matcha_all
         TasksTabFilter.Todo -> R.string.screen_matcha_tasks_status_todo
         TasksTabFilter.Doing -> R.string.screen_matcha_tasks_status_doing
         TasksTabFilter.Done -> R.string.screen_matcha_tasks_status_done
-        TasksTabFilter.Archived -> R.string.common_matcha_archived
+        TasksTabFilter.Archived -> CommonStrings.common_matcha_archived
     }
 )
 

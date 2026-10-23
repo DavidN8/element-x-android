@@ -58,6 +58,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.noticePillBackground
 import io.element.android.libraries.designsystem.theme.noticePillText
 import io.element.android.libraries.designsystem.utils.hasCompactHeightWindowSize
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /** The chip bar under a chat's top bar, its warning strip, and its sheets. */
@@ -135,7 +136,7 @@ private fun ChipRow(state: ChatBarState) {
             )
         }
         item(key = "tasks") {
-            val label = stringResource(R.string.common_matcha_tasks)
+            val label = stringResource(CommonStrings.common_matcha_tasks)
             val count = state.openTaskCount
             val description = if (count > 0) "$label, ${pluralStringResource(R.plurals.a11y_matcha_open_tasks, count, count)}" else null
             PillFilterChip(
@@ -156,7 +157,7 @@ private fun ChipRow(state: ChatBarState) {
         if (state.canCreateThread) {
             item(key = "new") {
                 PillFilterChip(
-                    label = stringResource(R.string.common_matcha_new_thread),
+                    label = stringResource(CommonStrings.common_matcha_new_thread),
                     selected = false,
                     leadingIcon = CompoundIcons.Plus(),
                     onClick = { eventSink(ChatBarEvent.NewThread) },
@@ -165,7 +166,7 @@ private fun ChipRow(state: ChatBarState) {
         }
         item(key = "all") {
             PillFilterChip(
-                label = stringResource(R.string.common_matcha_all_threads),
+                label = stringResource(CommonStrings.common_matcha_all_threads),
                 selected = false,
                 leadingIcon = CompoundIcons.Threads(),
                 onClick = { eventSink(ChatBarEvent.OpenAllThreads) },
@@ -185,7 +186,7 @@ private fun ThreadChip(
     selected: Boolean,
     eventSink: (ChatBarEvent) -> Unit,
 ) {
-    val name = thread.name ?: stringResource(R.string.common_matcha_thread_untitled)
+    val name = thread.name ?: stringResource(CommonStrings.common_matcha_thread_untitled)
     val archivedDescription = stringResource(R.string.a11y_matcha_thread_archived)
     PillFilterChip(
         label = name,
@@ -206,13 +207,13 @@ private fun MoreChip(state: ChatBarState) {
             label = null,
             selected = false,
             leadingIcon = CompoundIcons.OverflowHorizontal(),
-            contentDescription = stringResource(R.string.common_matcha_more),
+            contentDescription = stringResource(CommonStrings.common_matcha_more),
             onClick = { expanded = true },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             if (state.canRemind) {
                 MoreMenuItem(
-                    text = stringResource(R.string.action_matcha_remind_me),
+                    text = stringResource(CommonStrings.action_matcha_remind_me),
                     icon = CompoundIcons.Notifications(),
                     onClick = {
                         expanded = false
@@ -222,7 +223,7 @@ private fun MoreChip(state: ChatBarState) {
             }
             if (state.canOpenSpaceDocs) {
                 MoreMenuItem(
-                    text = stringResource(R.string.common_matcha_space_docs),
+                    text = stringResource(CommonStrings.common_matcha_space_docs),
                     icon = CompoundIcons.Document(),
                     onClick = {
                         expanded = false

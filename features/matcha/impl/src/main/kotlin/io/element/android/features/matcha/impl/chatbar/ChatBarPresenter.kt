@@ -250,7 +250,7 @@ class ChatBarPresenter(
             Timber.w(it, "Could not update thread %s", threadId.value)
             snackbarDispatcher.post(
                 SnackbarMessage(
-                    messageResId = R.string.common_matcha_write_failed,
+                    messageResId = CommonStrings.common_matcha_write_failed,
                     duration = SnackbarDuration.Long,
                     actionResId = CommonStrings.action_retry,
                     action = { roomCoroutineScope.launch { setArchived(threadId, archived, announce) } },
@@ -262,7 +262,7 @@ class ChatBarPresenter(
                 SnackbarMessage(
                     messageResId = if (archived) R.string.screen_matcha_threads_archived_snackbar else R.string.screen_matcha_threads_unarchived_snackbar,
                     duration = SnackbarDuration.Long,
-                    actionResId = R.string.action_matcha_undo,
+                    actionResId = CommonStrings.action_matcha_undo,
                     action = { roomCoroutineScope.launch { setArchived(threadId, !archived, announce = false) } },
                 )
             )

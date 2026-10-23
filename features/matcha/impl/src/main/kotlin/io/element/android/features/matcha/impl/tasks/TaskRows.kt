@@ -56,6 +56,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.placeholderBackground
 import io.element.android.libraries.designsystem.theme.rowSelected
 import io.element.android.libraries.ui.strings.CommonPlurals
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
@@ -93,7 +94,7 @@ internal fun TaskRow(
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = task.title ?: stringResource(R.string.common_matcha_thread_untitled),
+                    text = task.title ?: stringResource(CommonStrings.common_matcha_thread_untitled),
                     style = ElementTheme.typography.fontBodyLgMedium,
                     // An unnamed thread reads as untidy rather than broken.
                     color = if (task.title != null) ElementTheme.colors.textPrimary else ElementTheme.colors.textSecondary,
@@ -173,7 +174,7 @@ internal fun TaskCard(
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
-            text = task.title ?: stringResource(R.string.common_matcha_thread_untitled),
+            text = task.title ?: stringResource(CommonStrings.common_matcha_thread_untitled),
             style = ElementTheme.typography.fontBodyLgMedium,
             color = if (task.title != null) ElementTheme.colors.textPrimary else ElementTheme.colors.textSecondary,
             maxLines = 2,
@@ -233,7 +234,7 @@ internal fun ArchivedTasksRow(count: Int, onClick: () -> Unit, modifier: Modifie
     ) {
         IconTile(icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_archive), tint = ElementTheme.colors.iconSecondary)
         Text(
-            text = stringResource(R.string.common_matcha_archived),
+            text = stringResource(CommonStrings.common_matcha_archived),
             style = ElementTheme.typography.fontBodyLgMedium,
             color = ElementTheme.colors.textPrimary,
             modifier = Modifier.weight(1f),
