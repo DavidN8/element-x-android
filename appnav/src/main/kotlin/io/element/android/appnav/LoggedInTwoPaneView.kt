@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import io.element.android.appnav.twopane.NoRoomSelectedView
@@ -26,9 +27,8 @@ import io.element.android.libraries.architecture.appyx.SafeChildren
 import io.element.android.libraries.designsystem.theme.components.ElementDividerDefaults
 import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 
-// Room list / detail split, Material list-detail proportions (WhatsApp uses the same 40/60 on tablets).
-private const val LIST_PANE_WEIGHT = 2f
-private const val DETAIL_PANE_WEIGHT = 3f
+// WhatsApp's side panel width: the list keeps a phone-like width and the chat takes the rest, so it is never narrower than a phone.
+private val LIST_PANE_WIDTH = 360.dp
 
 /**
  * Two-pane rendering of [LoggedInFlowNode] for wide windows (tablets, unfolded foldables): the Home node
@@ -49,14 +49,14 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
         val homeNode = remember(homeElement.key.id) { childOrCreate(homeElement.key).node }
         Box(
             modifier = Modifier
-                .weight(LIST_PANE_WEIGHT)
+                .width(LIST_PANE_WIDTH)
                 .fillMaxHeight(),
         ) {
             homeNode.Compose()
         }
         Box(
             modifier = Modifier
-                .weight(DETAIL_PANE_WEIGHT)
+                .weight(1f)
                 .fillMaxHeight(),
         ) {
             // The screens of this pane continue the list pane's header band in their top bars.
