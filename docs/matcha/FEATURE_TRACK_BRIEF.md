@@ -66,89 +66,66 @@ into `features/messages`, `features/home` and `features/space`.
   (`ReminderProtocol.parseAcknowledgement`) confirms scheduling; until then the UI says "Reminder requested".
   Validate again right before sending (`ReminderProtocol.isValid`).
 
-## The API contract (create exactly these in `features/matcha/api`)
+## The API contract (already in `features/matcha/api`, do not change it)
 
-```kotlin
-package io.element.android.features.matcha.api
+Read these five files; implement exactly them. If a signature truly cannot work, change it minimally and explain why in
+your report, because the integration step codes against them and the other feature track uses them too.
 
-/** The horizontal chip bar shown under the top bar of a chat and of a thread. Room scoped. */
-interface MatchaChatBarRenderer {
-    @Composable
-    fun Render(
-        /** The thread currently shown, or null when the main chat is shown. */
-        selectedThreadId: ThreadId?,
-        onOpenChat: () -> Unit,
-        onOpenThread: (ThreadId) -> Unit,
-        onOpenTasks: (initialThreadId: ThreadId?) -> Unit,
-        /** Null hides the entry; the integration step decides whether the room has a space with documents. */
-        onOpenSpaceDocs: (() -> Unit)?,
-        modifier: Modifier,
-    )
-}
+- `MatchaChatBarRenderer` with `MatchaChatBarSelection` and `MatchaChatBarActions` (room scoped; rendered by the chat,
+  the thread screen and the board).
+- `MatchaRoomEntryPoint` (`createTasksNode`, room-scoped node; `Callback` for openThread/openGeneral/openAllThreads/openSpaceDocs).
+- `MatchaReminderRenderer` with `MatchaReminderTarget` (room scoped).
+- `MatchaTasksTabRenderer` (session scoped, `contentPadding` from Home's scaffold).
+- `MatchaSpaceDocsEntryPoint` (session-scoped node for a space's docs list, editor and setup).
 
-/** Room-scoped screens. */
-interface MatchaRoomEntryPoint : FeatureEntryPoint {
-    data class Params(val initialThreadId: ThreadId?) : NodeInputs
-    interface Callback : Plugin {
-        fun openThread(threadId: ThreadId)
-        fun close()
-    }
-    /** The room's task board. */
-    fun createTasksNode(parentNode: Node, buildContext: BuildContext, params: Params, callback: Callback): Node
-}
+Bind implementations with `@ContributesBinding(RoomScope::class)` / `(SessionScope::class)` for renderers and
+`@ContributesBinding(AppScope::class)` for entry points (see `DefaultKnockRequestsBannerRenderer` and
+`DefaultCreatePollEntryPoint`). Only the full app build validates the dependency graph, and the other track provides
+some implementations, so verify your track with the Matcha module tasks, not `:app:assemble*`.
 
-/** The reminder sheet, shown from the chip bar, a task, or a message's long-press menu. Room scoped. */
-interface MatchaReminderRenderer {
-    @Composable
-    fun Render(target: MatchaReminderTarget?, onDismiss: () -> Unit)
-}
+## Tracks
 
-@Immutable
-data class MatchaReminderTarget(
-    /** Prefilled message. */
-    val message: String,
-    /** The message or thread root the reminder is about; its link is appended to the message once. */
-    val eventId: EventId? = null,
-    val threadId: ThreadId? = null,
-    /** Prefilled exact time, e.g. a task's deadline. */
-    val dueAt: Long? = null,
-    /** Set when reminding about a task, so the card records the request. */
-    val cardId: String? = null,
-)
+Two feature tracks run at the same time in separate worktrees; each owns different packages under
+`features/matcha/impl/.../`. Never edit the other track's packages. Both add strings to the same `temporary.xml`;
+append yours in a block commented with your track name so the merge stays simple.
 
-/** The cross-chat Tasks tab content on Home. Session scoped. */
-interface MatchaTasksTabRenderer {
-    @Composable
-    fun Render(
-        onOpenRoom: (RoomId) -> Unit,
-        onOpenThread: (RoomId, ThreadId) -> Unit,
-        modifier: Modifier,
-    )
-}
-```
+### Track B (worktree `../ex-matcha-b`, branch `matcha-b`): chip bar, board, Tasks tab
+1. **Chip bar** (`chatbar/`) per spec §4a, implementing `MatchaChatBarRenderer`. Thread actions (create, rename,
+   archive with snackbar Undo, unarchive), the New thread sheet, the thread actions sheet (long-press), More menu (Remind
+   me shows `MatchaReminderRenderer`, which track C implements; inject the interface), warning strip. Presenter tests.
+2. **Tasks board** (`tasks/`) per spec §4b, implementing `MatchaRoomEntryPoint`: the node draws a top bar (room avatar,
+   name, subtitle "Tasks") and the chip bar with `MatchaChatBarSelection.Tasks`, then tabs (phone) or columns (wide),
+   task rows, the task actions sheet, the full-screen editor, archived tasks, all board states. Remind uses
+   `MatchaReminderRenderer` with a `MatchaReminderTarget(cardId = …)`. Presenter tests.
+3. **Tasks tab** (`taskstab/`) per spec §4c, implementing `MatchaTasksTabRenderer`, session scoped; opens a
+   `MatchaRoomStore` per joined room with bounded concurrency (ponytail-comment the ceiling) and destroys rooms it no
+   longer needs; chips, grouping by deadline, source chat avatar, new-task flow ("Choose a chat" then the editor; reuse
+   the board's editor), states. Presenter tests.
 
-Adapt names of imports to the codebase (`FeatureEntryPoint`, `NodeInputs`, `Plugin` live in `libraries/architecture`;
-check how `CreatePollEntryPoint` and `KnockRequestsBannerRenderer` are declared and bound). If you must change a
-signature, keep it minimal and document why in your final report: the integration step codes against this list.
+### Track C (worktree `../ex-matcha-c`, branch `matcha-c`): reminders, then Space Docs
+1. **Reminders** (`reminders/`) per spec §4d, implementing `MatchaReminderRenderer`: the two-step sheet, quick options,
+   custom date and time with time zone, bot states (joined, invited/waiting, add bot, cannot invite), send failure, and
+   recording `reminder_requested` on the card when `cardId` is set (read-modify-write with `store.latestRevision`).
+   Presenter tests with an injectable clock.
+2. **Space Docs** (`docs/`) per spec §4e and plan §2.4, implementing `MatchaSpaceDocsEntryPoint`. The Yjs engine runs in
+   a headless or embedded WebView from an asset bundle built from the web fork's `yjs` package
+   (`~/Code/mozart-dm-group/element-web`, read-only: never modify that repo; build the bundle into this repo's
+   `features/matcha/impl/src/main/assets/matcha-docs/` and commit the built file plus the tiny entry source and the exact
+   build command). The Kotlin side owns the Matrix transport exactly like the web `RoomDocumentSession`: anchor = the
+   space's `m.room.create` event, full replay of `com.matchahoneylatte.docs.update` frames from the store's `events`,
+   chunking/commit, dedupe by sender + update id, 500 ms debounce, stable transaction ids are not available through
+   `sendRawEvent` (note this as a known difference), saved only after acknowledgement, the catalog document, setup
+   (enable encryption, then set the two power-level keys from the current power levels JSON via `sendRawStateEvent`),
+   docs list, editor (preview + edit with a plain Compose text field whose edits are diffed into Y.Text), all states.
+   Read the web code in `apps/web/src/utils/matcha/{documents,documentCatalog}.ts` and
+   `apps/web/src/viewmodels/room/{RoomDocs,SpaceDocs}ViewModel.ts` first. Presenter/transport tests.
 
-## Order of work and done criteria
+## Done criteria
 
-1. **Chip bar** (`chatbar/`): presenter reads the store; shows General, Tasks, up to the spec's number of active named
-   threads (most recent first, the selected one always visible), New thread, History (all threads incl. archived, with
-   load more), More (Space docs, Remind me). Dialogs for create/rename; confirm for archive. Errors as snackbars or inline
-   text per spec. Renderer `DefaultMatchaChatBarRenderer` bound in `RoomScope`. Tests for presenter behaviour.
-2. **Tasks board** (`tasks/`): `TasksNode` (`@ContributesNode(RoomScope::class)`), presenter + view per spec: not-created
-   state (create button if permitted, explanation otherwise), loading, empty, list/columns, editor sheet, archived toggle,
-   load older, read-only when `!canWriteCards`, opening the thread via callback, Remind via `MatchaReminderRenderer`.
-   `DefaultMatchaRoomEntryPoint` bound in `AppScope` (like `DefaultCreatePollEntryPoint`).
-3. **Reminder sheet** (`reminders/`): presenter (now injectable for tests) + bottom sheet view per spec (quick options
-   modelled on WhatsApp's "Remind me": e.g. In 1 hour / In 2 hours / Tomorrow 9:00 / Custom; custom date and time pickers
-   with the timezone shown; message field), the bot flow above, pending → requested states; `DefaultMatchaReminderRenderer`
-   bound in `RoomScope`.
-4. **Tasks tab** (`taskstab/`): session-scoped presenter that opens stores for joined rooms with bounded concurrency
-   (ponytail-comment the ceiling), keeps rooms that have a board, groups or filters per spec, shows the source chat on
-   each task, edits shared cards in place, drops a room's tasks as soon as the user leaves it.
-   `DefaultMatchaTasksTabRenderer` bound in `SessionScope`.
+
+
+Every step: builds (`:features:matcha:impl:compileDebugKotlin`), tests pass (`:features:matcha:impl:testDebugUnitTest`),
+ktlint clean for the module, previews for all states, committed.
 
 Report at the end: what you built, file list, test counts, anything you could not finish, and every place the
 integration step must call (which renderer/entry point, from where, with which arguments).
