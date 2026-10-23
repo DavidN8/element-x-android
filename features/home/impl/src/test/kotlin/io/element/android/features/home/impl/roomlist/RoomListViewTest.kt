@@ -174,6 +174,8 @@ class RoomListViewTest : RobolectricTest() {
         }
     }
 
+    // The search pill and the chips push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `clicking on a room invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<RoomListEvent>()
@@ -198,6 +200,8 @@ class RoomListViewTest : RobolectricTest() {
         eventsRecorder.assertEmpty()
     }
 
+    // The search pill and the chips push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `clicking on a room twice invokes the expected callback only once`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<RoomListEvent>()
@@ -221,6 +225,8 @@ class RoomListViewTest : RobolectricTest() {
         eventsRecorder.assertEmpty()
     }
 
+    // The search pill and the chips push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `long clicking on a room emits the expected Event`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<RoomListEvent>()

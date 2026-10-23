@@ -34,6 +34,7 @@ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
  * @param modifier The modifier to be applied to the indicator.
  * @param dotIndicatorSize The size of the dot indicator.
  * @param color The background color of the indicator.
+ * @param contentColor The color of the count.
  * @param contentDescription The content description for accessibility.
  * @param border The border to be applied to the indicator.
  * @param contentPadding The padding inside the indicator.
@@ -44,6 +45,7 @@ fun UnreadIndicatorAtom(
     modifier: Modifier = Modifier,
     dotIndicatorSize: Dp = 12.dp,
     color: Color = ElementTheme.colors.iconAccentPrimary,
+    contentColor: Color = ElementTheme.colors.bgCanvasDefault,
     contentDescription: String? = null,
     border: BorderStroke? = null,
     contentPadding: PaddingValues = PaddingValues.Zero,
@@ -58,7 +60,7 @@ fun UnreadIndicatorAtom(
                 .then(if (count == 0L) Modifier.size(dotIndicatorSize) else Modifier)
                 .then(if (border != null) Modifier.border(border, RoundedCornerShape(percent = 100)) else Modifier),
             containerColor = color,
-            contentColor = ElementTheme.colors.bgCanvasDefault,
+            contentColor = contentColor,
             textStyle = ElementTheme.typography.fontBodySmMedium,
             contentPadding = contentPadding,
         )
