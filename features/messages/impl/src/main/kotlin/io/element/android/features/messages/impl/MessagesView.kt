@@ -246,10 +246,6 @@ fun MessagesView(
         state.reactionSummaryState.eventSink(ReactionSummaryEvent.ShowReactionSummary(event.eventId, event.reactionsState.reactions, emoji))
     }
 
-    fun onMoreReactionsClick(event: TimelineItem.Event) {
-        state.customReactionState.eventSink(CustomReactionEvent.ShowCustomReactionSheet(event))
-    }
-
     val expandableState = rememberExpandableBottomSheetLayoutState()
     // On the phone the root pads the status bar: give it the top bar's colour rather than the wallpaper's.
     val statusBarHeightPx = if (LocalIsInDetailPane.current) 0 else WindowInsets.statusBars.getTop(LocalDensity.current)
@@ -364,9 +360,7 @@ fun MessagesView(
                                     state.linkState.eventSink(LinkEvent.OnLinkClick(link))
                                 }
                             },
-                            onReactionClick = ::onEmojiReactionClick,
                             onReactionLongClick = ::onEmojiReactionLongClick,
-                            onMoreReactionsClick = ::onMoreReactionsClick,
                             onReadReceiptClick = { event ->
                                 state.readReceiptBottomSheetState.eventSink(ReadReceiptBottomSheetEvent.EventSelected(event))
                             },
@@ -590,9 +584,7 @@ private fun MessagesViewContent(
     onContentClick: (TimelineItem.Event) -> Unit,
     onUserDataClick: (MatrixUser) -> Unit,
     onLinkClick: (Link, Boolean) -> Unit,
-    onReactionClick: (key: String, TimelineItem.Event) -> Unit,
     onReactionLongClick: (key: String, TimelineItem.Event) -> Unit,
-    onMoreReactionsClick: (TimelineItem.Event) -> Unit,
     onReadReceiptClick: (TimelineItem.Event) -> Unit,
     onMessageLongClick: (TimelineItem.Event) -> Unit,
     onGalleryItemClick: ((TimelineItem.Event, Int) -> Unit),
@@ -653,9 +645,7 @@ private fun MessagesViewContent(
                 onGalleryItemClick = onGalleryItemClick,
                 onMessageLongClick = onMessageLongClick,
                 onSwipeToReply = onSwipeToReply,
-                onReactionClick = onReactionClick,
                 onReactionLongClick = onReactionLongClick,
-                onMoreReactionsClick = onMoreReactionsClick,
                 onReadReceiptClick = onReadReceiptClick,
                 onJoinCallClick = onJoinCallClick,
                 forceJumpToBottomVisibility = forceJumpToBottomVisibility,

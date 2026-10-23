@@ -8,126 +8,111 @@
 
 package io.element.android.features.messages.impl.timeline.components
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalLayoutDirection
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import io.element.android.features.messages.impl.R
+import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.messages.impl.timeline.aTimelineItemReactions
 import io.element.android.features.messages.impl.timeline.model.AggregatedReaction
 import io.element.android.features.messages.impl.timeline.model.TimelineItemReactions
-import io.element.android.libraries.architecture.coverage.ExcludeFromCoverage
-import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import kotlinx.collections.immutable.ImmutableList
+import io.element.android.libraries.designsystem.theme.chatWallpaper
+import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.composerSurface
+import io.element.android.libraries.matrix.api.media.MediaSource
+import io.element.android.libraries.matrixmedia.api.MediaRequestData
+import kotlinx.collections.immutable.toImmutableList
 
+internal const val REACTION_IMAGE_ASPECT_RATIO = 1.0f
+
+private const val MAX_REACTIONS_IN_PILL = 3
+private val PILL_HEIGHT = 24.dp
+
+/**
+ * The reactions of a message as one pill that overlaps the bottom of the bubble: up to three emoji and the total count.
+ * Tapping it opens the reaction summary, where each reaction and who sent it are listed.
+ *
+ * The pill is hidden from screen readers: the reactions are announced with the message.
+ */
 @Composable
 fun TimelineItemReactionsView(
     reactionsState: TimelineItemReactions,
-    isOutgoing: Boolean,
-    userCanSendReaction: Boolean,
-    onReactionClick: (emoji: String) -> Unit,
-    onReactionLongClick: (emoji: String) -> Unit,
-    onMoreReactionsClick: () -> Unit,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded: Boolean by rememberSaveable { mutableStateOf(false) }
-    TimelineItemReactionsView(
-        modifier = modifier.semantics {
-            hideFromAccessibility()
-        },
-        reactions = reactionsState.reactions,
-        userCanSendReaction = userCanSendReaction,
-        expanded = expanded,
-        isOutgoing = isOutgoing,
-        onReactionClick = onReactionClick,
-        onReactionLongClick = onReactionLongClick,
-        onMoreReactionsClick = onMoreReactionsClick,
-        onToggleExpandClick = { expanded = !expanded },
-    )
+    val reactions = reactionsState.reactions
+    if (reactions.isEmpty()) return
+    val totalCount = reactions.sumOf { it.count }
+    val isLight = ElementTheme.colors.isLight
+    Row(
+        modifier = modifier
+            .semantics { hideFromAccessibility() }
+            // Compose extends the touch area of this 27 dp pill to the 48 dp minimum, without changing its layout.
+            .height(PILL_HEIGHT + RING_WIDTH * 2)
+            .then(if (isLight) Modifier.shadow(1.dp, CircleShape) else Modifier)
+            .border(BorderStroke(RING_WIDTH, ElementTheme.colors.chatWallpaper), CircleShape)
+            .padding(RING_WIDTH)
+            .clip(CircleShape)
+            .background(ElementTheme.colors.composerSurface)
+            .combinedClickable(onClick = onClick, onLongClick = onClick)
+            .padding(horizontal = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        reactions.take(MAX_REACTIONS_IN_PILL).forEach { reaction ->
+            ReactionKey(reaction)
+        }
+        if (totalCount > 1) {
+            Text(
+                modifier = Modifier.padding(start = 2.dp),
+                text = totalCount.toString(),
+                style = ElementTheme.typography.fontBodySmRegular,
+                color = ElementTheme.colors.textSecondary,
+            )
+        }
+    }
 }
 
-@Composable
-private fun TimelineItemReactionsView(
-    reactions: ImmutableList<AggregatedReaction>,
-    userCanSendReaction: Boolean,
-    isOutgoing: Boolean,
-    expanded: Boolean,
-    onReactionClick: (emoji: String) -> Unit,
-    onReactionLongClick: (emoji: String) -> Unit,
-    onMoreReactionsClick: () -> Unit,
-    onToggleExpandClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    // In LTR languages we want an incoming message's reactions to be LTR and outgoing to be RTL.
-    // For RTL languages it should be the opposite.
-    val currentLayout = LocalLayoutDirection.current
-    val reactionsLayoutDirection = when {
-        !isOutgoing -> currentLayout
-        currentLayout == LayoutDirection.Ltr -> LayoutDirection.Rtl
-        else -> LayoutDirection.Ltr
-    }
+private val RING_WIDTH = 1.5.dp
 
-    CompositionLocalProvider(LocalLayoutDirection provides reactionsLayoutDirection) {
-        TimelineItemReactionsLayout(
-            modifier = modifier,
-            itemSpacing = 4.dp,
-            rowSpacing = 4.dp,
-            expanded = expanded,
-            expandButton = {
-                MessagesReactionButton(
-                    content = MessagesReactionsButtonContent.Text(
-                        text = stringResource(
-                            id = if (expanded) {
-                                R.string.screen_room_timeline_reactions_show_less
-                            } else {
-                                R.string.screen_room_timeline_reactions_show_more
-                            }
-                        )
-                    ),
-                    onClick = onToggleExpandClick,
-                    onLongClick = {}
-                )
-            },
-            addMoreButton = if (userCanSendReaction) {
-                {
-                    CompositionLocalProvider(LocalLayoutDirection provides currentLayout) {
-                        MessagesReactionButton(
-                            content = MessagesReactionsButtonContent.Icon(CompoundDrawables.ic_compound_reaction_add),
-                            onClick = onMoreReactionsClick,
-                            onLongClick = {}
-                        )
-                    }
-                }
-            } else {
-                null
-            },
-            reactions = {
-                reactions.forEach { reaction ->
-                    CompositionLocalProvider(LocalLayoutDirection provides currentLayout) {
-                        MessagesReactionButton(
-                            content = MessagesReactionsButtonContent.Reaction(reaction = reaction),
-                            onClick = {
-                                // Always allow user to redact their own reactions
-                                if (reaction.isHighlighted || userCanSendReaction) {
-                                    onReactionClick(reaction.key)
-                                }
-                            },
-                            onLongClick = { onReactionLongClick(reaction.key) }
-                        )
-                    }
-                }
-            }
+@Composable
+private fun ReactionKey(reaction: AggregatedReaction) {
+    // Check if this is a custom reaction (MSC4027)
+    if (reaction.key.startsWith("mxc://")) {
+        AsyncImage(
+            modifier = Modifier
+                .height(16.dp)
+                .aspectRatio(REACTION_IMAGE_ASPECT_RATIO, false),
+            model = MediaRequestData(MediaSource(reaction.key), MediaRequestData.Kind.Content),
+            contentDescription = null
+        )
+    } else {
+        Text(
+            text = reaction.displayKey,
+            maxLines = 1,
+            style = ElementTheme.typography.fontBodyMdRegular.copy(
+                fontSize = 14.sp,
+                lineHeight = 18.sp,
+            ),
         )
     }
 }
@@ -135,50 +120,18 @@ private fun TimelineItemReactionsView(
 @PreviewsDayNight
 @Composable
 internal fun TimelineItemReactionsViewPreview() = ElementPreview {
-    ContentToPreview(
-        reactions = aTimelineItemReactions(count = 1).reactions
-    )
-}
-
-@PreviewsDayNight
-@Composable
-internal fun TimelineItemReactionsViewFewPreview() = ElementPreview {
-    ContentToPreview(
-        reactions = aTimelineItemReactions(count = 3).reactions
-    )
-}
-
-@PreviewsDayNight
-@Composable
-internal fun TimelineItemReactionsViewIncomingPreview() = ElementPreview {
-    ContentToPreview(
-        reactions = aTimelineItemReactions(count = 18).reactions
-    )
-}
-
-@PreviewsDayNight
-@Composable
-internal fun TimelineItemReactionsViewOutgoingPreview() = ElementPreview {
-    ContentToPreview(
-        reactions = aTimelineItemReactions(count = 18).reactions,
-        isOutgoing = true
-    )
-}
-
-@ExcludeFromCoverage
-@Composable
-private fun ContentToPreview(
-    reactions: ImmutableList<AggregatedReaction>,
-    isOutgoing: Boolean = false
-) {
-    TimelineItemReactionsView(
-        reactionsState = TimelineItemReactions(
-            reactions
-        ),
-        userCanSendReaction = true,
-        isOutgoing = isOutgoing,
-        onReactionClick = {},
-        onReactionLongClick = {},
-        onMoreReactionsClick = {},
-    )
+    val reactions = aTimelineItemReactions().reactions
+    Column(
+        modifier = Modifier
+            .background(ElementTheme.colors.chatWallpaper)
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        listOf(1, 3, reactions.size).forEach { count ->
+            TimelineItemReactionsView(
+                reactionsState = TimelineItemReactions(reactions.take(count).toImmutableList()),
+                onClick = {},
+            )
+        }
+    }
 }

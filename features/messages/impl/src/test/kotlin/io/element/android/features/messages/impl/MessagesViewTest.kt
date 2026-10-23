@@ -16,7 +16,6 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.longClick
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -419,13 +418,16 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
-    fun `clicking on a reaction emits the expected Event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<MessagesEvent>()
+    fun `clicking on the reactions pill opens the reaction summary`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<ReactionSummaryEvent>()
         val state = aMessagesState(
             timelineState = aTimelineState(
                 timelineItems = aTimelineItemList(aTimelineItemTextContent()),
             ),
-            eventSink = eventsRecorder,
+            reactionSummaryState = aReactionSummaryState(
+                target = null,
+                eventSink = eventsRecorder,
+            ),
         )
         val timelineItem = state.timelineState.timelineItems.first() as TimelineItem.Event
         setMessagesView(
@@ -435,7 +437,13 @@ class MessagesViewTest : RobolectricTest() {
             text = "👍️",
             useUnmergedTree = true,
         ).onFirst().performClick()
-        eventsRecorder.assertSingle(MessagesEvent.ToggleReaction("👍️", timelineItem.eventOrTransactionId))
+        eventsRecorder.assertSingle(
+            ReactionSummaryEvent.ShowReactionSummary(
+                timelineItem.eventId!!,
+                timelineItem.reactionsState.reactions,
+                timelineItem.reactionsState.reactions.first().key
+            )
+        )
     }
 
     @Test
@@ -459,26 +467,6 @@ class MessagesViewTest : RobolectricTest() {
             useUnmergedTree = true,
         ).onFirst().performTouchInput { longClick() }
         eventsRecorder.assertSingle(ReactionSummaryEvent.ShowReactionSummary(timelineItem.eventId!!, timelineItem.reactionsState.reactions, "👍️"))
-    }
-
-    @Test
-    fun `clicking on more reaction emits the expected Event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<CustomReactionEvent>()
-        val state = aMessagesState(
-            timelineState = aTimelineState(
-                timelineItems = aTimelineItemList(aTimelineItemTextContent()),
-            ),
-            customReactionState = aCustomReactionState(
-                eventSink = eventsRecorder,
-            ),
-        )
-        val timelineItem = state.timelineState.timelineItems.first() as TimelineItem.Event
-        setMessagesView(
-            state = state,
-        )
-        val moreReactionContentDescription = activity!!.getString(R.string.screen_room_timeline_add_reaction)
-        onAllNodesWithContentDescription(moreReactionContentDescription).onFirst().performClick()
-        eventsRecorder.assertSingle(CustomReactionEvent.ShowCustomReactionSheet(timelineItem))
     }
 
     @Test

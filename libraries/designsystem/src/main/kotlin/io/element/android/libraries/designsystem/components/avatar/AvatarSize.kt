@@ -42,7 +42,7 @@ enum class AvatarSize(val dp: Dp) {
     ChatTopBar(40.dp),
     TimelineSender(28.dp),
     TimelineReadReceipt(16.dp),
-    TimelineThreadLatestEventSender(24.dp),
+    TimelineThreadLatestEventSender(20.dp),
 
     ComposerAlert(32.dp),
 

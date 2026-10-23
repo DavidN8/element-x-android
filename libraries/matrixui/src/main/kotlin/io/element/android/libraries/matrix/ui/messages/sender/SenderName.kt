@@ -82,9 +82,9 @@ private fun RowScope.MainText(
     mode: SenderNameMode,
 ) {
     val style = when (mode) {
-        is SenderNameMode.Timeline -> ElementTheme.typography.fontBodyMdMedium
-        SenderNameMode.ActionList,
-        SenderNameMode.Reply -> ElementTheme.typography.fontBodySmMedium
+        is SenderNameMode.Timeline,
+        SenderNameMode.Reply -> ElementTheme.typography.fontBodyMdMedium
+        SenderNameMode.ActionList -> ElementTheme.typography.fontBodySmMedium
     }
     val modifier = when (mode) {
         is SenderNameMode.Timeline -> Modifier.alignByBaseline()

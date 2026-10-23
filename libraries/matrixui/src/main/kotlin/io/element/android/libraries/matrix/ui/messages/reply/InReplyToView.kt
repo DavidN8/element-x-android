@@ -8,7 +8,6 @@
 
 package io.element.android.libraries.matrix.ui.messages.reply
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,17 +16,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -35,9 +33,11 @@ import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.core.extensions.toSafeLength
 import io.element.android.libraries.designsystem.atomic.atoms.PlaceholderAtom
+import io.element.android.libraries.designsystem.colors.AvatarColorsProvider
 import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+import io.element.android.libraries.designsystem.theme.bubbleSecondaryText
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.matrix.api.core.UserId
@@ -53,7 +53,10 @@ import io.element.android.libraries.matrix.ui.messages.sender.SenderNameMode
 import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
- * https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=2019-6286
+ * The quoted message of a reply, drawn on the quote surface of a bubble or of the composer: a bar in the quoted sender's colour at the start,
+ * the sender's name, the quoted text, and a thumbnail at the end for media.
+ *
+ * @param isFromMe whether the quoted message is yours, which draws the bar in the accent colour.
  */
 @Composable
 fun InReplyToView(
@@ -62,6 +65,7 @@ fun InReplyToView(
     contentValidationValue: ContentValidationValue,
     modifier: Modifier = Modifier,
     maxLines: Int = 2,
+    isFromMe: Boolean = false,
 ) {
     when (inReplyTo) {
         is InReplyToDetails.Ready -> when (contentValidationValue) {
@@ -70,6 +74,7 @@ fun InReplyToView(
                 senderProfile = inReplyTo.senderProfile,
                 metadata = inReplyTo.metadata(hideImage),
                 maxLines = maxLines,
+                isFromMe = isFromMe,
                 modifier = modifier,
             )
             ContentValidationValue.Invalid -> ReplyToInvalidContent()
@@ -89,31 +94,25 @@ private fun ReplyToReadyContent(
     senderProfile: ProfileDetails,
     metadata: InReplyToMetadata?,
     maxLines: Int,
+    isFromMe: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    val paddings = if (metadata is InReplyToMetadata.Thumbnail) {
-        PaddingValues(end = 8.dp)
-    } else {
-        PaddingValues(horizontal = 8.dp)
-    }
+    // The colour is only on the bar: decorative sender colours are too light for text on the quote surface.
+    val barColor = if (isFromMe) ElementTheme.colors.bgAccentRest else AvatarColorsProvider.provide(senderId.value).foreground
     Row(
         modifier
-            .background(ElementTheme.colors.bgCanvasDefault)
-            .padding(paddings)
+            .drawBehind {
+                drawRect(barColor, size = Size(QUOTE_BAR_WIDTH.toPx(), size.height))
+            }
+            .padding(start = QUOTE_BAR_WIDTH),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (metadata is InReplyToMetadata.Thumbnail) {
-            AttachmentThumbnail(
-                info = metadata.attachmentThumbnailInfo,
-                backgroundColor = ElementTheme.colors.bgSubtlePrimary,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(4.dp))
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-        }
         val a11InReplyToText = stringResource(CommonStrings.common_in_reply_to, senderProfile.getDisambiguatedDisplayName(senderId))
         Column(
-            modifier = Modifier.semantics(mergeDescendants = false) { isTraversalGroup = true },
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .semantics(mergeDescendants = false) { isTraversalGroup = true },
             verticalArrangement = Arrangement.SpaceBetween
         ) {
             SenderName(
@@ -128,8 +127,17 @@ private fun ReplyToReadyContent(
             )
             ReplyToContentText(metadata, maxLines)
         }
+        if (metadata is InReplyToMetadata.Thumbnail) {
+            AttachmentThumbnail(
+                info = metadata.attachmentThumbnailInfo,
+                backgroundColor = ElementTheme.colors.bgSubtlePrimary,
+                modifier = Modifier.size(48.dp)
+            )
+        }
     }
 }
+
+private val QUOTE_BAR_WIDTH = 4.dp
 
 @Composable
 private fun ReplyToLoadingContent(
@@ -137,9 +145,7 @@ private fun ReplyToLoadingContent(
 ) {
     val paddings = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
     Row(
-        modifier
-            .background(ElementTheme.colors.bgCanvasDefault)
-            .padding(paddings)
+        modifier.padding(paddings)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             PlaceholderAtom(width = 80.dp, height = 12.dp)
@@ -180,10 +186,6 @@ private fun ReplyToContentText(
         InReplyToMetadata.UnableToDecrypt -> CompoundDrawables.ic_compound_time
         else -> null
     }
-    val fontStyle = when (metadata) {
-        is InReplyToMetadata.Informative -> FontStyle.Italic
-        else -> FontStyle.Normal
-    }
     Row(
         modifier = Modifier.semantics(mergeDescendants = false) {
             isTraversalGroup = true
@@ -194,7 +196,7 @@ private fun ReplyToContentText(
         if (iconResourceId != null) {
             Icon(
                 resourceId = iconResourceId,
-                tint = ElementTheme.colors.iconSecondary,
+                tint = ElementTheme.colors.bubbleSecondaryText,
                 contentDescription = null,
                 modifier = Modifier.size(16.dp)
             )
@@ -203,9 +205,8 @@ private fun ReplyToContentText(
         Text(
             text = text,
             style = ElementTheme.typography.fontBodyMdRegular,
-            fontStyle = fontStyle,
             textAlign = TextAlign.Start,
-            color = ElementTheme.colors.textSecondary,
+            color = ElementTheme.colors.bubbleSecondaryText,
             maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
         )
