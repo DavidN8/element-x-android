@@ -30,8 +30,10 @@ import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.timeline.TimelineException
 import io.element.android.libraries.matrix.api.timeline.item.event.EventTimelineItem
 import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -103,6 +106,8 @@ data class MatchaRoomSnapshot(
 class MatchaRoomStore(
     private val room: JoinedRoom,
     private val coroutineScope: CoroutineScope,
+    /** More event types to read into [MatchaRoomSnapshot.events], such as `m.room.create` for documents. */
+    private val extraEventTypes: Set<String> = emptySet(),
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
@@ -114,8 +119,11 @@ class MatchaRoomStore(
     private val pagination = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = true))
     private val historyPagesRead = MutableStateFlow(0)
     private val loadingMore = MutableStateFlow(false)
+    private val loadMoreMutex = Mutex()
     private val writeMutex = Mutex()
-    private var timeline: Timeline? = null
+
+    /** The scan timeline once opened, or null when it could not be opened. */
+    private val openedTimeline = CompletableDeferred<Timeline?>()
 
     private val _snapshot = MutableStateFlow(MatchaRoomSnapshot())
     val snapshot: StateFlow<MatchaRoomSnapshot> = _snapshot.asStateFlow()
@@ -132,15 +140,20 @@ class MatchaRoomStore(
     @OptIn(FlowPreview::class)
     private fun start() {
         coroutineScope.launch {
-            val created = room.createTimeline(CreateTimelineParams.OnlyEventTypes(MatchaConfig.MESSAGE_LIKE_EVENT_TYPES + MatchaConfig.STATE_EVENT_TYPES))
+            val types = MatchaConfig.MESSAGE_LIKE_EVENT_TYPES + MatchaConfig.STATE_EVENT_TYPES + extraEventTypes
+            val created = room.createTimeline(CreateTimelineParams.OnlyEventTypes(types))
                 .onFailure { Timber.w(it, "Could not open the Matcha timeline") }
-                .getOrNull() ?: return@launch
-            timeline = created
+                .getOrNull()
+            if (created == null) {
+                openedTimeline.complete(null)
+                return@launch
+            }
             created.backwardPaginationStatus.onEach { pagination.value = it }.launchIn(this)
             created.timelineItems
                 .map { items -> items.mapNotNull(::parse).asReversed() }
                 .onEach { scanEvents.value = it }
                 .launchIn(this)
+            openedTimeline.complete(created)
             // Read a bounded amount of history up front; older items are loaded on demand.
             readInitialHistory(created)
         }
@@ -293,19 +306,35 @@ class MatchaRoomStore(
         )
     }
 
-    /** Loads one more page of history and of the thread list. */
-    suspend fun loadMore() {
-        if (loadingMore.value) return
+    /**
+     * Loads one more page of history and of the thread list. Calls are serialized.
+     *
+     * @return whether older history remains, or a failure when the history page could not be read; a failure to read more
+     * threads is only logged.
+     */
+    suspend fun loadMore(): Result<Boolean> = loadMoreMutex.withLock {
         loadingMore.value = true
         try {
-            timeline?.takeIf { it.backwardPaginationStatus.value.hasMoreToLoad }?.paginate(Timeline.PaginationDirection.BACKWARDS)
-                ?.onFailure { Timber.w(it, "Could not read older Matcha history") }
+            val timeline = openedTimeline.await() ?: return@withLock Result.failure(IllegalStateException("The Matcha timeline is not open"))
+            val history = paginateBackwards(timeline).onFailure { Timber.w(it, "Could not read older Matcha history") }
             if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) {
                 room.threadsListService.paginate().onFailure { Timber.w(it, "Could not read older threads") }
             }
+            history.map { timeline.backwardPaginationStatus.value.hasMoreToLoad }
         } finally {
             loadingMore.value = false
         }
+    }
+
+    /** Reads one older page. The initial history read may be running, so a refused page waits for it and tries again. */
+    private suspend fun paginateBackwards(timeline: Timeline): Result<Unit> {
+        var result: Result<Unit> = Result.failure(TimelineException.CannotPaginate)
+        var attempts = 0
+        while (result.exceptionOrNull() == TimelineException.CannotPaginate && attempts++ < PAGINATION_ATTEMPTS) {
+            val hasMore = timeline.backwardPaginationStatus.first { !it.isPaginating }.hasMoreToLoad
+            result = if (hasMore) timeline.paginate(Timeline.PaginationDirection.BACKWARDS).map { } else Result.success(Unit)
+        }
+        return result
     }
 
     /** Sends a Matcha timeline event and shows it straight away, before its remote echo. */
@@ -346,5 +375,6 @@ class MatchaRoomStore(
     companion object {
         /** Pages of 50 events read when the store opens. */
         const val INITIAL_HISTORY_PAGES = 10
+        private const val PAGINATION_ATTEMPTS = 5
     }
 }
