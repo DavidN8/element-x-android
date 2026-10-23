@@ -16,7 +16,7 @@ import io.element.android.libraries.matrix.api.core.ThreadId
 /** Room-scoped Matcha screens, created from the chat's flow. */
 interface MatchaRoomEntryPoint : FeatureEntryPoint {
     data class Params(
-        /** Opens the editor for this thread's task when set, e.g. from a thread's "View task". */
+        /** The board opens the editor for this thread's task when set, e.g. from a thread chip's "View task". */
         val initialThreadId: ThreadId? = null,
     )
 
@@ -32,9 +32,12 @@ interface MatchaRoomEntryPoint : FeatureEntryPoint {
 
         /** The board's chip bar asked for the space documents, when the chat has a space. */
         fun openSpaceDocs()
+
+        /** The board's top bar name block was tapped. */
+        fun openRoomDetails()
     }
 
-    /** The chat's task board, with the chat's top bar and chip bar. */
+    /** The chat's task board, with its own room top bar and the chip bar. */
     fun createTasksNode(
         parentNode: Node,
         buildContext: BuildContext,

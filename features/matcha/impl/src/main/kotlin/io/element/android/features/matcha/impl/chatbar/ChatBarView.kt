@@ -88,7 +88,6 @@ private fun ChipRow(state: ChatBarState) {
         MatchaChatBarSelection.General -> 0
         MatchaChatBarSelection.Tasks -> 1
         is MatchaChatBarSelection.Thread -> state.threads.indexOfFirst { it.id == selection.threadId }.takeIf { it >= 0 }?.plus(2)
-        MatchaChatBarSelection.AllThreads -> 2 + state.threads.size + if (state.canCreateThread) 1 else 0
     }
     LaunchedEffect(selectedIndex) {
         if (selectedIndex == null) return@LaunchedEffect
@@ -145,9 +144,9 @@ private fun ChipRow(state: ChatBarState) {
         item(key = "all") {
             PillFilterChip(
                 label = stringResource(R.string.screen_matcha_threads_all),
-                selected = state.selection == MatchaChatBarSelection.AllThreads,
+                selected = false,
                 leadingIcon = CompoundIcons.Threads(),
-                onClick = { eventSink(ChatBarEvent.Select(MatchaChatBarSelection.AllThreads)) },
+                onClick = { eventSink(ChatBarEvent.OpenAllThreads) },
             )
         }
         if (state.showMore) {
@@ -223,10 +222,11 @@ private fun MoreMenuItem(text: String, icon: ImageVector, onClick: () -> Unit) {
     )
 }
 
+/** A notice strip under a bar, shared with the task board. */
 @Composable
-private fun WarningStrip(text: String) {
+internal fun WarningStrip(text: String, modifier: Modifier = Modifier, maxLines: Int = 1) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(min = 32.dp)
             .background(ElementTheme.colors.noticePillBackground)
@@ -244,7 +244,7 @@ private fun WarningStrip(text: String) {
             text = text,
             style = ElementTheme.typography.fontBodySmRegular,
             color = ElementTheme.colors.noticePillText,
-            maxLines = 1,
+            maxLines = maxLines,
             overflow = TextOverflow.Ellipsis,
         )
     }

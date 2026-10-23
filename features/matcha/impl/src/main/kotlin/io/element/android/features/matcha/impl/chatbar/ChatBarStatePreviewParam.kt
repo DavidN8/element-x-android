@@ -31,7 +31,7 @@ open class ChatBarStatePreviewParam : PreviewParameterProvider<ChatBarState> {
                 threads = listOf(ChatBarThread(ThreadId("\$t1"), "Launch plan", isArchived = false), ChatBarThread(ThreadId("\$t5"), null, isArchived = false)),
                 showUnreadableNamesWarning = true,
             ),
-            aChatBarState(selection = MatchaChatBarSelection.AllThreads, canRemind = false, canOpenSpaceDocs = false),
+            aChatBarState(canRemind = false, canOpenSpaceDocs = false),
             aChatBarState(sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false)),
             aChatBarState(sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = ThreadNameError.Empty, isSending = false)),
             aChatBarState(sheet = ChatBarSheet.ThreadName(threadId = null, name = "A".repeat(104), error = ThreadNameError.TooLong, isSending = false)),

@@ -28,19 +28,18 @@ import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.MatchaThread
+import io.element.android.features.matcha.impl.store.NamedThreadResult
+import io.element.android.features.matcha.impl.store.createNamedThread
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.di.annotations.RoomCoroutineScope
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.ThreadId
-import io.element.android.libraries.matrix.api.core.toThreadId
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
 import timber.log.Timber
 
 /**
@@ -87,13 +86,13 @@ class ChatBarPresenter(
                 val threadId = current.threadId
                 if (threadId == null) {
                     when (val result = roomCoroutineScope.async { createThread(name) }.await()) {
-                        is CreateResult.Created -> {
+                        is NamedThreadResult.Created -> {
                             createdNames[result.threadId] = name
                             sheet = null
                             currentActions.openThread(result.threadId)
                         }
-                        CreateResult.RootOnly -> sheet = null
-                        CreateResult.Failed -> sheet = current.copy(error = ThreadNameError.CreateFailed, isSending = false)
+                        NamedThreadResult.RootOnly -> sheet = null
+                        NamedThreadResult.Failed -> sheet = current.copy(error = ThreadNameError.CreateFailed, isSending = false)
                     }
                 } else if (name == threads.firstOrNull { it.id == threadId }?.name) {
                     sheet = null
@@ -107,6 +106,7 @@ class ChatBarPresenter(
         fun handleEvent(event: ChatBarEvent) {
             when (event) {
                 is ChatBarEvent.Select -> if (event.target != currentSelection) currentActions.open(event.target)
+                ChatBarEvent.OpenAllThreads -> currentActions.openAllThreads()
                 ChatBarEvent.OpenSpaceDocs -> currentActions.openSpaceDocs?.invoke()
                 is ChatBarEvent.RemindMe -> {
                     sheet = null
@@ -163,32 +163,11 @@ class ChatBarPresenter(
         )
     }
 
-    private sealed interface CreateResult {
-        data class Created(val threadId: ThreadId) : CreateResult
-
-        /** The root message was sent but the thread could not be set up. */
-        data object RootOnly : CreateResult
-        data object Failed : CreateResult
-    }
-
-    /** Sends the root message, then the hidden first reply that names it and makes it a thread, as the web client does. */
-    private suspend fun createThread(name: String): CreateResult {
-        val rootContent = buildJsonObject {
-            put("msgtype", "m.text")
-            put("body", name)
-        }.toString()
-        val root = store.send(EVENT_ROOM_MESSAGE, rootContent).getOrElse {
-            Timber.w(it, "Could not send the root of a new thread")
-            return CreateResult.Failed
+    /** Creates the thread; a thread that could not be set up is reported here, since the bar may be gone by then. */
+    private suspend fun createThread(name: String): NamedThreadResult = store.createNamedThread(name).also {
+        if (it == NamedThreadResult.RootOnly) {
+            snackbarDispatcher.post(SnackbarMessage(R.string.screen_matcha_threads_setup_failed, duration = SnackbarDuration.Long))
         }
-        return store.send(MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.bootstrapReplyContent(root.value, name)).fold(
-            onSuccess = { CreateResult.Created(root.toThreadId()) },
-            onFailure = {
-                Timber.w(it, "Could not set up the new thread %s", root.value)
-                snackbarDispatcher.post(SnackbarMessage(R.string.screen_matcha_threads_setup_failed, duration = SnackbarDuration.Long))
-                CreateResult.RootOnly
-            },
-        )
     }
 
     /** Renames, archives or restores a thread for everyone; archiving offers Undo. Returns whether it was sent. */
@@ -216,7 +195,6 @@ class ChatBarPresenter(
     }
 
     companion object {
-        private const val EVENT_ROOM_MESSAGE = "m.room.message"
         internal const val MAX_THREAD_CHIPS = 4
     }
 }
@@ -224,7 +202,6 @@ class ChatBarPresenter(
 private fun MatchaChatBarActions.open(target: MatchaChatBarSelection) = when (target) {
     MatchaChatBarSelection.General -> openGeneral()
     MatchaChatBarSelection.Tasks -> openTasks()
-    MatchaChatBarSelection.AllThreads -> openAllThreads()
     is MatchaChatBarSelection.Thread -> openThread(target.threadId)
 }
 

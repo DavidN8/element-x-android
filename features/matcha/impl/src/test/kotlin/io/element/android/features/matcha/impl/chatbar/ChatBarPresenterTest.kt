@@ -129,7 +129,7 @@ class ChatBarPresenterTest {
             state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.General))
             state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Tasks))
             state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Thread(ThreadId("\$t1"))))
-            state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.AllThreads))
+            state.eventSink(ChatBarEvent.OpenAllThreads)
             state.eventSink(ChatBarEvent.OpenSpaceDocs)
             assertThat(actions.calls).containsExactly("tasks", "thread \$t1", "all", "docs").inOrder()
         }

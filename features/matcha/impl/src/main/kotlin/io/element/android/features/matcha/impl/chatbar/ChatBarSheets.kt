@@ -169,7 +169,7 @@ internal fun ThreadActionsSheet(
 }
 
 @Composable
-private fun SheetTitle(text: String, modifier: Modifier = Modifier) {
+internal fun SheetTitle(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = ElementTheme.typography.fontHeadingMdRegular,
@@ -184,7 +184,7 @@ private fun SheetTitle(text: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ActionRow(text: String, icon: ImageVector, onClick: () -> Unit) {
+internal fun ActionRow(text: String, icon: ImageVector, onClick: () -> Unit) {
     ListItem(
         leadingContent = ListItemContent.Icon(IconSource.Vector(icon)),
         onClick = onClick,
