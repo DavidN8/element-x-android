@@ -82,6 +82,7 @@ class KonsistPreviewTest {
     }
 
     private val previewNameExceptions = listOf(
+        "ArchivedTasksViewEmptyPreview",
         "AsyncIndicatorFailurePreview",
         "AsyncIndicatorLoadingPreview",
         "AvatarPickerSizesPreview",
@@ -137,6 +138,9 @@ class KonsistPreviewTest {
         "SelectionIndicatorSelectedPreview",
         "SpaceMembersViewNoHeroesPreview",
         "SyncStateViewServerUnreachablePreview",
+        "TaskActionsSheetArchivedPreview",
+        "TaskActionsSheetReadOnlyPreview",
+        "TasksViewWidePreview",
         "TextComposerAddCaptionPreview",
         "TextComposerCaptionPreview",
         "TextComposerEditCaptionPreview",

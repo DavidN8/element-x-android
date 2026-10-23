@@ -380,7 +380,7 @@ internal fun TaskStatus.icon(): ImageVector = when (this) {
 
 @PreviewsDayNight
 @Composable
-internal fun TaskRowsPreview() = ElementPreview {
+internal fun TaskRowPreview() = ElementPreview {
     Column {
         aTaskItemList().forEach { TaskRow(task = it, onClick = {}, onLongClick = {}) }
         ArchivedTasksRow(count = 3, onClick = {})
