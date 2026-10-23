@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.impl.docs
 
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.impl.docs.transport.DocumentCatalog
 import io.element.android.features.matcha.impl.docs.transport.RoomDocumentSession
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.networkmonitor.test.FakeNetworkMonitor
@@ -21,7 +22,6 @@ import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemDebugInfoProvider
 import io.element.android.libraries.matrix.test.A_ROOM_ID
-import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomInfo
@@ -33,6 +33,8 @@ import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 
 const val ANCHOR = "\$create"
 const val BOB = "@bob:x"
@@ -56,8 +58,8 @@ fun anItem(json: String, eventId: String): MatrixTimelineItem.Event = MatrixTime
 fun aCreateItem(eventId: String = ANCHOR) =
     anItem("""{"type": "m.room.create", "state_key": "", "event_id": "$eventId", "sender": "@admin:x", "origin_server_ts": 1, "content": {}}""", eventId)
 
-fun aFrameItem(eventId: String, content: String, sender: String = BOB, type: String = MatchaConfig.EVENT_DOCS_UPDATE) =
-    anItem("""{"type": "$type", "event_id": "$eventId", "sender": "$sender", "origin_server_ts": 2, "content": $content}""", eventId)
+fun aFrameItem(eventId: String, content: String, sender: String = BOB, type: String = MatchaConfig.EVENT_DOCS_UPDATE, timestamp: Long = 2) =
+    anItem("""{"type": "$type", "event_id": "$eventId", "sender": "$sender", "origin_server_ts": $timestamp, "content": $content}""", eventId)
 
 /** The frames of one update, as timeline items with the ids "$prefix-0", "$prefix-1" and so on. */
 fun frameItems(
@@ -66,7 +68,20 @@ fun frameItems(
     updateId: String,
     documentId: String = DocsProtocol.MAIN_DOCUMENT_ID,
     sender: String = BOB,
-) = DocsProtocol.frames(update, ANCHOR, updateId, documentId).mapIndexed { index, frame -> aFrameItem("$prefix-$index", frame, sender) }
+    timestamp: Long = 2,
+) = DocsProtocol.frames(update, ANCHOR, updateId, documentId).mapIndexed { index, frame -> aFrameItem("$prefix-$index", frame, sender, timestamp = timestamp) }
+
+/** A space where docs are turned on: Megolm encryption, and members may send frames. */
+val CONFIGURED_STATE = mapOf(
+    StateEventType.RoomEncryption to """{"algorithm": "m.megolm.v1.aes-sha2"}""",
+    StateEventType.RoomPowerLevels to
+        """{"users": {"@admin:x": 100}, "events_default": 50, "events": {"com.matchahoneylatte.docs.update": 0, "m.room.encrypted": 0}}""",
+)
+
+/** A catalog update naming [documentId]. */
+fun aCatalogEntry(operationId: String, documentId: String, title: String, createdAt: Long = 1) = FakeYjsEngine.update(
+    FakeYjsEngine.operation(operationId, key = documentId, value = Json.parseToJsonElement("""{"title": "$title", "createdAt": $createdAt}""").jsonObject),
+)
 
 /** A space room with a filtered timeline holding [items], whose sent events are recorded in [sent]. */
 class DocsRoomFixture(
@@ -133,7 +148,21 @@ class DocsRoomFixture(
         )
     }
 
-    companion object {
-        val OWN_SENDER = A_SESSION_ID.value
+    /** The docs context of this room, running in [scope]; never closed, since that would cancel the scope. */
+    fun context(
+        scope: CoroutineScope,
+        isEarlierChatDocument: Boolean = false,
+        newDocumentId: () -> String = { "33333333-3333-4333-8333-333333333333" },
+    ): SpaceDocsContext {
+        val store = store(scope)
+        val catalogSession = if (isEarlierChatDocument) null else session(scope, store, DocsProtocol.CATALOG_DOCUMENT_ID)
+        return SpaceDocsContext(
+            room = room,
+            store = store,
+            catalog = catalogSession?.let { DocumentCatalog(it, room, clock = { 1_000 }, newDocumentId = newDocumentId) },
+            catalogSession = catalogSession,
+            scope = scope,
+            openSession = { session(scope, store, it, isReadOnly = isEarlierChatDocument) },
+        )
     }
 }
