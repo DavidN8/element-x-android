@@ -47,6 +47,9 @@ import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
  * https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=1985-3223
+ *
+ * @param onClear called by the clear button, which shows while the field is focused and not empty. Clears the text by default.
+ * @param onSearch called by the keyboard's search action, before the keyboard is hidden.
  */
 @Composable
 fun SearchField(
@@ -54,6 +57,8 @@ fun SearchField(
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onClear: () -> Unit = { state.clearText() },
+    onSearch: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val isFocused by interactionSource.collectIsFocusedAsState()
@@ -67,6 +72,7 @@ fun SearchField(
             imeAction = ImeAction.Search,
         ),
         onKeyboardAction = {
+            onSearch()
             focusManager.clearFocus()
         },
         cursorBrush = SolidColor(ElementTheme.colors.textActionAccent),
@@ -76,7 +82,7 @@ fun SearchField(
                 placeholder = placeholder,
                 isTextEmpty = state.text.isEmpty(),
                 innerTextField = innerTextField,
-                onClear = { state.clearText() },
+                onClear = onClear,
             )
         }
     )
