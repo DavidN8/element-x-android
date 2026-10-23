@@ -85,4 +85,34 @@ class RoomSummaryRowUnreadIndicatorCountTest {
         assertThat(room.unreadIndicatorCount(showUnreadCount = true, showAllActivity = true)).isNull()
         assertThat(room.unreadIndicatorCount(showUnreadCount = false, showAllActivity = false)).isNull()
     }
+
+    @Test
+    fun `the timestamp is not green for unread messages that show no badge`() {
+        val room = createRoomListRoomSummary(
+            numberOfUnreadNotifications = 0,
+            numberOfUnreadMessages = 5,
+        )
+        assertThat(room.hasNewContent).isTrue()
+        assertThat(room.hasHighlightedTimestamp(showAllActivity = false)).isFalse()
+        // With all activity shown, the same room shows a dot, and the time turns green with it.
+        assertThat(room.hasHighlightedTimestamp(showAllActivity = true)).isTrue()
+    }
+
+    @Test
+    fun `the timestamp is green with an unread badge or a mention badge`() {
+        assertThat(createRoomListRoomSummary(numberOfUnreadNotifications = 2).hasHighlightedTimestamp(showAllActivity = false)).isTrue()
+        assertThat(createRoomListRoomSummary(numberOfUnreadMentions = 1).hasHighlightedTimestamp(showAllActivity = false)).isTrue()
+        assertThat(createRoomListRoomSummary(isMarkedUnread = true).hasHighlightedTimestamp(showAllActivity = false)).isTrue()
+    }
+
+    @Test
+    fun `the timestamp of a muted room is never green`() {
+        val room = createRoomListRoomSummary(
+            numberOfUnreadNotifications = 3,
+            numberOfUnreadMessages = 5,
+            isMarkedUnread = true,
+            userDefinedNotificationMode = RoomNotificationMode.MUTE,
+        )
+        assertThat(room.hasHighlightedTimestamp(showAllActivity = true)).isFalse()
+    }
 }

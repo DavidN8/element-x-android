@@ -91,13 +91,7 @@ internal fun RoomSummaryRow(
     showAllActivity: Boolean = false,
     eventSink: (RoomListEvent) -> Unit,
 ) {
-    val background = if (isSelected) {
-        Modifier
-            .background(ElementTheme.colors.rowSelected)
-            .semantics { selected = true }
-    } else {
-        Modifier
-    }
+    val background = if (isSelected) Modifier.background(ElementTheme.colors.rowSelected) else Modifier
     Box(modifier = modifier.then(background)) {
         when (room.displayType) {
             RoomSummaryDisplayType.PLACEHOLDER -> {
@@ -106,6 +100,7 @@ internal fun RoomSummaryRow(
             RoomSummaryDisplayType.INVITE -> {
                 RoomSummaryScaffoldRow(
                     room = room,
+                    isSelected = isSelected,
                     hideAvatarImage = hideInviteAvatars,
                     onClick = onClick,
                     onLongClick = {
@@ -136,6 +131,7 @@ internal fun RoomSummaryRow(
             RoomSummaryDisplayType.ROOM -> {
                 RoomSummaryScaffoldRow(
                     room = room,
+                    isSelected = isSelected,
                     onClick = onClick,
                     onLongClick = {
                         eventSink(RoomListEvent.ShowContextMenu(room))
@@ -144,7 +140,7 @@ internal fun RoomSummaryRow(
                     NameAndTimestampRow(
                         name = room.name,
                         timestamp = room.timestamp,
-                        isUnread = room.hasNewContent && !room.isMuted,
+                        isUnread = room.hasHighlightedTimestamp(showAllActivity = showAllActivity),
                         dmUserStatus = room.dmUserStatus,
                     )
                     MessagePreviewAndIndicatorRow(room = room, showUnreadCount = showUnreadCount, showAllActivity = showAllActivity)
@@ -153,6 +149,7 @@ internal fun RoomSummaryRow(
             RoomSummaryDisplayType.KNOCKED -> {
                 RoomSummaryScaffoldRow(
                     room = room,
+                    isSelected = isSelected,
                     onClick = onClick,
                     onLongClick = {
                         Timber.d("Long click on knocked room")
@@ -190,6 +187,7 @@ internal fun RoomSummaryRow(
 @Composable
 private fun RoomSummaryScaffoldRow(
     room: RoomListRoomSummary,
+    isSelected: Boolean,
     onClick: (RoomListRoomSummary) -> Unit,
     onLongClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
@@ -205,6 +203,8 @@ private fun RoomSummaryScaffoldRow(
             interactionSource = remember { MutableInteractionSource() }
         )
         .onKeyboardContextMenuAction { onLongClick(room) }
+        // On the clickable node, which is the one TalkBack focuses: the open chat of the two-pane list is announced as selected.
+        .then(if (isSelected) Modifier.semantics { selected = true } else Modifier)
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -407,6 +407,14 @@ private fun UnreadBadge(
             stringResource(CommonStrings.a11y_notifications_new_messages)
         },
     )
+}
+
+/**
+ * Whether the timestamp is green: only when the room is not muted and shows a green indicator (unread badge or @ badge),
+ * so that the time and the badge always agree. A room marked as unread keeps its green time, as upstream.
+ */
+internal fun RoomListRoomSummary.hasHighlightedTimestamp(showAllActivity: Boolean): Boolean {
+    return !isMuted && (isHighlighted || unreadIndicatorCount(showUnreadCount = false, showAllActivity = showAllActivity) != null)
 }
 
 /**
