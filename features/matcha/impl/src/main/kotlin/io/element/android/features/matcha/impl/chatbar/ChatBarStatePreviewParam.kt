@@ -9,6 +9,7 @@ package io.element.android.features.matcha.impl.chatbar
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.features.matcha.api.MatchaChatBarSelection
+import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.libraries.matrix.api.core.ThreadId
 import kotlinx.collections.immutable.toImmutableList
 
@@ -29,7 +30,7 @@ open class ChatBarStatePreviewParam : PreviewParameterProvider<ChatBarState> {
             aChatBarState(
                 selection = MatchaChatBarSelection.Tasks,
                 threads = listOf(ChatBarThread(ThreadId("\$t1"), "Launch plan", isArchived = false), ChatBarThread(ThreadId("\$t5"), null, isArchived = false)),
-                showUnreadableNamesWarning = true,
+                warning = MatchaWarning.Undecryptable,
             ),
             aChatBarState(canRemind = false, canOpenSpaceDocs = false),
             aChatBarState(sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false)),
@@ -39,6 +40,10 @@ open class ChatBarStatePreviewParam : PreviewParameterProvider<ChatBarState> {
             aChatBarState(sheet = ChatBarSheet.ThreadName(threadId = ThreadId("\$t1"), name = "Launch plan v2", error = null, isSending = true)),
             aChatBarState(sheet = ChatBarSheet.ThreadActions(previewThreads.first())),
             aChatBarState(sheet = ChatBarSheet.ThreadActions(previewThreads.first()), canManageThreads = false, canCreateThread = false),
+            aChatBarState(warning = MatchaWarning.Network),
+            aChatBarState(
+                sheet = ChatBarSheet.ThreadName(threadId = ThreadId("\$t1"), name = "Launch plan v2", error = ThreadNameError.RenameFailed, isSending = false)
+            ),
         )
 }
 
@@ -57,11 +62,12 @@ internal fun aChatBarState(
     canManageThreads: Boolean = true,
     canRemind: Boolean = true,
     canOpenSpaceDocs: Boolean = true,
-    showUnreadableNamesWarning: Boolean = false,
+    warning: MatchaWarning? = null,
     sheet: ChatBarSheet? = null,
     eventSink: (ChatBarEvent) -> Unit = {},
 ) = ChatBarState(
     isVisible = true,
+    showBar = true,
     selection = selection,
     openTaskCount = openTaskCount,
     threads = threads.toImmutableList(),
@@ -69,7 +75,7 @@ internal fun aChatBarState(
     canManageThreads = canManageThreads,
     canRemind = canRemind,
     canOpenSpaceDocs = canOpenSpaceDocs,
-    showUnreadableNamesWarning = showUnreadableNamesWarning,
+    warning = warning,
     sheet = sheet,
     reminderTarget = null,
     eventSink = eventSink,

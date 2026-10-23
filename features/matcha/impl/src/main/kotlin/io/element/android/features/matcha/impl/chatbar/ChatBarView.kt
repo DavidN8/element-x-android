@@ -11,10 +11,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
@@ -29,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
@@ -41,6 +45,7 @@ import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.impl.R
+import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -50,22 +55,26 @@ import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.noticePillBackground
 import io.element.android.libraries.designsystem.theme.noticePillText
+import io.element.android.libraries.designsystem.utils.hasCompactHeightWindowSize
 import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /** The chip bar under a chat's top bar, its warning strip, and its sheets. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChatBarView(
     state: ChatBarState,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ElementTheme.colors.bgCanvasDefault)
-    ) {
-        ChipRow(state)
-        if (state.showUnreadableNamesWarning) {
-            WarningStrip(stringResource(R.string.screen_matcha_threads_warning_undecryptable))
+    // The bar gives way to the content on a short window, and to the keyboard on a narrow one.
+    val isHiddenByWindow = hasCompactHeightWindowSize() || WindowInsets.isImeVisible && LocalConfiguration.current.screenWidthDp < COMPACT_WIDTH_DP
+    if (state.showBar && !isHiddenByWindow) {
+        Column(
+            modifier = modifier
+                .fillMaxWidth()
+                .background(ElementTheme.colors.bgCanvasDefault)
+        ) {
+            ChipRow(state)
+            state.warning?.let { WarningStrip(stringResource(it.messageResId())) }
         }
     }
     when (val sheet = state.sheet) {
@@ -78,6 +87,15 @@ fun ChatBarView(
         )
         null -> Unit
     }
+}
+
+private const val COMPACT_WIDTH_DP = 600
+
+private fun MatchaWarning.messageResId() = when (this) {
+    MatchaWarning.Undecryptable -> R.string.screen_matcha_threads_warning_undecryptable
+    MatchaWarning.HistoryUnavailable -> R.string.screen_matcha_threads_warning_history
+    MatchaWarning.NoAccess -> R.string.screen_matcha_threads_warning_access
+    MatchaWarning.Network -> R.string.screen_matcha_threads_warning_network
 }
 
 @Composable
@@ -134,7 +152,7 @@ private fun ChipRow(state: ChatBarState) {
         if (state.canCreateThread) {
             item(key = "new") {
                 PillFilterChip(
-                    label = stringResource(R.string.screen_matcha_threads_new),
+                    label = stringResource(R.string.common_matcha_new_thread),
                     selected = false,
                     leadingIcon = CompoundIcons.Plus(),
                     onClick = { eventSink(ChatBarEvent.NewThread) },
@@ -143,7 +161,7 @@ private fun ChipRow(state: ChatBarState) {
         }
         item(key = "all") {
             PillFilterChip(
-                label = stringResource(R.string.screen_matcha_threads_all),
+                label = stringResource(R.string.common_matcha_all_threads),
                 selected = false,
                 leadingIcon = CompoundIcons.Threads(),
                 onClick = { eventSink(ChatBarEvent.OpenAllThreads) },
@@ -163,7 +181,7 @@ private fun ThreadChip(
     selected: Boolean,
     eventSink: (ChatBarEvent) -> Unit,
 ) {
-    val name = thread.name ?: stringResource(R.string.screen_matcha_threads_fallback_name)
+    val name = thread.name ?: stringResource(R.string.common_matcha_thread_untitled)
     val archivedDescription = stringResource(R.string.a11y_matcha_thread_archived)
     PillFilterChip(
         label = name,
@@ -200,7 +218,7 @@ private fun MoreChip(state: ChatBarState) {
             }
             if (state.canOpenSpaceDocs) {
                 MoreMenuItem(
-                    text = stringResource(R.string.screen_matcha_threads_space_docs),
+                    text = stringResource(R.string.common_matcha_space_docs),
                     icon = CompoundIcons.Document(),
                     onClick = {
                         expanded = false

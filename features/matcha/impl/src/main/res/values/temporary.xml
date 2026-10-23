@@ -6,7 +6,7 @@
   -->
 
 <resources>
-    <!-- Track B: chip bar. The common_/action_ keys are listed as shared in WHATSAPP_DESIGN.md §5; keep one copy when merging. -->
+    <!-- Track B: chip bar. The common_/action_ keys belong in libraries/ui-strings per WHATSAPP_DESIGN.md §5; move them at integration. -->
     <string name="common_matcha_tasks">"Tasks"</string>
     <string name="common_matcha_more">"More"</string>
     <string name="common_matcha_error_name_empty">"Enter a name"</string>
@@ -16,21 +16,24 @@
     <string name="action_matcha_unarchive">"Unarchive"</string>
     <string name="action_matcha_undo">"Undo"</string>
     <string name="screen_matcha_threads_general">"General"</string>
-    <string name="screen_matcha_threads_new">"New thread"</string>
-    <string name="screen_matcha_threads_all">"All threads"</string>
-    <string name="screen_matcha_threads_space_docs">"Space docs"</string>
+    <string name="common_matcha_new_thread">"New thread"</string>
+    <string name="common_matcha_all_threads">"All threads"</string>
+    <string name="common_matcha_space_docs">"Space docs"</string>
+    <string name="common_matcha_thread_untitled">"Untitled thread"</string>
+    <string name="common_matcha_write_failed">"Couldn't save. Check your connection and try again."</string>
     <string name="screen_matcha_threads_name_hint">"Thread name"</string>
     <string name="screen_matcha_threads_name_helper">"Everyone in this chat can see the name."</string>
     <string name="screen_matcha_threads_create">"Create thread"</string>
     <string name="screen_matcha_threads_rename_title">"Rename thread"</string>
     <string name="screen_matcha_threads_setup_failed">"Message sent, but the thread couldn't be set up. Try again."</string>
     <string name="screen_matcha_threads_create_failed">"Couldn't create the thread. Check your connection and try again."</string>
-    <string name="screen_matcha_threads_update_failed">"Couldn't update the thread. Check your connection and try again."</string>
     <string name="screen_matcha_threads_archived_snackbar">"Thread archived"</string>
     <string name="screen_matcha_threads_unarchived_snackbar">"Thread unarchived"</string>
     <string name="screen_matcha_threads_view_task">"View task"</string>
     <string name="screen_matcha_threads_warning_undecryptable">"Some thread names can't be read on this device yet."</string>
-    <string name="screen_matcha_threads_fallback_name">"Thread"</string>
+    <string name="screen_matcha_threads_warning_history">"Older thread names aren't available on this device."</string>
+    <string name="screen_matcha_threads_warning_access">"You can't see thread names from before you joined."</string>
+    <string name="screen_matcha_threads_warning_network">"Thread names may be out of date. Check your connection."</string>
     <string name="a11y_matcha_thread_archived">"Archived thread"</string>
     <plurals name="a11y_matcha_open_tasks">
         <item quantity="one">"%1$d open task"</item>

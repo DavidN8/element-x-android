@@ -9,6 +9,7 @@ package io.element.android.features.matcha.impl.chatbar
 
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -25,17 +26,21 @@ import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
+import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.MatchaThread
 import io.element.android.features.matcha.impl.store.NamedThreadResult
 import io.element.android.features.matcha.impl.store.createNamedThread
+import io.element.android.features.matcha.impl.store.retrySetup
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.di.annotations.RoomCoroutineScope
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.ThreadId
+import io.element.android.libraries.matrix.api.room.JoinedRoom
+import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -50,7 +55,9 @@ import timber.log.Timber
  */
 @Inject
 class ChatBarPresenter(
+    private val room: JoinedRoom,
     private val store: MatchaRoomStore,
+    private val controller: DefaultMatchaRoomController,
     private val featureFlagService: FeatureFlagService,
     private val snackbarDispatcher: SnackbarDispatcher,
     @RoomCoroutineScope private val roomCoroutineScope: CoroutineScope,
@@ -70,8 +77,16 @@ class ChatBarPresenter(
         val permissions = snapshot.permissions
         val canManage = permissions.canManageThreads
         val canCreate = canManage && permissions.canSendMessages
-        val canRemind = permissions.canSendMessages
+        val canRemind = rememberCanRemind(room, permissions.canSendMessages)
         val threads = chipThreads(snapshot, selection, createdNames)
+        val request by controller.requests.collectAsState()
+
+        LaunchedEffect(request, isEnabled, canCreate) {
+            if (request == ChatBarRequest.NewThread && isEnabled) {
+                if (canCreate) sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false)
+                controller.consume(ChatBarRequest.NewThread)
+            }
+        }
 
         fun submitName(current: ChatBarSheet.ThreadName) {
             if (current.isSending) return
@@ -91,13 +106,18 @@ class ChatBarPresenter(
                             sheet = null
                             currentActions.openThread(result.threadId)
                         }
-                        NamedThreadResult.RootOnly -> sheet = null
+                        // The root exists, so the thread opens; the snackbar offers to finish setting it up.
+                        is NamedThreadResult.RootOnly -> {
+                            createdNames[result.threadId] = name
+                            sheet = null
+                            currentActions.openThread(result.threadId)
+                        }
                         NamedThreadResult.Failed -> sheet = current.copy(error = ThreadNameError.CreateFailed, isSending = false)
                     }
                 } else if (name == threads.firstOrNull { it.id == threadId }?.name) {
                     sheet = null
                 } else {
-                    val renamed = roomCoroutineScope.async { patch(threadId, name = name) }.await()
+                    val renamed = roomCoroutineScope.async { rename(threadId, name) }.await()
                     sheet = if (renamed) null else current.copy(error = ThreadNameError.RenameFailed, isSending = false)
                 }
             }
@@ -133,7 +153,7 @@ class ChatBarPresenter(
                     sheet = null
                     if (!canManage) return
                     localScope.launch {
-                        val done = roomCoroutineScope.async { patch(event.threadId, archived = event.archived, announce = true) }.await()
+                        val done = roomCoroutineScope.async { setArchived(event.threadId, event.archived, announce = true) }.await()
                         if (done && event.archived && currentSelection == MatchaChatBarSelection.Thread(event.threadId)) currentActions.openGeneral()
                     }
                 }
@@ -146,9 +166,10 @@ class ChatBarPresenter(
             }
         }
 
-        val visibleIds = threads.mapTo(HashSet()) { it.id }
         return ChatBarState(
             isVisible = isEnabled,
+            // The board always draws the bar; elsewhere it waits for the data, and appears only once the chat uses the features.
+            showBar = isEnabled && (selection == MatchaChatBarSelection.Tasks || snapshot.isLoaded && snapshot.hasChatBar()),
             selection = selection,
             openTaskCount = if (snapshot.isLoaded) snapshot.board?.cards?.count { !it.archived && it.status != TaskStatus.Done } ?: 0 else 0,
             threads = threads.toImmutableList(),
@@ -156,7 +177,7 @@ class ChatBarPresenter(
             canManageThreads = canManage,
             canRemind = canRemind,
             canOpenSpaceDocs = actions.openSpaceDocs != null,
-            showUnreadableNamesWarning = snapshot.threads.any { it.id in visibleIds && it.isRootUnreadable && !it.hasName() },
+            warning = snapshot.warning,
             sheet = sheet,
             reminderTarget = reminderTarget,
             eventSink = ::handleEvent,
@@ -165,30 +186,55 @@ class ChatBarPresenter(
 
     /** Creates the thread; a thread that could not be set up is reported here, since the bar may be gone by then. */
     private suspend fun createThread(name: String): NamedThreadResult = store.createNamedThread(name).also {
-        if (it == NamedThreadResult.RootOnly) {
-            snackbarDispatcher.post(SnackbarMessage(R.string.screen_matcha_threads_setup_failed, duration = SnackbarDuration.Long))
-        }
+        if (it is NamedThreadResult.RootOnly) postSetupFailed(it.threadId, name)
     }
 
-    /** Renames, archives or restores a thread for everyone; archiving offers Undo. Returns whether it was sent. */
-    private suspend fun patch(threadId: ThreadId, name: String? = null, archived: Boolean? = null, announce: Boolean = false): Boolean {
-        val result = store.send(MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(threadId.value, name = name, archived = archived))
+    private fun postSetupFailed(threadId: ThreadId, name: String) {
+        snackbarDispatcher.post(
+            SnackbarMessage(
+                messageResId = R.string.screen_matcha_threads_setup_failed,
+                duration = SnackbarDuration.Long,
+                actionResId = CommonStrings.action_retry,
+                action = {
+                    roomCoroutineScope.launch {
+                        store.retrySetup(threadId, name).onFailure { postSetupFailed(threadId, name) }
+                    }
+                },
+            )
+        )
+    }
+
+    /** Renames a thread for everyone; a failure is shown in the sheet. Returns whether it was sent. */
+    private suspend fun rename(threadId: ThreadId, name: String): Boolean =
+        store.send(MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(threadId.value, name = name))
+            .onFailure { Timber.w(it, "Could not rename thread %s", threadId.value) }
+            .isSuccess
+
+    /**
+     * Archives or restores a thread for everyone. With [announce], a snackbar offers to undo it; a failure always offers to
+     * retry. Returns whether it was sent.
+     */
+    private suspend fun setArchived(threadId: ThreadId, archived: Boolean, announce: Boolean): Boolean {
+        val result = store.send(MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(threadId.value, archived = archived))
         result.onFailure {
             Timber.w(it, "Could not update thread %s", threadId.value)
-            if (archived != null) snackbarDispatcher.post(SnackbarMessage(R.string.screen_matcha_threads_update_failed))
-        }
-        if (result.isSuccess && announce && archived != null) {
             snackbarDispatcher.post(
-                if (archived) {
-                    SnackbarMessage(
-                        messageResId = R.string.screen_matcha_threads_archived_snackbar,
-                        duration = SnackbarDuration.Long,
-                        actionResId = R.string.action_matcha_undo,
-                        action = { roomCoroutineScope.launch { patch(threadId, archived = false) } },
-                    )
-                } else {
-                    SnackbarMessage(R.string.screen_matcha_threads_unarchived_snackbar)
-                }
+                SnackbarMessage(
+                    messageResId = R.string.common_matcha_write_failed,
+                    duration = SnackbarDuration.Long,
+                    actionResId = CommonStrings.action_retry,
+                    action = { roomCoroutineScope.launch { setArchived(threadId, archived, announce) } },
+                )
+            )
+        }
+        if (result.isSuccess && announce) {
+            snackbarDispatcher.post(
+                SnackbarMessage(
+                    messageResId = if (archived) R.string.screen_matcha_threads_archived_snackbar else R.string.screen_matcha_threads_unarchived_snackbar,
+                    duration = SnackbarDuration.Long,
+                    actionResId = R.string.action_matcha_undo,
+                    action = { roomCoroutineScope.launch { setArchived(threadId, !archived, announce = false) } },
+                )
             )
         }
         return result.isSuccess
@@ -212,17 +258,18 @@ private fun validate(trimmedName: String, submitting: Boolean): ThreadNameError?
     else -> null
 }
 
-/** The name fell back to the root id: neither a shared name nor a readable root message exists. */
-private fun MatchaThread.hasName() = metadata.name != id.value
-
-private fun MatchaThread.toChip() = ChatBarThread(id = id, name = metadata.name.takeIf { hasName() }, isArchived = metadata.archived)
+private fun MatchaThread.toChip() = ChatBarThread(
+    id = id,
+    name = metadata.name.takeIf { metadata.nameSource != ThreadNameSource.EventId },
+    isArchived = metadata.archived,
+)
 
 /** Thread chips appear once the metadata has loaded, so names never change under the user's finger. */
 private fun chipThreads(snapshot: MatchaRoomSnapshot, selection: MatchaChatBarSelection, createdNames: Map<ThreadId, String>): List<ChatBarThread> {
     if (!snapshot.isLoaded) return emptyList()
+    // The store's order: newest activity first.
     val active = snapshot.threads
         .filter { !it.metadata.archived }
-        .sortedByDescending { it.rootTimestamp }
         .take(ChatBarPresenter.MAX_THREAD_CHIPS)
         .map { it.toChip() }
     val selectedId = (selection as? MatchaChatBarSelection.Thread)?.threadId

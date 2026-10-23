@@ -20,6 +20,7 @@ import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
@@ -31,6 +32,8 @@ import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.room.MessageEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
+import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -39,6 +42,12 @@ import org.junit.Test
 
 class ChatBarPresenterTest {
     private val boardRoot = "\$board"
+
+    /** Runs work launched in the room scope, which is the test's background scope. */
+    private fun TestScope.settle() {
+        testScheduler.advanceTimeBy(1_000)
+        testScheduler.runCurrent()
+    }
 
     @Test
     fun `nothing is shown when the feature is off`() = runTest {
@@ -63,7 +72,7 @@ class ChatBarPresenterTest {
     }
 
     @Test
-    fun `up to four active threads are shown, newest root first, with the open task count`() = runTest {
+    fun `up to four active threads are shown, newest activity first, with the open task count`() = runTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
             boardRoot = boardRoot,
@@ -117,7 +126,7 @@ class ChatBarPresenterTest {
         aPresenter(store).test {
             val state = awaitUntil { it.threads.isNotEmpty() }
             assertThat(state.threads.single().name).isNull()
-            assertThat(state.showUnreadableNamesWarning).isTrue()
+            assertThat(state.warning).isEqualTo(MatchaWarning.Undecryptable)
         }
     }
 
@@ -164,21 +173,33 @@ class ChatBarPresenterTest {
     }
 
     @Test
-    fun `a thread that could not be set up says so and stays in the chat`() = runTest {
+    fun `a thread that could not be set up opens anyway and offers to finish setting it up`() = runTest {
         val actions = FakeMatchaChatBarActions()
         val snackbarDispatcher = SnackbarDispatcher()
-        var sends = 0
-        val store = aMatchaRoomStore(backgroundScope) { _, _ ->
-            sends++
-            if (sends == 1) Result.success(EventId("\$root")) else Result.failure(IllegalStateException("offline"))
+        val sent = mutableListOf<String>()
+        val store = aMatchaRoomStore(backgroundScope) { type, content ->
+            sent += content
+            when (sent.size) {
+                1 -> Result.success(EventId("\$root"))
+                2 -> Result.failure(IllegalStateException("offline"))
+                else -> Result.success(EventId("\$reply"))
+            }
         }
         aPresenter(store, actions = actions, snackbarDispatcher = snackbarDispatcher).test {
             awaitUntil { it.canCreateThread }.eventSink(ChatBarEvent.NewThread)
             awaitUntil { it.sheet is ChatBarSheet.ThreadName }.eventSink(ChatBarEvent.UpdateThreadName("Plan"))
             awaitUntil { (it.sheet as? ChatBarSheet.ThreadName)?.name == "Plan" }.eventSink(ChatBarEvent.SubmitThreadName)
             awaitUntil { it.sheet == null }
-            assertThat(snackbarDispatcher.snackbarMessage.first()?.messageResId).isEqualTo(R.string.screen_matcha_threads_setup_failed)
-            assertThat(actions.calls).isEmpty()
+            assertThat(actions.calls).containsExactly("thread \$root")
+            val snackbar = snackbarDispatcher.snackbarMessage.first()!!
+            assertThat(snackbar.messageResId).isEqualTo(R.string.screen_matcha_threads_setup_failed)
+            assertThat(snackbar.actionResId).isEqualTo(CommonStrings.action_retry)
+
+            snackbar.action()
+            settle()
+            assertThat(sent).hasSize(3)
+            assertThat(sent.last()).isEqualTo(sent[1])
+            cancelAndIgnoreRemainingEvents()
         }
     }
 
@@ -267,6 +288,74 @@ class ChatBarPresenterTest {
     }
 
     @Test
+    fun `a failed archive offers to retry, and unarchiving offers Undo`() = runTest {
+        val snackbarDispatcher = SnackbarDispatcher()
+        var fail = true
+        val sent = mutableListOf<String>()
+        val store = aMatchaRoomStore(backgroundScope, threads = listOf(aThreadListItem("\$t1"))) { _, content ->
+            sent += content
+            if (fail) Result.failure(IllegalStateException("offline")) else Result.success(EventId("\$patch${sent.size}"))
+        }
+        aPresenter(store, snackbarDispatcher = snackbarDispatcher).test {
+            awaitUntil { it.threads.isNotEmpty() }.eventSink(ChatBarEvent.SetArchived(ThreadId("\$t1"), archived = true))
+            val failure = snackbarDispatcher.snackbarMessage.first { it != null }!!
+            assertThat(failure.messageResId).isEqualTo(R.string.common_matcha_write_failed)
+            assertThat(failure.actionResId).isEqualTo(CommonStrings.action_retry)
+
+            fail = false
+            snackbarDispatcher.clear()
+            failure.action()
+            // An archived thread leaves the bar.
+            val archived = awaitUntil { it.threads.isEmpty() }
+            assertThat(sent.last()).contains("\"archived\":true")
+            snackbarDispatcher.clear()
+
+            archived.eventSink(ChatBarEvent.SetArchived(ThreadId("\$t1"), archived = false))
+            awaitUntil { it.threads.singleOrNull()?.isArchived == false }
+            val unarchived = snackbarDispatcher.snackbarMessage.first { it != null }!!
+            assertThat(unarchived.messageResId).isEqualTo(R.string.screen_matcha_threads_unarchived_snackbar)
+            assertThat(unarchived.actionResId).isEqualTo(R.string.action_matcha_undo)
+        }
+    }
+
+    @Test
+    fun `the bar shows once the chat has a named thread or a board, and always on the board`() = runTest {
+        val named = aMatchaRoomStore(
+            scope = backgroundScope,
+            threads = listOf(aThreadListItem("\$t1")),
+            items = listOf(namePatch(1, "\$t1", "Launch plan")),
+        )
+        aPresenter(named).test {
+            assertThat(awaitUntil { it.threads.isNotEmpty() }.showBar).isTrue()
+        }
+        val unnamed = aMatchaRoomStore(scope = backgroundScope, threads = listOf(aThreadListItem("\$t1")))
+        aPresenter(unnamed).test {
+            val state = awaitUntil { it.threads.isNotEmpty() }
+            assertThat(state.isVisible).isTrue()
+            assertThat(state.showBar).isFalse()
+        }
+        aPresenter(unnamed, selection = MatchaChatBarSelection.Tasks).test {
+            assertThat(awaitUntil { it.isVisible }.showBar).isTrue()
+        }
+        aPresenter(aMatchaRoomStore(scope = backgroundScope, boardRoot = boardRoot)).test {
+            assertThat(awaitUntil { it.showBar }.threads).isEmpty()
+        }
+    }
+
+    @Test
+    fun `the room controller opens the New thread sheet`() = runTest {
+        val store = aMatchaRoomStore(backgroundScope)
+        val controller = DefaultMatchaRoomController(store, backgroundScope)
+        aPresenter(store, controller = controller).test {
+            awaitUntil { it.canCreateThread }
+            controller.openNewThread()
+            assertThat(awaitUntil { it.sheet != null }.sheet).isEqualTo(ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false))
+            assertThat(controller.requests.value).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `without permission threads cannot be created or managed`() = runTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
@@ -297,6 +386,12 @@ class ChatBarPresenterTest {
             assertThat(actions.calls).containsExactly("task \$t2")
         }
     }
+
+    private fun namePatch(index: Int, threadId: String, name: String) = aMatchaEventItem(
+        index,
+        MatchaConfig.EVENT_THREAD_METADATA,
+        """{"version": 1, "name": "$name", "m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
+    )
 
     private fun archivePatch(index: Int, threadId: String) = aMatchaEventItem(
         index,
@@ -329,9 +424,12 @@ class ChatBarPresenterTest {
         actions: MatchaChatBarActions = FakeMatchaChatBarActions(),
         isEnabled: Boolean = true,
         snackbarDispatcher: SnackbarDispatcher = SnackbarDispatcher(),
+        controller: DefaultMatchaRoomController = DefaultMatchaRoomController(store, backgroundScope),
     ) = PresenterUnderTest(
         presenter = ChatBarPresenter(
+            room = FakeJoinedRoom(),
             store = store,
+            controller = controller,
             featureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to isEnabled)),
             snackbarDispatcher = snackbarDispatcher,
             roomCoroutineScope = backgroundScope,

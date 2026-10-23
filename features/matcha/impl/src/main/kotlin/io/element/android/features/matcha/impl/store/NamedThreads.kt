@@ -19,8 +19,8 @@ import timber.log.Timber
 sealed interface NamedThreadResult {
     data class Created(val threadId: ThreadId) : NamedThreadResult
 
-    /** The root message was sent but the thread could not be set up. */
-    data object RootOnly : NamedThreadResult
+    /** The root message was sent but the thread could not be set up; [retrySetup] tries again. */
+    data class RootOnly(val threadId: ThreadId) : NamedThreadResult
 
     /** Nothing was sent. */
     data object Failed : NamedThreadResult
@@ -44,9 +44,15 @@ suspend fun MatchaRoomStore.createNamedThread(name: String): NamedThreadResult {
         onSuccess = { NamedThreadResult.Created(root.toThreadId()) },
         onFailure = {
             Timber.w(it, "Could not set up the new thread %s", root.value)
-            NamedThreadResult.RootOnly
+            NamedThreadResult.RootOnly(root.toThreadId())
         },
     )
 }
+
+/** Sends the bootstrap reply of a named thread again, after [NamedThreadResult.RootOnly]. */
+suspend fun MatchaRoomStore.retrySetup(threadId: ThreadId, name: String): Result<Unit> =
+    send(MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.bootstrapReplyContent(threadId.value, name.trim()))
+        .onFailure { Timber.w(it, "Could not set up the new thread %s", threadId.value) }
+        .map { }
 
 private const val EVENT_ROOM_MESSAGE = "m.room.message"

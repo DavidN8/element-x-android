@@ -24,8 +24,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -59,18 +61,22 @@ internal fun ThreadNameSheet(
     eventSink: (ChatBarEvent) -> Unit,
 ) {
     val isRename = sheet.threadId != null
-    val title = stringResource(if (isRename) R.string.screen_matcha_threads_rename_title else R.string.screen_matcha_threads_new)
+    val title = stringResource(if (isRename) R.string.screen_matcha_threads_rename_title else R.string.common_matcha_new_thread)
     ModalBottomSheet(
         onDismissRequest = { eventSink(ChatBarEvent.DismissSheet) },
         scrollable = true,
         modifier = Modifier.semantics { paneTitle = title },
     ) {
+        // Name errors sit under the field; a failed send sits above the pill, and the sheet stays open.
         val errorText = when (sheet.error) {
             ThreadNameError.Empty -> stringResource(R.string.common_matcha_error_name_empty)
             ThreadNameError.TooLong -> stringResource(R.string.common_matcha_error_max_chars, MatchaConfig.THREAD_NAME_MAX_LENGTH.toString())
+            else -> null
+        }
+        val sendErrorText = when (sheet.error) {
             ThreadNameError.CreateFailed -> stringResource(R.string.screen_matcha_threads_create_failed)
-            ThreadNameError.RenameFailed -> stringResource(R.string.screen_matcha_threads_update_failed)
-            null -> null
+            ThreadNameError.RenameFailed -> stringResource(R.string.common_matcha_write_failed)
+            else -> null
         }
         val focusRequester = remember { FocusRequester() }
         if (!LocalInspectionMode.current) {
@@ -109,6 +115,14 @@ internal fun ThreadNameSheet(
                     .focusRequester(focusRequester)
                     .semantics { if (errorText != null) error(errorText) },
             )
+            if (sendErrorText != null) {
+                Text(
+                    text = sendErrorText,
+                    style = ElementTheme.typography.fontBodyMdRegular,
+                    color = ElementTheme.colors.textCriticalPrimary,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
             Button(
                 text = stringResource(if (isRename) CommonStrings.action_save else R.string.screen_matcha_threads_create),
                 onClick = { eventSink(ChatBarEvent.SubmitThreadName) },
@@ -129,7 +143,7 @@ internal fun ThreadActionsSheet(
     canRemind: Boolean,
     eventSink: (ChatBarEvent) -> Unit,
 ) {
-    val title = thread.name ?: stringResource(R.string.screen_matcha_threads_fallback_name)
+    val title = thread.name ?: stringResource(R.string.common_matcha_thread_untitled)
     ModalBottomSheet(
         onDismissRequest = { eventSink(ChatBarEvent.DismissSheet) },
         scrollable = true,

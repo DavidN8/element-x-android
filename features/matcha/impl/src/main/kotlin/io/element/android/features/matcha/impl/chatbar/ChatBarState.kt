@@ -10,12 +10,15 @@ package io.element.android.features.matcha.impl.chatbar
 import androidx.compose.runtime.Immutable
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.api.MatchaReminderTarget
+import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.libraries.matrix.api.core.ThreadId
 import kotlinx.collections.immutable.ImmutableList
 
 data class ChatBarState(
-    /** False when the Matcha workspaces feature is off: nothing is drawn. */
+    /** False when the Matcha workspaces feature is off: nothing is drawn, and no sheet is shown. */
     val isVisible: Boolean,
+    /** Draw the bar itself; when false only the sheets are hosted. */
+    val showBar: Boolean,
     val selection: MatchaChatBarSelection,
     /** To do and In progress tasks on the chat's board; 0 hides the count. */
     val openTaskCount: Int,
@@ -25,7 +28,8 @@ data class ChatBarState(
     val canManageThreads: Boolean,
     val canRemind: Boolean,
     val canOpenSpaceDocs: Boolean,
-    val showUnreadableNamesWarning: Boolean,
+    /** Why some thread names may be missing or out of date, shown as a strip under the bar. */
+    val warning: MatchaWarning?,
     val sheet: ChatBarSheet?,
     /** The reminder sheet is shown while this is set. */
     val reminderTarget: MatchaReminderTarget?,
@@ -37,7 +41,7 @@ data class ChatBarState(
 @Immutable
 data class ChatBarThread(
     val id: ThreadId,
-    /** The shared name, or null when there is none to show; drawn as "Thread". */
+    /** The shared name or the root message text, or null when only the event id is known; drawn as "Untitled thread". */
     val name: String?,
     val isArchived: Boolean,
 )
