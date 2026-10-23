@@ -264,7 +264,7 @@ class MatchaRoomStoreTest {
                 aTimelineItemDebugInfo(
                     originalJson = """{"type": "m.room.encrypted", "event_id": "${'$'}u$index", "sender": "@bob:x", "origin_server_ts": $index,
                         "content": {"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "x",
-                        "m.relates_to": {"rel_type": "m.reference", "event_id": "$target"}}}"""
+                        "m.relates_to": {"rel_type": "m.reference", "event_id": "$target"}}}""".trimIndent()
                 )
             },
         ),

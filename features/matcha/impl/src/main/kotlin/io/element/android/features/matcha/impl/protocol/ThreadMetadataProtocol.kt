@@ -60,8 +60,9 @@ object ThreadMetadataProtocol {
     /**
      * The latest value of each field wins independently, so a rename never undoes a concurrent archive.
      *
-     * @param patchesNewestFirst the valid patches for this thread in server order, newest first.
+     * @param rootId the thread root event id, the name of last resort.
      * @param rootBody the root message body, used as the name until someone names the thread.
+     * @param patchesNewestFirst the valid patches for this thread in server order, newest first.
      * @param legacyArchived the archive flag of the legacy state event, read only as a fallback.
      */
     fun resolve(

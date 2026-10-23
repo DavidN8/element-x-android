@@ -293,12 +293,12 @@ class MatchaRoomStore(
             .onFailure { Timber.w(it, "Could not read the board pointer") }
         val pointer = pointerRead.getOrNull()
             ?.get("")
-            ?.let { runCatching { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+            ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
             ?.let(KanbanProtocol::parseBoardPointer)
         val legacy = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_THREAD_ARCHIVE)).getOrNull()
             .orEmpty()
             .mapNotNull { (key, content) ->
-                val archived = runCatching { json.parseToJsonElement(content).jsonObject }.getOrNull()?.booleanOrNull("archived")
+                val archived = runCatchingExceptions { json.parseToJsonElement(content).jsonObject }.getOrNull()?.booleanOrNull("archived")
                 archived?.let { key to it }
             }
             .toMap()
@@ -347,8 +347,7 @@ class MatchaRoomStore(
         val latestCards = KanbanProtocol.latestRevisions(revisions)
 
         val patchesByRoot = HashMap<String, MutableList<ThreadMetadataPatch>>()
-        for (event in events) {
-            if (event.type != MatchaConfig.EVENT_THREAD_METADATA) continue
+        for (event in events.filter { it.type == MatchaConfig.EVENT_THREAD_METADATA }) {
             val root = event.content.referenceTarget() ?: continue
             ThreadMetadataProtocol.parsePatch(event, root)?.let { patchesByRoot.getOrPut(root) { mutableListOf() } += it }
         }
@@ -384,7 +383,7 @@ class MatchaRoomStore(
             .filter { it.type == EVENT_ROOM_ENCRYPTED && it.content.referenceTarget() in matchaTargets }
             .map { event -> event.eventId?.let(health.utdCauses::get) }
         val unreadableRootCauses = threadList
-            .filter { item -> (item.rootEvent.content as? UnableToDecryptContent) != null }
+            .filter { item -> item.rootEvent.content is UnableToDecryptContent }
             .filter { item -> threads.firstOrNull { it.id == item.threadId }?.metadata?.nameSource != ThreadNameSource.Explicit }
             .map { item -> ((item.rootEvent.content as UnableToDecryptContent).data as? UnableToDecryptContent.Data.MegolmV1AesSha2)?.utdCause }
         val warning = (unreadableCauses + unreadableRootCauses).map(::warningFor).minOrNull()
@@ -427,7 +426,7 @@ class MatchaRoomStore(
     /** Sends a Matcha timeline event and shows it straight away, before its remote echo. */
     suspend fun send(eventType: String, contentJson: String): Result<EventId> = writeMutex.withLock {
         room.sendRawEvent(eventType, contentJson).onSuccess { eventId ->
-            val content = runCatching { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
+            val content = runCatchingExceptions { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
             val echo = RawEvent(
                 type = eventType,
                 content = content,

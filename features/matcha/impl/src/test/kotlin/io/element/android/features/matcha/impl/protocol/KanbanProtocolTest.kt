@@ -20,7 +20,7 @@ class KanbanProtocolTest {
         val unsigned = if (redacted) """, "unsigned": {"redacted_because": {}}""" else ""
         return RawEvent.parse(
             """{"type": "${MatchaConfig.EVENT_KANBAN_CARD}", "event_id": "${'$'}e", "sender": "@a:b", "origin_server_ts": 1,
-                "content": {"version": 1, $fields, "m.relates_to": {"rel_type": "m.reference", "event_id": "$root"}}$unsigned}"""
+                "content": {"version": 1, $fields, "m.relates_to": {"rel_type": "m.reference", "event_id": "$root"}}$unsigned}""".trimIndent()
         )!!
     }
 
@@ -48,7 +48,8 @@ class KanbanProtocolTest {
     fun `optional fields are read when valid and dropped when not`() {
         val card = KanbanProtocol.parseCard(
             cardEvent(
-                """$valid, "thread_id": "${'$'}t", "due_at": 1767225600000, "reminder_requested": {"event_id": "${'$'}cmd", "at": 1767225600000}, "show_to_room": false"""
+                """$valid, "thread_id": "${'$'}t", "due_at": 1767225600000, """ +
+                    """"reminder_requested": {"event_id": "${'$'}cmd", "at": 1767225600000}, "show_to_room": false"""
             ),
             root,
         )!!
