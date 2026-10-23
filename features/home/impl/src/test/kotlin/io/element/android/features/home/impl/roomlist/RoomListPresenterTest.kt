@@ -57,6 +57,7 @@ import io.element.android.libraries.matrix.test.A_ROOM_ID_2
 import io.element.android.libraries.matrix.test.A_ROOM_ID_3
 import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.A_SESSION_ID_2
+import io.element.android.libraries.matrix.test.A_THREAD_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.encryption.FakeEncryptionService
 import io.element.android.libraries.matrix.test.notificationsettings.FakeNotificationSettingsService
@@ -79,6 +80,10 @@ import io.element.android.libraries.sessionstorage.test.aSessionData
 import io.element.android.services.analytics.api.AnalyticsService
 import io.element.android.services.analytics.test.FakeAnalyticsService
 import io.element.android.services.analytics.test.watchers.FakeAnalyticsColdStartWatcher
+import io.element.android.services.appnavstate.api.AppNavigationStateService
+import io.element.android.services.appnavstate.test.FakeAppNavigationStateService
+import io.element.android.services.appnavstate.test.aNavigationState
+import io.element.android.services.appnavstate.test.anAppNavigationState
 import io.element.android.tests.testutils.EventsRecorder
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
@@ -754,6 +759,29 @@ class RoomListPresenterTest {
         }
     }
 
+    @Test
+    fun `present - selectedRoomId follows the room of the app navigation state`() = runTest {
+        val appNavigationStateService = FakeAppNavigationStateService()
+        val presenter = createRoomListPresenter(appNavigationStateService = appNavigationStateService)
+        presenter.test {
+            assertThat(awaitItem().selectedRoomId).isNull()
+            appNavigationStateService.emitNavigationState(
+                anAppNavigationState(navigationState = aNavigationState(sessionId = A_SESSION_ID, roomId = A_ROOM_ID))
+            )
+            assertThat(consumeItemsUntilPredicate { it.selectedRoomId != null }.last().selectedRoomId).isEqualTo(A_ROOM_ID)
+            // A thread keeps its parent room selected
+            appNavigationStateService.emitNavigationState(
+                anAppNavigationState(navigationState = aNavigationState(sessionId = A_SESSION_ID, roomId = A_ROOM_ID_2, threadId = A_THREAD_ID))
+            )
+            assertThat(consumeItemsUntilPredicate { it.selectedRoomId == A_ROOM_ID_2 }.last().selectedRoomId).isEqualTo(A_ROOM_ID_2)
+            appNavigationStateService.emitNavigationState(
+                anAppNavigationState(navigationState = aNavigationState(sessionId = A_SESSION_ID))
+            )
+            assertThat(consumeItemsUntilPredicate { it.selectedRoomId == null }.last().selectedRoomId).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun TestScope.createRoomListPresenter(
         client: MatrixClient = FakeMatrixClient(),
         leaveRoomState: LeaveRoomState = aLeaveRoomState(),
@@ -771,6 +799,7 @@ class RoomListPresenterTest {
         featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
         markRoomAsRead: MarkRoomAsRead? = null,
         sessionStore: SessionStore = InMemorySessionStore(),
+        appNavigationStateService: AppNavigationStateService = FakeAppNavigationStateService(),
     ) = RoomListPresenter(
         client = client,
         leaveRoomPresenter = { leaveRoomState },
@@ -804,5 +833,6 @@ class RoomListPresenterTest {
         coldStartWatcher = FakeAnalyticsColdStartWatcher(),
         featureFlagService = featureFlagService,
         sessionStore = sessionStore,
+        appNavigationStateService = appNavigationStateService,
     )
 }

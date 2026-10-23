@@ -53,6 +53,7 @@ dependencies {
     implementation(projects.features.leaveroom.api)
     implementation(projects.features.rageshake.api)
     implementation(projects.services.analytics.api)
+    implementation(projects.services.appnavstate.api)
     implementation(libs.androidx.datastore.preferences)
     implementation(projects.features.preferences.impl)
     implementation(projects.features.reportroom.api)
@@ -73,4 +74,5 @@ dependencies {
     testImplementation(projects.libraries.sessionStorage.test)
     testImplementation(projects.libraries.push.test)
     testImplementation(projects.services.analytics.test)
+    testImplementation(projects.services.appnavstate.test)
 }

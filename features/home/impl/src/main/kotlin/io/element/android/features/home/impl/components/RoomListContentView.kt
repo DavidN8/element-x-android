@@ -63,6 +63,7 @@ import io.element.android.libraries.designsystem.theme.components.IconSource
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.utils.OnVisibleRangeChangeEffect
 import io.element.android.libraries.fullscreenintent.api.FullScreenIntentPermissionsEvent
+import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.push.api.battery.BatteryOptimizationEvent
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
@@ -74,6 +75,7 @@ fun RoomListContentView(
     spaceFiltersState: SpaceFiltersState,
     lazyListState: LazyListState,
     hideInvitesAvatars: Boolean,
+    selectedRoomId: RoomId?,
     eventSink: (RoomListEvent) -> Unit,
     onSetUpRecoveryClick: () -> Unit,
     onConfirmRecoveryKeyClick: () -> Unit,
@@ -105,6 +107,7 @@ fun RoomListContentView(
                 modifier = modifier,
                 state = contentState,
                 hideInvitesAvatars = hideInvitesAvatars,
+                selectedRoomId = selectedRoomId,
                 filtersState = filtersState,
                 spaceFiltersState = spaceFiltersState,
                 eventSink = eventSink,
@@ -192,6 +195,7 @@ private fun EmptyView(
 private fun RoomsView(
     state: RoomListContentState.Rooms,
     hideInvitesAvatars: Boolean,
+    selectedRoomId: RoomId?,
     filtersState: RoomListFiltersState,
     spaceFiltersState: SpaceFiltersState,
     eventSink: (RoomListEvent) -> Unit,
@@ -214,6 +218,7 @@ private fun RoomsView(
         RoomsViewList(
             state = state,
             hideInvitesAvatars = hideInvitesAvatars,
+            selectedRoomId = selectedRoomId,
             eventSink = eventSink,
             onSetUpRecoveryClick = onSetUpRecoveryClick,
             onConfirmRecoveryKeyClick = onConfirmRecoveryKeyClick,
@@ -229,6 +234,7 @@ private fun RoomsView(
 private fun RoomsViewList(
     state: RoomListContentState.Rooms,
     hideInvitesAvatars: Boolean,
+    selectedRoomId: RoomId?,
     eventSink: (RoomListEvent) -> Unit,
     onSetUpRecoveryClick: () -> Unit,
     onConfirmRecoveryKeyClick: () -> Unit,
@@ -298,6 +304,7 @@ private fun RoomsViewList(
                 hideInviteAvatars = hideInvitesAvatars,
                 isInviteSeen = room.displayType == RoomSummaryDisplayType.INVITE &&
                     state.seenRoomInvites.contains(room.roomId),
+                isSelected = room.roomId == selectedRoomId,
                 showUnreadCount = state.showUnreadCount,
                 showAllActivity = state.showAllActivity,
                 onClick = onRoomClick,
@@ -441,6 +448,7 @@ internal fun RoomListContentViewPreview(@PreviewParameter(RoomListContentStatePr
         ),
         spaceFiltersState = anUnselectedSpaceFiltersState(),
         hideInvitesAvatars = false,
+        selectedRoomId = null,
         eventSink = {},
         onSetUpRecoveryClick = {},
         onConfirmRecoveryKeyClick = {},

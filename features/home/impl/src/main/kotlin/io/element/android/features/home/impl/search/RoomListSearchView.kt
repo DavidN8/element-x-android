@@ -183,6 +183,8 @@ private fun RoomListSearchContent(
                         hideInviteAvatars = hideInvitesAvatars,
                         // TODO
                         isInviteSeen = false,
+                        // Search results are a transient list, the open room is only highlighted in the main list.
+                        isSelected = false,
                         onClick = ::onRoomClick,
                         eventSink = eventSink,
                     )

@@ -63,6 +63,7 @@ import io.element.android.libraries.designsystem.theme.components.HorizontalFloa
 import io.element.android.libraries.designsystem.theme.components.HorizontalFloatingToolbarSeparator
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Scaffold
+import io.element.android.libraries.designsystem.utils.hasTwoPaneWindowSize
 import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarHost
@@ -296,6 +297,8 @@ private fun HomeScaffold(
                             spaceFiltersState = roomListState.spaceFiltersState,
                             lazyListState = roomsLazyListState,
                             hideInvitesAvatars = roomListState.hideInvitesAvatars,
+                            // The open room is only highlighted when it is shown next to the list.
+                            selectedRoomId = if (hasTwoPaneWindowSize()) roomListState.selectedRoomId else null,
                             eventSink = roomListState.eventSink,
                             onSetUpRecoveryClick = onSetUpRecoveryClick,
                             onConfirmRecoveryKeyClick = onConfirmRecoveryKeyClick,

@@ -34,6 +34,8 @@ data class RoomListState(
     val acceptDeclineInviteState: AcceptDeclineInviteState,
     val hideInvitesAvatars: Boolean,
     val canReportRoom: Boolean,
+    /** The room currently open in the app, highlighted in the list when it is shown next to the room (two-pane layout). */
+    val selectedRoomId: RoomId?,
     val eventSink: (RoomListEvent) -> Unit,
 ) {
     val displayFilters = contentState is RoomListContentState.Rooms

@@ -60,6 +60,8 @@ import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.services.analytics.api.AnalyticsService
 import io.element.android.services.analytics.api.watchers.AnalyticsColdStartWatcher
 import io.element.android.services.analyticsproviders.api.trackers.captureInteraction
+import io.element.android.services.appnavstate.api.AppNavigationStateService
+import io.element.android.services.appnavstate.api.currentRoomId
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
@@ -92,6 +94,7 @@ class RoomListPresenter(
     private val globalSearchPresenter: Presenter<GlobalSearchState>,
     private val featureFlagService: FeatureFlagService,
     private val sessionStore: SessionStore,
+    private val appNavigationStateService: AppNavigationStateService,
 ) : Presenter<RoomListState> {
     private val encryptionService = client.encryptionService
 
@@ -184,6 +187,9 @@ class RoomListPresenter(
         }
 
         val canReportRoom by produceState(false) { value = client.canReportRoom() }
+        val selectedRoomId by produceState<RoomId?>(initialValue = null) {
+            appNavigationStateService.appNavigationState.collect { value = it.navigationState.currentRoomId() }
+        }
         val showUnreadCount by produceState(false) {
             featureFlagService.isFeatureEnabledFlow(FeatureFlags.UnreadIndicatorCount).collect { value = it }
         }
@@ -208,6 +214,7 @@ class RoomListPresenter(
             acceptDeclineInviteState = acceptDeclineInviteState,
             hideInvitesAvatars = hideInvitesAvatar,
             canReportRoom = canReportRoom,
+            selectedRoomId = selectedRoomId,
             eventSink = ::handleEvent,
         )
     }

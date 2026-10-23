@@ -52,6 +52,7 @@ import io.element.android.services.analytics.api.AnalyticsService
 import io.element.android.services.analytics.api.finishLongRunningTransaction
 import io.element.android.services.appnavstate.api.ActiveRoomsHolder
 import io.element.android.services.appnavstate.api.AppNavigationStateService
+import io.element.android.services.appnavstate.api.currentRoomId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.parcelize.Parcelize
@@ -115,6 +116,11 @@ class JoinedRoomLoadedFlowNode(
             },
             onResume = {
                 analyticsService.finishLongRunningTransaction(LoadJoinedRoomFlow)
+                // A room revealed again by popping a newer one is not reported by onCreate, so report it here.
+                // Skipped when the state already points at this room (or one of its threads), e.g. when the app comes back to the foreground.
+                if (appNavigationStateService.appNavigationState.value.navigationState.currentRoomId() != inputs.room.roomId) {
+                    appNavigationStateService.onNavigateToRoom(id, inputs.room.roomId)
+                }
                 sessionCoroutineScope.launch {
                     inputs.room.subscribeToSync()
                 }

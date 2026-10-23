@@ -8,6 +8,7 @@
 
 package io.element.android.features.home.impl.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +46,7 @@ import io.element.android.features.home.impl.model.LatestEvent
 import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.features.home.impl.model.RoomListRoomSummaryPreviewParam
 import io.element.android.features.home.impl.model.RoomSummaryDisplayType
+import io.element.android.features.home.impl.model.aRoomListRoomSummary
 import io.element.android.features.home.impl.roomlist.RoomListEvent
 import io.element.android.libraries.core.extensions.orEmpty
 import io.element.android.libraries.core.extensions.toSafeLength
@@ -76,13 +78,15 @@ internal fun RoomSummaryRow(
     room: RoomListRoomSummary,
     hideInviteAvatars: Boolean,
     isInviteSeen: Boolean,
+    isSelected: Boolean,
     onClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
     showUnreadCount: Boolean = false,
     showAllActivity: Boolean = false,
     eventSink: (RoomListEvent) -> Unit,
 ) {
-    Box(modifier = modifier) {
+    val background = if (isSelected) Modifier.background(ElementTheme.colors.bgSubtleSecondary) else Modifier
+    Box(modifier = modifier.then(background)) {
         when (room.displayType) {
             RoomSummaryDisplayType.PLACEHOLDER -> {
                 RoomSummaryPlaceholderRow()
@@ -466,9 +470,23 @@ internal fun RoomSummaryRowPreview(@PreviewParameter(RoomListRoomSummaryPreviewP
         hideInviteAvatars = false,
         // Set isInviteSeen to true for the preview when the room has name "Bob"
         isInviteSeen = data.name == "Bob",
+        isSelected = false,
         onClick = {},
         eventSink = {},
         showUnreadCount = data.numberOfUnreadNotifications > 0,
         showAllActivity = true,
+    )
+}
+
+@PreviewsDayNight
+@Composable
+internal fun RoomSummaryRowSelectedPreview() = ElementPreview {
+    RoomSummaryRow(
+        room = aRoomListRoomSummary(),
+        hideInviteAvatars = false,
+        isInviteSeen = false,
+        isSelected = true,
+        onClick = {},
+        eventSink = {},
     )
 }
