@@ -39,6 +39,12 @@ fun SemanticColors.toMaterialColorSchemeLight(): ColorScheme = lightColorScheme(
     onSurface = textPrimary,
     surfaceVariant = bgSubtleSecondary,
     onSurfaceVariant = textSecondary,
+    // Without these, Material 3 falls back to its baseline lavender containers (menus, pickers, cards...).
+    surfaceContainerLowest = bgCanvasDefault,
+    surfaceContainerLow = bgCanvasDefault,
+    surfaceContainer = bgCanvasDefault,
+    surfaceContainerHigh = bgCanvasDefault,
+    surfaceContainerHighest = bgSubtleSecondary,
     surfaceTint = LightColorTokens.colorGray1000,
     inverseSurface = LightColorTokens.colorGray1300,
     inverseOnSurface = textOnSolidPrimary,
