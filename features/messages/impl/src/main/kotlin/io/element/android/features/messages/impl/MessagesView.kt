@@ -13,7 +13,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.RowScope
@@ -125,6 +124,7 @@ import io.element.android.libraries.designsystem.text.toDp
 import io.element.android.libraries.designsystem.theme.chatWallpaper
 import io.element.android.libraries.designsystem.theme.components.BottomSheetDragHandle
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
@@ -556,12 +556,12 @@ internal fun RowScope.MessagesMenuActions(
     onThreadsListClick: () -> Unit,
 ) {
     if (displayThreads) {
-        Icon(
-            modifier = Modifier.clickable(enabled = true, onClick = onThreadsListClick),
-            imageVector = CompoundIcons.ThreadsSolid(),
-            contentDescription = stringResource(CommonStrings.common_threads),
-        )
-        Spacer(Modifier.width(8.dp))
+        IconButton(onClick = onThreadsListClick) {
+            Icon(
+                imageVector = CompoundIcons.Threads(),
+                contentDescription = stringResource(CommonStrings.common_threads),
+            )
+        }
     }
     CallMenuItem(
         roomCallState = roomCallState,
