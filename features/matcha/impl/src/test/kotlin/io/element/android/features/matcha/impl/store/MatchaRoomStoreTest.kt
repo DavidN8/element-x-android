@@ -104,7 +104,7 @@ class MatchaRoomStoreTest {
                 createTimelineResult?.invoke() ?: Result.success(timeline)
             },
             sendRawEventResult = sendRawEventResult,
-            fetchRelatedEventsJsonResult = { eventId, relation, _ ->
+            fetchRelatedEventsJsonResult = { eventId, relation, _, _ ->
                 val related = if (relation == RawRelationType.Reference) references else threadReplies
                 Result.success(RawEventsPage(related[eventId.value].orEmpty(), null))
             },

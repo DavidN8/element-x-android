@@ -191,6 +191,9 @@ class MatchaRoomStore(
 
     /** The reply count each thread had when its replies were last requested, by thread root id. */
     private val repliesRequestedAt = HashMap<String, Long>()
+
+    /** The highest reply count each thread had when a read of its replies succeeded, by thread root id; guarded like [repliesRequestedAt]. */
+    private val repliesReadAt = HashMap<String, Long>()
     private val relationsUnavailable = MutableStateFlow(false)
     private val requestedAnchors = HashSet<String>()
     private val anchorPermits = Semaphore(MAX_CONCURRENT_ANCHORS)
@@ -371,7 +374,8 @@ class MatchaRoomStore(
     /**
      * Reads the newest page of each thread's replies: their senders are the thread's participants, and the hidden bootstrap reply
      * among them makes [MatchaThread.hasHiddenFirstReply]. A thread is read again whenever its reply count changes, so new repliers
-     * are seen; only its first read holds up [MatchaRoomSnapshot.isLoaded].
+     * are seen; only its first read holds up [MatchaRoomSnapshot.isLoaded]. What is read is added to what was read before, so once a
+     * read has succeeded, the next one only asks for the replies counted since.
      *
      * ponytail: one request per thread and per change of its reply count, of the newest [RELATIONS_PAGE_SIZE] replies; a longer
      * thread may count its hidden reply as a visible one, and misses repliers further back.
@@ -384,17 +388,21 @@ class MatchaRoomStore(
                 // A listed thread without replies has none to read; a card's thread that isn't listed yet may have some.
                 .filter { it.numberOfReplies > 0 || it.rootSenderId == null }
                 .mapNotNull { thread ->
-                    val previous = repliesRequestedAt.put(thread.id.value, thread.numberOfReplies)
-                    (thread.id.value to (previous == null)).takeIf { previous != thread.numberOfReplies }
+                    val count = thread.numberOfReplies
+                    val previous = repliesRequestedAt.put(thread.id.value, count)
+                    // A count that went down (a redaction) still reads the newest reply.
+                    val limit = repliesReadAt[thread.id.value]?.let { (count - it).coerceIn(1, RELATIONS_PAGE_SIZE.toLong()).toInt() } ?: RELATIONS_PAGE_SIZE
+                    ThreadRepliesRead(thread.id.value, count, limit, isFirstRead = previous == null).takeIf { previous != count }
                 }
         }
-        for ((threadId, isFirstRead) in fresh) {
+        for ((threadId, count, limit, isFirstRead) in fresh) {
             val read = suspend {
-                room.fetchRelatedEventsJson(EventId(threadId), RawRelationType.Thread, null, RELATIONS_PAGE_SIZE)
+                room.fetchRelatedEventsJson(EventId(threadId), RawRelationType.Thread, null, limit)
                     .map { page -> page.events.mapNotNull { RawEvent.parse(it) } }
             }
             val key = "$threadId$THREAD_KEY_SUFFIX"
             launchRelationsRead(key, isFirstRead, read) { replies ->
+                synchronized(repliesRequestedAt) { repliesReadAt.merge(threadId, count, ::maxOf) }
                 val repliers = TaskParticipants.repliers(replies)[threadId].orEmpty()
                 threadRepliers.update { it + (threadId to it[threadId].orEmpty() + repliers) }
                 // Only the hidden bootstrap replies are kept with the Matcha events. A later read adds to the earlier ones: once a thread
@@ -440,6 +448,8 @@ class MatchaRoomStore(
         Timber.w("Stopped reading the events related to a Matcha anchor after %d pages", MAX_RELATION_PAGES)
         return Result.success(events)
     }
+
+    private data class ThreadRepliesRead(val threadId: String, val count: Long, val limit: Int, val isFirstRead: Boolean)
 
     /** The thread list, the repliers read from each thread, and the members of a direct chat. */
     private data class ThreadData(

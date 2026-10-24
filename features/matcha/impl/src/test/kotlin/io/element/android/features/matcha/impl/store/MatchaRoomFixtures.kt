@@ -122,7 +122,7 @@ internal fun aMatchaJoinedRoom(
         },
         sendRawEventResult = sendRawEventResult,
         sendRawStateEventResult = sendRawStateEventResult,
-        fetchRelatedEventsJsonResult = { eventId, relation, _ ->
+        fetchRelatedEventsJsonResult = { eventId, relation, _, _ ->
             Result.success(RawEventsPage(if (relation == RawRelationType.Thread) threadReplies[eventId.value].orEmpty() else emptyList(), null))
         },
         getStateEventsJsonResult = { type ->
