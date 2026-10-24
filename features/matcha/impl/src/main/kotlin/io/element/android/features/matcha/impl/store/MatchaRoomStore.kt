@@ -88,8 +88,8 @@ data class MatchaThread(
     /**
      * Who the thread involves: its root sender and everyone who replied in it, as far as read.
      *
-     * ponytail: replies are read from the thread's newest page of 100 (and its latest reply), so in a longer thread someone who only
-     * replied further back is missed; reading every page would lift that.
+     * ponytail: a thread's first read pages back through at most 50 pages of 100 replies, so in a thread longer than 5000 replies
+     * someone who only replied further back is missed; paging on demand would lift that.
      */
     val participants: Set<String> = emptySet(),
 ) {
@@ -202,7 +202,7 @@ class MatchaRoomStore(
     private val liveEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val anchorsLoading = MutableStateFlow<Set<String>>(emptySet())
 
-    /** The senders of each thread's replies, from its newest page of replies, by thread root id. */
+    /** The senders of each thread's replies, as far as read, by thread root id. */
     private val threadRepliers = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
 
     /** The reply count each thread had when its replies were last requested, by thread root id. */
@@ -210,6 +210,12 @@ class MatchaRoomStore(
 
     /** The highest reply count each thread had when a read of its replies succeeded, by thread root id; guarded like [repliesRequestedAt]. */
     private val repliesReadAt = HashMap<String, Long>()
+
+    /** The newest replies read of each thread, at most a page of them, newest first, by thread root id; guarded like [repliesRequestedAt]. */
+    private val newestRepliesRead = HashMap<String, List<String>>()
+
+    /** The threads whose replies are being read, one read per thread at a time; guarded like [repliesRequestedAt]. */
+    private val repliesReading = HashSet<String>()
     private val _relationsUnavailable = MutableStateFlow(false)
 
     /** The SDK can't fetch related events as JSON, so cards, thread names and document frames can't be read from relations. */
@@ -404,56 +410,77 @@ class MatchaRoomStore(
     private fun requestAnchors(anchors: Collection<String>) {
         val fresh = synchronized(requestedAnchors) { anchors.filter { it.startsWith("$") && requestedAnchors.add(it) } }
         for (anchor in fresh) {
-            launchRelationsRead(anchor, isFirstRead = true, read = { fetchAllRelated(anchor) }) { events ->
+            launchRelationsRead(anchor, isFirstRead = true, read = { fetchRelated(anchor, RawRelationType.Reference) }) { events ->
                 relationEvents.update { it + (anchor to events) }
             }
         }
     }
 
     /**
-     * Reads the newest page of each thread's replies: their senders are the thread's participants, and the hidden bootstrap reply
-     * among them makes [MatchaThread.hasHiddenFirstReply]. A thread is read again whenever its reply count changes, so new repliers
-     * are seen; only its first read holds up [MatchaRoomSnapshot.isLoaded]. What is read is added to what was read before, so once a
-     * read has succeeded, the next one only asks for the replies counted since.
+     * Reads each thread's replies: their senders are the thread's participants, and the hidden bootstrap reply among them (the
+     * thread's first) makes [MatchaThread.hasHiddenFirstReply]. A thread's first read pages back through all its replies. A thread
+     * is read again whenever its reply count changes, so new repliers are seen, one read per thread at a time; only its first read
+     * holds up [MatchaRoomSnapshot.isLoaded]. What is read is added to what was read before, so once a read has succeeded, the next
+     * one pages only until it reaches one of the newest replies read before.
      *
-     * ponytail: one request per thread and per change of its reply count, of the newest [RELATIONS_PAGE_SIZE] replies; a longer
-     * thread may count its hidden reply as a visible one, and misses repliers further back.
+     * ponytail: a first read takes up to [MAX_RELATION_PAGES] requests of [RELATIONS_PAGE_SIZE] replies and holds up the load until
+     * done; a longer thread may count its hidden reply as a visible one, and misses repliers further back. Paging older replies on
+     * demand, as the web client's Load more does, would lift both. A later read that finds none of the newest replies read before
+     * (all redacted since) pages back through the whole thread too.
      */
     private fun requestReplies(threads: List<MatchaThread>) {
         // Without the SDK's related events, every read would fail the same way.
         if (_relationsUnavailable.value) return
         val fresh = synchronized(repliesRequestedAt) {
             threads
-                // A listed thread without replies has none to read; a card's thread that isn't listed yet may have some.
-                .filter { it.numberOfReplies > 0 || it.rootSenderId == null }
+                // A listed thread without replies has none to read; a card's thread that isn't listed yet may have some. A thread
+                // being read is requested again when its read ends.
+                .filter { (it.numberOfReplies > 0 || it.rootSenderId == null) && it.id.value !in repliesReading }
                 .mapNotNull { thread ->
+                    val threadId = thread.id.value
                     val count = thread.numberOfReplies
-                    val previous = repliesRequestedAt.put(thread.id.value, count)
+                    val previous = repliesRequestedAt.put(threadId, count)
+                    if (previous == count) return@mapNotNull null
+                    repliesReading += threadId
                     // A count that went down (a redaction) still reads the newest reply.
-                    val limit = repliesReadAt[thread.id.value]?.let { (count - it).coerceIn(1, RELATIONS_PAGE_SIZE.toLong()).toInt() } ?: RELATIONS_PAGE_SIZE
-                    ThreadRepliesRead(thread.id.value, count, limit, isFirstRead = previous == null).takeIf { previous != count }
+                    val wanted = repliesReadAt[threadId]?.let { (count - it).coerceAtLeast(1).toInt() }
+                    ThreadRepliesRead(threadId, count, wanted, newestRepliesRead[threadId].orEmpty(), isFirstRead = previous == null)
                 }
         }
-        for ((threadId, count, limit, isFirstRead) in fresh) {
-            val read = suspend {
-                room.fetchRelatedEventsJson(EventId(threadId), RawRelationType.Thread, null, limit)
-                    .map { page -> page.events.mapNotNull { RawEvent.parse(it) } }
-            }
+        for ((threadId, count, wanted, readBefore, isFirstRead) in fresh) {
             val key = "$threadId$THREAD_KEY_SUFFIX"
-            launchRelationsRead(key, isFirstRead, read) { replies ->
-                synchronized(repliesRequestedAt) { repliesReadAt.merge(threadId, count, ::maxOf) }
+            val read = suspend { fetchRelated(threadId, RawRelationType.Thread, wanted, readBefore) }
+            val onDone = {
+                synchronized(repliesRequestedAt) { repliesReading -= threadId }
+                requestReplies(_snapshot.value.threads)
+            }
+            launchRelationsRead(key, isFirstRead, read, onDone) { replies ->
+                synchronized(repliesRequestedAt) {
+                    repliesReadAt.merge(threadId, count, ::maxOf)
+                    val ids = replies.take(RELATIONS_PAGE_SIZE).mapNotNull { it.eventId } + newestRepliesRead[threadId].orEmpty()
+                    newestRepliesRead[threadId] = ids.distinct().take(RELATIONS_PAGE_SIZE)
+                }
                 val repliers = TaskParticipants.repliers(replies)[threadId].orEmpty()
                 threadRepliers.update { it + (threadId to it[threadId].orEmpty() + repliers) }
-                // Only the hidden bootstrap replies are kept with the Matcha events. A later read adds to the earlier ones: once a thread
-                // has grown past one page, its newest page no longer holds the bootstrap reply.
+                // Only the hidden bootstrap replies are kept with the Matcha events. A later read adds to the earlier ones: it no longer
+                // reaches the thread's first reply.
                 val bootstrap = replies.filter { event -> event.type == MatchaConfig.EVENT_THREAD_METADATA }
                 relationEvents.update { it + (key to (it[key].orEmpty() + bootstrap).distinctBy { event -> event.eventId ?: event }) }
             }
         }
     }
 
-    /** Runs [read] a few at a time, then [onRead] with what it read; a first read is waited for by [MatchaRoomSnapshot.isLoaded]. */
-    private fun launchRelationsRead(key: String, isFirstRead: Boolean, read: suspend () -> Result<List<RawEvent>>, onRead: (List<RawEvent>) -> Unit) {
+    /**
+     * Runs [read] a few at a time, then [onRead] with what it read, then [onDone] whether it succeeded or not; a first read is waited
+     * for by [MatchaRoomSnapshot.isLoaded].
+     */
+    private fun launchRelationsRead(
+        key: String,
+        isFirstRead: Boolean,
+        read: suspend () -> Result<List<RawEvent>>,
+        onDone: () -> Unit = {},
+        onRead: (List<RawEvent>) -> Unit,
+    ) {
         if (isFirstRead) anchorsLoading.update { it + key }
         coroutineScope.launch {
             try {
@@ -465,30 +492,45 @@ class MatchaRoomStore(
                     }
             } finally {
                 if (isFirstRead) anchorsLoading.update { it - key }
+                onDone()
             }
         }
     }
 
     /**
-     * Reads every event related to [anchor] by an `m.reference` relation, newest first, page by page.
+     * Reads the events related to [eventId] by [relation], newest first, page by page: all of them, or only the newer ones. A read
+     * that knows some of the newest events [readBefore] pages until it reaches one of them, as events sent after the [wanted] ones
+     * were counted push those further back; its first page asks for one more than [wanted], so it usually reaches one there.
+     * Without [readBefore], it stops once [wanted] events are read.
      *
      * ponytail: a fixed page cap bounds very long histories (MAX_RELATION_PAGES × 100 events); add paging on demand if one anchor
      * ever needs more.
      */
-    private suspend fun fetchAllRelated(anchor: String): Result<List<RawEvent>> {
+    private suspend fun fetchRelated(
+        eventId: String,
+        relation: RawRelationType,
+        wanted: Int? = null,
+        readBefore: List<String> = emptyList(),
+    ): Result<List<RawEvent>> {
         val events = ArrayList<RawEvent>()
         var from: String? = null
+        var fetched = 0
+        val toFetch = wanted?.plus(if (readBefore.isEmpty()) 0 else 1)
         repeat(MAX_RELATION_PAGES) {
-            val page = room.fetchRelatedEventsJson(EventId(anchor), RawRelationType.Reference, from, RELATIONS_PAGE_SIZE)
+            val limit = toFetch?.minus(fetched)?.takeIf { it > 0 }?.coerceAtMost(RELATIONS_PAGE_SIZE) ?: RELATIONS_PAGE_SIZE
+            val page = room.fetchRelatedEventsJson(EventId(eventId), relation, from, limit)
                 .getOrElse { return Result.failure(it) }
-            page.events.mapNotNullTo(events) { RawEvent.parse(it) }
-            from = page.nextBatch ?: return Result.success(events)
+            fetched += page.events.size
+            val read = page.events.mapNotNull { RawEvent.parse(it) }
+            events += read
+            val isDone = if (readBefore.isEmpty()) toFetch != null && fetched >= toFetch else read.any { it.eventId in readBefore }
+            from = page.nextBatch?.takeUnless { isDone } ?: return Result.success(events)
         }
         Timber.w("Stopped reading the events related to a Matcha anchor after %d pages", MAX_RELATION_PAGES)
         return Result.success(events)
     }
 
-    private data class ThreadRepliesRead(val threadId: String, val count: Long, val limit: Int, val isFirstRead: Boolean)
+    private data class ThreadRepliesRead(val threadId: String, val count: Long, val wanted: Int?, val readBefore: List<String>, val isFirstRead: Boolean)
 
     /** The thread list, the repliers read from each thread, and the members of a direct chat. */
     private data class ThreadData(
