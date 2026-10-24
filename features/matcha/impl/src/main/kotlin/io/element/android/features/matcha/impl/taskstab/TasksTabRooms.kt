@@ -12,7 +12,6 @@ import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.NoBoardAnswers
-import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
@@ -41,8 +40,6 @@ import kotlinx.coroutines.plus
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 import kotlin.time.Duration.Companion.seconds
 
@@ -106,7 +103,6 @@ internal class TasksTabRooms(
 
     private data class ChatInfo(val name: String?, val avatarUrl: String?)
 
-    private val json = Json { ignoreUnknownKeys = true }
     private val checks = MutableStateFlow<Map<RoomId, Check>>(emptyMap())
 
     /** The joined chats, or null until the room list has loaded. */
@@ -192,7 +188,7 @@ internal class TasksTabRooms(
                 .onFailure { Timber.w(it, "Could not read the board pointer of %s", roomId) }
                 .getOrNull()
                 ?.get("")
-                ?.let(::boardRootId) != null
+                ?.let(KanbanProtocol::parseBoardPointerJson) != null
             // The sync doesn't store the pointer, so ask the homeserver; a chat without a board is then skipped unread.
             val serverPointer = if (hasStoredPointer) ServerPointer.Unknown else readServerPointer(room) ?: return
             if (serverPointer == ServerPointer.Absent) {
@@ -244,7 +240,7 @@ internal class TasksTabRooms(
                 null
             }
             else -> {
-                val rootId = read.getOrNull()?.let(::boardRootId)
+                val rootId = KanbanProtocol.parseBoardPointerJson(read.getOrNull())
                 if (rootId != null) {
                     NoBoardAnswers.forget(room.sessionId, room.roomId)
                     ServerPointer.Present(rootId)
@@ -257,9 +253,6 @@ internal class TasksTabRooms(
     }
 
     private fun newWriteScope() = client.sessionCoroutineScope + SupervisorJob(client.sessionCoroutineScope.coroutineContext[Job])
-
-    private fun boardRootId(pointerJson: String): String? =
-        runCatchingExceptions { json.parseToJsonElement(pointerJson).jsonObject }.getOrNull()?.let(KanbanProtocol::parseBoardPointer)
 
     /** Records [check] unless the chat was dropped meanwhile; returns whether it was recorded. */
     private fun record(roomId: RoomId, check: Check): Boolean {

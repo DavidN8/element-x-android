@@ -34,7 +34,7 @@ data class RawEvent(
         /** Parses a full event JSON object, or returns null when it is not one. */
         fun parse(json: String?): RawEvent? {
             if (json.isNullOrBlank()) return null
-            val root = runCatchingExceptions { Json.parseToJsonElement(json).jsonObject }.getOrNull() ?: return null
+            val root = json.toJsonObjectOrNull() ?: return null
             val type = root.stringOrNull("type") ?: return null
             val unsigned = root.objectOrNull("unsigned")
             return RawEvent(
@@ -50,11 +50,17 @@ data class RawEvent(
     }
 }
 
-/** The event id an `m.reference` relation in this content points at, if any. */
-fun JsonObject.referenceTarget(): String? {
+/** Parses a JSON object, or returns null when this is not one. */
+internal fun String.toJsonObjectOrNull(): JsonObject? = runCatchingExceptions { Json.parseToJsonElement(this).jsonObject }.getOrNull()
+
+/** The event id a relation of [relType] in this content points at, if any. */
+internal fun JsonObject.relationTarget(relType: String): String? {
     val relation = objectOrNull("m.relates_to") ?: return null
-    return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == REL_TYPE_REFERENCE }
+    return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == relType }
 }
+
+/** The event id an `m.reference` relation in this content points at, if any. */
+fun JsonObject.referenceTarget(): String? = relationTarget(REL_TYPE_REFERENCE)
 
 internal fun JsonObject.stringOrNull(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.content
 

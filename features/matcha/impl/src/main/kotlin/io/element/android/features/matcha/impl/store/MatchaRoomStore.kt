@@ -19,10 +19,9 @@ import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.protocol.booleanOrNull
-import io.element.android.features.matcha.impl.protocol.objectOrNull
 import io.element.android.features.matcha.impl.protocol.referenceTarget
-import io.element.android.features.matcha.impl.protocol.stringOrNull
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.features.matcha.impl.protocol.relationTarget
+import io.element.android.features.matcha.impl.protocol.toJsonObjectOrNull
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UniqueId
@@ -61,8 +60,6 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -171,7 +168,6 @@ class MatchaRoomStore(
     /** The board pointer the homeserver already returned to the caller, so the store starts from it instead of asking again. */
     knownServerPointer: String? = null,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
     private val scanEvents = MutableStateFlow<List<RawEvent>>(emptyList())
 
@@ -492,15 +488,11 @@ class MatchaRoomStore(
     private suspend fun readStoredState(): Result<String?> {
         val pointerRead = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
             .onFailure { Timber.w(it, "Could not read the board pointer") }
-            .map { states ->
-                states[""]
-                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-                    ?.let(KanbanProtocol::parseBoardPointer)
-            }
+            .map { states -> KanbanProtocol.parseBoardPointerJson(states[""]) }
         val legacy = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_THREAD_ARCHIVE)).getOrNull()
             .orEmpty()
             .mapNotNull { (key, content) ->
-                val archived = runCatchingExceptions { json.parseToJsonElement(content).jsonObject }.getOrNull()?.booleanOrNull("archived")
+                val archived = content.toJsonObjectOrNull()?.booleanOrNull("archived")
                 archived?.let { key to it }
             }
             .toMap()
@@ -542,11 +534,7 @@ class MatchaRoomStore(
         if (read.exceptionOrNull() is UnsupportedOperationException) return null
         return read
             .onFailure { Timber.w(it, "Could not fetch the board pointer from the homeserver") }
-            .map { content ->
-                content
-                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-                    ?.let(KanbanProtocol::parseBoardPointer)
-            }
+            .map(KanbanProtocol::parseBoardPointerJson)
     }
 
     private fun merge(scan: List<RawEvent>, optimistic: List<RawEvent>): List<RawEvent> {
@@ -721,7 +709,7 @@ class MatchaRoomStore(
         room.sendRawEvent(eventType, contentJson).onSuccess { eventId ->
             // Only the Matcha types come back through the filtered timeline, so an echo of any other type would never be replaced.
             if (eventType !in MatchaConfig.MESSAGE_LIKE_EVENT_TYPES) return@onSuccess
-            val content = runCatchingExceptions { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
+            val content = contentJson.toJsonObjectOrNull() ?: return@onSuccess
             val echo = RawEvent(
                 type = eventType,
                 content = content,
@@ -783,8 +771,4 @@ private fun warningFor(cause: UtdCause?): MatchaWarning = when (cause) {
 }
 
 /** The thread root of a hidden first reply sent when a named thread is created, or null for any other event. */
-private fun RawEvent.bootstrapRootId(): String? {
-    if (type != MatchaConfig.EVENT_THREAD_METADATA) return null
-    val relation = content.objectOrNull("m.relates_to") ?: return null
-    return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == REL_TYPE_THREAD }
-}
+private fun RawEvent.bootstrapRootId(): String? = content.takeIf { type == MatchaConfig.EVENT_THREAD_METADATA }?.relationTarget(REL_TYPE_THREAD)

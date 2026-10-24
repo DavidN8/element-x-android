@@ -48,10 +48,7 @@ object TaskParticipants {
     private fun RawEvent.validSender(): String? = senderId?.takeIf(MatrixPatterns::isUserId)
 
     /** The root of the thread this event replies in. A relation stays readable in an event that can't be decrypted. */
-    private fun RawEvent.threadRootId(): String? {
-        val relation = content.objectOrNull("m.relates_to")?.takeUnless { isRedacted } ?: return null
-        return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == REL_TYPE_THREAD }
-    }
+    private fun RawEvent.threadRootId(): String? = content.takeUnless { isRedacted }?.relationTarget(REL_TYPE_THREAD)
 
     private fun List<Pair<String, String>>.groupByToSets(): Map<String, Set<String>> = groupBy({ it.first }, { it.second }).mapValues { it.value.toSet() }
 }

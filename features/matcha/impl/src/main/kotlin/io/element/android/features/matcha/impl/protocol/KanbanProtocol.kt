@@ -87,6 +87,9 @@ object KanbanProtocol {
         return content.stringOrNull("event_id")?.takeIf { it.startsWith("$") }
     }
 
+    /** [parseBoardPointer] of a pointer's raw content JSON. */
+    fun parseBoardPointerJson(json: String?): String? = parseBoardPointer(json?.toJsonObjectOrNull())
+
     fun boardPointerContent(rootId: String): String = buildJsonObject {
         put("version", 1)
         put("event_id", rootId)
