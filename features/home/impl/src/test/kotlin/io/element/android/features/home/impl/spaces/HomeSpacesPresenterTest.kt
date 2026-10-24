@@ -29,14 +29,17 @@ import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
 import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
 import io.element.android.libraries.previewutils.room.aSpaceRoom
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
+import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.test
 import io.element.android.tests.testutils.testCoroutineDispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeSpacesPresenterTest {
@@ -55,17 +58,37 @@ class HomeSpacesPresenterTest {
 
     @Test
     fun `present - without the Matcha workspaces, the channels are not built`() = runTest {
+        val rebuildSummaries = lambdaRecorder<Unit> { }
         val roomList = FakeDynamicRoomList(
             summaries = MutableStateFlow(listOf(aChannel(OTHER))),
             loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(1)),
+            rebuildSummariesLambda = rebuildSummaries,
         )
         val presenter = createHomeSpacesPresenter(
             client = FakeMatrixClient(roomListService = FakeRoomListService(allRooms = roomList)),
             featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
         )
         presenter.test {
+            advanceTimeBy(1.seconds)
             runCurrent()
             assertThat(expectMostRecentItem().channels).isNull()
+            rebuildSummaries.assertions().isNeverCalled()
+        }
+    }
+
+    @Test
+    fun `present - the room list is rebuilt when the notification settings change, so the mute icons are right`() = runTest {
+        val rebuildSummaries = lambdaRecorder<Unit> { }
+        val roomList = FakeDynamicRoomList(rebuildSummariesLambda = rebuildSummaries)
+        val presenter = createHomeSpacesPresenter(
+            client = FakeMatrixClient(roomListService = FakeRoomListService(allRooms = roomList)),
+        )
+        presenter.test {
+            // The fake service signals a change as soon as it is observed.
+            advanceTimeBy(1.seconds)
+            runCurrent()
+            rebuildSummaries.assertions().isCalledOnce()
+            cancelAndIgnoreRemainingEvents()
         }
     }
 

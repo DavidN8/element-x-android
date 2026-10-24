@@ -32,14 +32,19 @@ import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
+import kotlinx.coroutines.flow.transform
+import kotlin.time.Duration.Companion.seconds
 
 @Inject
 class HomeSpacesPresenter(
@@ -84,9 +89,14 @@ class HomeSpacesPresenter(
     }
 
     /** The channels grouped by space, from what the SDK already knows: no room is opened. Null until the room list is loaded. */
+    @OptIn(FlowPreview::class)
     private fun channelsFlow(): Flow<HomeChannels?> {
         val allRooms = client.roomListService.allRooms
-        return combine(
+        // The SDK does not update a room's notification mode in the room list, so the mute icons are rebuilt as the Chats list does.
+        val rebuildsOnNotificationSettingsChange = client.notificationSettingsService.notificationSettingsChangeFlow
+            .debounce(0.5.seconds)
+            .transform<Unit, HomeChannels?> { allRooms.rebuildSummaries() }
+        val channels = combine(
             client.spaceService.topLevelSpacesFlow.startingEmpty(),
             client.spaceService.spaceFiltersFlow.startingEmpty(),
             allRooms.loadingState,
@@ -95,6 +105,7 @@ class HomeSpacesPresenter(
             // ponytail: rebuilds every row on each room list update; cache the rows by summary if it ever shows up in a profile.
             if (loadingState is RoomList.LoadingState.Loaded) groupChannels(spaces, filters, summaries) else null
         }.flowOn(coroutineDispatchers.computation)
+        return merge(channels, rebuildsOnNotificationSettingsChange)
     }
 
     private fun groupChannels(spaces: List<SpaceRoom>, filters: List<SpaceServiceFilter>, summaries: List<RoomSummary>): HomeChannels {
