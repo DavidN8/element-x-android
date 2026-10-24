@@ -158,7 +158,7 @@ object KanbanProtocol {
     /** Stable card id for a thread, identical to the web client's: `thread-` + SHA-256 hex of the thread root id. */
     fun threadCardId(threadId: String): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(threadId.toByteArray(Charsets.UTF_8))
-        return "thread-" + digest.joinToString("") { "%02x".format(it) }
+        return "thread-" + digest.toHexString()
     }
 
     /** Keeps the newest revision of each card id, from revisions in server order, newest first. */
