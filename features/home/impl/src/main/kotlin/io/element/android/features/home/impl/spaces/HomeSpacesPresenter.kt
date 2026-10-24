@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import dev.zacsweers.metro.Inject
 import io.element.android.features.home.impl.datasource.RoomListRoomSummaryFactory
+import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.features.invite.api.SeenInvitesStore
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
@@ -44,6 +45,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.transform
+import java.time.LocalDate
 import kotlin.time.Duration.Companion.seconds
 
 @Inject
@@ -96,23 +98,31 @@ class HomeSpacesPresenter(
         val rebuildsOnNotificationSettingsChange = client.notificationSettingsService.notificationSettingsChangeFlow
             .debounce(0.5.seconds)
             .transform<Unit, HomeChannels?> { allRooms.rebuildSummaries() }
+        // A row is only built again when its room changed, or when the day changed for its relative time, so that a message in one
+        // room does not format the preview of every channel again, even while another tab is shown.
+        // ponytail: a time zone change only shows on the rows of the rooms that change after it.
+        var rows = emptyMap<RoomSummary, RoomListRoomSummary>()
+        var rowsDay: LocalDate? = null
         val channels = combine(
             client.spaceService.topLevelSpacesFlow.startingEmpty(),
             client.spaceService.spaceFiltersFlow.startingEmpty(),
             allRooms.loadingState,
             allRooms.summaries,
         ) { spaces, filters, loadingState, summaries ->
-            // ponytail: rebuilds every row on each room list update; cache the rows by summary if it ever shows up in a profile.
-            if (loadingState is RoomList.LoadingState.Loaded) groupChannels(spaces, filters, summaries) else null
+            if (loadingState !is RoomList.LoadingState.Loaded) return@combine null
+            val today = LocalDate.now()
+            val previousRows = rows.takeIf { rowsDay == today }.orEmpty()
+            // The room list is sorted by recency, so each group is too.
+            rows = summaries
+                .filter { it.info.currentUserMembership == CurrentUserMembership.JOINED && !it.info.isSpace && !it.isDm }
+                .associateWith { previousRows[it] ?: roomListRoomSummaryFactory.create(it) }
+            rowsDay = today
+            groupChannels(spaces, filters, rows.values.toList())
         }.flowOn(coroutineDispatchers.computation)
         return merge(channels, rebuildsOnNotificationSettingsChange)
     }
 
-    private fun groupChannels(spaces: List<SpaceRoom>, filters: List<SpaceServiceFilter>, summaries: List<RoomSummary>): HomeChannels {
-        // The room list is sorted by recency, so each group is too.
-        val channels = summaries
-            .filter { it.info.currentUserMembership == CurrentUserMembership.JOINED && !it.info.isSpace && !it.isDm }
-            .map(roomListRoomSummaryFactory::create)
+    private fun groupChannels(spaces: List<SpaceRoom>, filters: List<SpaceServiceFilter>, channels: List<RoomListRoomSummary>): HomeChannels {
         // A level 0 filter holds the direct children of a top level space, and the level 1 filters that follow it hold the rest of its tree.
         val trees = mutableMapOf<RoomId, MutableSet<RoomId>>()
         var topLevelSpaceId: RoomId? = null

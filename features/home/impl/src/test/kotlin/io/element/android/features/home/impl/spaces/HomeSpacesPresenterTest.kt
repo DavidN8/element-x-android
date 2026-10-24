@@ -9,10 +9,12 @@
 package io.element.android.features.home.impl.spaces
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.features.home.impl.datasource.RoomListRoomSummaryFactory
 import io.element.android.features.home.impl.datasource.aRoomListRoomSummaryFactory
 import io.element.android.features.home.impl.spacefilters.aSpaceServiceFilter
 import io.element.android.features.invite.api.SeenInvitesStore
 import io.element.android.features.invite.test.InMemorySeenInvitesStore
+import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
@@ -162,17 +164,39 @@ class HomeSpacesPresenterTest {
         }
     }
 
+    @Test
+    fun `present - a room list update only builds the rows of the rooms that changed`() = runTest {
+        var formattedRows = 0
+        val summaries = MutableStateFlow(listOf(aChannel(A_CHANNEL), aChannel(OTHER)))
+        val roomList = FakeDynamicRoomList(summaries = summaries, loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(2)))
+        val presenter = createHomeSpacesPresenter(
+            client = FakeMatrixClient(roomListService = FakeRoomListService(allRooms = roomList)),
+            roomListRoomSummaryFactory = aRoomListRoomSummaryFactory(dateFormatter = FakeDateFormatter { _, _, _ -> "Today".also { formattedRows++ } }),
+        )
+        presenter.test {
+            consumeItemsUntilPredicate { it.channels != null }
+            assertThat(formattedRows).isEqualTo(2)
+            val renamed = aChannel(A_CHANNEL).let { it.copy(info = it.info.copy(name = "Renamed")) }
+            summaries.value = listOf(renamed, aChannel(OTHER))
+            val channels = consumeItemsUntilPredicate { it.channels?.otherChannels?.first()?.name == "Renamed" }.last().channels!!
+            assertThat(channels.otherChannels.map { it.roomId }).containsExactly(A_CHANNEL, OTHER).inOrder()
+            assertThat(formattedRows).isEqualTo(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private fun aChannel(roomId: RoomId): RoomSummary = aRoomSummary(aRoomInfo(id = roomId, isDirect = false, activeMembersCount = 5))
 
     private fun TestScope.createHomeSpacesPresenter(
         client: MatrixClient = FakeMatrixClient(),
         seenInvitesStore: SeenInvitesStore = InMemorySeenInvitesStore(),
         featureFlagService: FeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+        roomListRoomSummaryFactory: RoomListRoomSummaryFactory = aRoomListRoomSummaryFactory(),
     ) = HomeSpacesPresenter(
         client = client,
         seenInvitesStore = seenInvitesStore,
         featureFlagService = featureFlagService,
-        roomListRoomSummaryFactory = aRoomListRoomSummaryFactory(),
+        roomListRoomSummaryFactory = roomListRoomSummaryFactory,
         coroutineDispatchers = testCoroutineDispatchers(useUnconfinedTestDispatcher = true),
     )
 
