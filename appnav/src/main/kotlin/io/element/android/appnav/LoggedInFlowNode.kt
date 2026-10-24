@@ -64,6 +64,7 @@ import io.element.android.features.linknewdevice.api.LinkNewDeviceEntryPoint
 import io.element.android.features.location.api.LocalMapTilerConfig
 import io.element.android.features.location.api.LocationService
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
+import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.networkmonitor.api.NetworkMonitor
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.features.networkmonitor.api.ui.ConnectivityIndicatorContainer
@@ -162,6 +163,7 @@ class LoggedInFlowNode(
     private val activeLiveLocationShareManager: ActiveLiveLocationShareManager,
     private val locationService: LocationService,
     private val loggedInEventProcessorFactory: LoggedInEventProcessor.Factory,
+    private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
 ) : BaseFlowNode<LoggedInFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = NavTarget.Placeholder,
@@ -304,6 +306,10 @@ class LoggedInFlowNode(
 
         @Parcelize
         data class IncomingVerificationRequest(val data: VerificationRequest.Incoming) : NavTarget
+
+        /** The notes of a space, opened from the Notes tab of Home. */
+        @Parcelize
+        data class SpaceNote(val spaceId: RoomId, val documentId: String?) : NavTarget
     }
 
     override fun resolve(navTarget: NavTarget, buildContext: BuildContext): Node {
@@ -392,6 +398,11 @@ class LoggedInFlowNode(
                             attachRoom(roomIdOrAlias = roomId.toRoomIdOrAlias(), clearBackstack = false)
                                 .attachThread(threadId, focusedEventId = null)
                         }
+                    }
+
+                    override fun navigateToSpaceNote(spaceId: RoomId, documentId: String?) {
+                        // Single top: in the two-pane layout, opening another note replaces the one in the detail pane.
+                        backstack.singleTop(NavTarget.SpaceNote(spaceId = spaceId, documentId = documentId))
                     }
                 }
                 homeEntryPoint.createNode(
@@ -602,6 +613,20 @@ class LoggedInFlowNode(
                             }
                         }
                     },
+                )
+            }
+            is NavTarget.SpaceNote -> {
+                val callback = object : MatchaSpaceDocsEntryPoint.Callback {
+                    override fun close() {
+                        // Its own element, as for rooms: in the two-pane layout something else may be on top by then.
+                        backstack.removeLast(navTarget)
+                    }
+                }
+                matchaSpaceDocsEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaSpaceDocsEntryPoint.Params(spaceId = navTarget.spaceId, documentId = navTarget.documentId),
+                    callback = callback,
                 )
             }
             is NavTarget.IncomingVerificationRequest -> {

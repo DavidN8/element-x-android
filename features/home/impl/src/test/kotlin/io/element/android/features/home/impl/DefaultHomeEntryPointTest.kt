@@ -16,6 +16,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.features.home.api.HomeEntryPoint
 import io.element.android.features.home.api.HomeTab
 import io.element.android.features.invite.test.declineandblock.FakeDeclineInviteAndBlockEntryPoint
+import io.element.android.features.matcha.api.MatchaNotesTabRenderer
 import io.element.android.features.matcha.api.MatchaTasksTabRenderer
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
@@ -57,6 +58,14 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
                         modifier: Modifier,
                     ) = lambdaError()
                 },
+                matchaNotesTabRenderer = object : MatchaNotesTabRenderer {
+                    @Composable
+                    override fun Render(
+                        contentPadding: PaddingValues,
+                        onOpenNote: (spaceId: RoomId, documentId: String?) -> Unit,
+                        modifier: Modifier,
+                    ) = lambdaError()
+                },
             )
         }
         val callback = object : HomeEntryPoint.Callback {
@@ -72,6 +81,7 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
             override fun navigateToSession(sessionId: SessionId) = lambdaError()
             override fun onTabSelected(tab: HomeTab) = lambdaError()
             override fun navigateToThread(roomId: RoomId, threadId: ThreadId) = lambdaError()
+            override fun navigateToSpaceNote(spaceId: RoomId, documentId: String?) = lambdaError()
         }
         val result = entryPoint.createNode(
             parentNode = parentNode,

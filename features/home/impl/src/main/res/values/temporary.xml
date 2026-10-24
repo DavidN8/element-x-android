@@ -24,6 +24,9 @@
     </plurals>
     <string name="a11y_matcha_mentioned">You were mentioned</string>
     <string name="a11y_matcha_home_more_options">More options</string>
+    <string name="screen_home_tab_notes">Notes</string>
+    <!-- In the Matcha web client a group chat is called a channel. -->
+    <string name="screen_home_tab_channels">Channels</string>
     <plurals name="screen_home_channels_count">
         <item quantity="one">%1$d channel</item>
         <item quantity="other">%1$d channels</item>

@@ -16,6 +16,8 @@ import androidx.compose.ui.res.vectorResource
 import io.element.android.features.home.api.HomeTab
 import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.ui.strings.CommonStrings
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
 
 /**
  * The tabs of the bottom navigation bar. A tab's label is also its top bar title (except on Chats, which shows the product
@@ -52,6 +54,25 @@ enum class HomeNavigationBarItem(
         iconRes = CompoundDrawables.ic_compound_check_circle,
         selectedIconRes = CompoundDrawables.ic_compound_check_circle_solid,
         homeTab = HomeTab.Tasks,
+    ),
+
+    /** The notes (space documents) of all the user's spaces, shown while the Matcha workspaces are on. Compound has no solid document icon. */
+    Notes(
+        labelRes = R.string.screen_home_tab_notes,
+        iconRes = CompoundDrawables.ic_compound_document,
+        selectedIconRes = CompoundDrawables.ic_compound_document,
+        homeTab = HomeTab.Notes,
+    ),
+
+    /**
+     * The group chats ("channels"), under the space they belong to, shown in place of [Spaces] while the Matcha workspaces are on.
+     * The room icon is a hash, the usual channel sign; Compound has no solid variant of it.
+     */
+    Channels(
+        labelRes = R.string.screen_home_tab_channels,
+        iconRes = CompoundDrawables.ic_compound_room,
+        selectedIconRes = CompoundDrawables.ic_compound_room,
+        homeTab = HomeTab.Channels,
     );
 
     /** The outlined icon, or the solid one when the tab is selected. */
@@ -59,11 +80,24 @@ enum class HomeNavigationBarItem(
     fun icon(isSelected: Boolean): ImageVector = ImageVector.vectorResource(if (isSelected) selectedIconRes else iconRes)
 
     companion object {
-        /** The tabs in the order of the bar, which is not the order of the entries; Tasks only exists with the Matcha workspaces. */
-        fun barOrder(isTasksTabEnabled: Boolean): List<HomeNavigationBarItem> = listOfNotNull(Chats, Tasks.takeIf { isTasksTabEnabled }, Spaces)
+        /** The tabs in the order of the bar, which is not the order of the entries: Chats · Tasks · Notes · Channels with the Matcha workspaces. */
+        fun barOrder(isMatchaWorkspacesEnabled: Boolean): ImmutableList<HomeNavigationBarItem> = if (isMatchaWorkspacesEnabled) {
+            persistentListOf(Chats, Tasks, Notes, Channels)
+        } else {
+            persistentListOf(Chats, Spaces)
+        }
 
-        fun from(index: Int): HomeNavigationBarItem {
-            return entries.getOrElse(index) { Chats }
+        /**
+         * The tab saved with the given [ordinal]. Spaces and Channels are the same tab under two names, so a saved one maps to the
+         * other when the Matcha workspaces are toggled; any other tab missing from the bar falls back to Chats.
+         */
+        fun from(ordinal: Int, isMatchaWorkspacesEnabled: Boolean): HomeNavigationBarItem {
+            val item = when (val saved = entries.getOrElse(ordinal) { Chats }) {
+                Spaces -> if (isMatchaWorkspacesEnabled) Channels else Spaces
+                Channels -> if (isMatchaWorkspacesEnabled) Channels else Spaces
+                else -> saved
+            }
+            return item.takeIf { it in barOrder(isMatchaWorkspacesEnabled) } ?: Chats
         }
     }
 }

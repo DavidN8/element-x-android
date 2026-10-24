@@ -47,6 +47,7 @@ import io.element.android.features.home.impl.components.MultiAccountAnnouncement
 import io.element.android.features.home.impl.components.RoomListContentView
 import io.element.android.features.home.impl.components.RoomListMenuAction
 import io.element.android.features.home.impl.model.RoomListRoomSummary
+import io.element.android.features.home.impl.roomlist.RoomListContentState
 import io.element.android.features.home.impl.roomlist.RoomListContextMenu
 import io.element.android.features.home.impl.roomlist.RoomListDeclineInviteMenu
 import io.element.android.features.home.impl.roomlist.RoomListEvent
@@ -57,6 +58,7 @@ import io.element.android.features.home.impl.search.RoomListSearchView
 import io.element.android.features.home.impl.spacefilters.SpaceFiltersEvent
 import io.element.android.features.home.impl.spacefilters.SpaceFiltersState
 import io.element.android.features.home.impl.spacefilters.SpaceFiltersView
+import io.element.android.features.home.impl.spaces.HomeChannelsView
 import io.element.android.features.home.impl.spaces.HomeSpacesView
 import io.element.android.libraries.androidutils.throttler.FirstThrottler
 import io.element.android.libraries.designsystem.preview.ElementPreview
@@ -76,6 +78,7 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.ui.strings.CommonStrings
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
 
 @Composable
@@ -95,6 +98,7 @@ fun HomeView(
     onDeclineInviteAndBlockUser: (roomSummary: RoomListRoomSummary) -> Unit,
     acceptDeclineInviteView: @Composable () -> Unit,
     tasksTab: @Composable (PaddingValues) -> Unit,
+    notesTab: @Composable (PaddingValues) -> Unit,
     modifier: Modifier = Modifier,
     leaveRoomView: @Composable () -> Unit,
 ) {
@@ -140,6 +144,7 @@ fun HomeView(
             onMenuActionClick = onMenuActionClick,
             onSwitchToAccount = onSwitchToAccount,
             tasksTab = tasksTab,
+            notesTab = notesTab,
         )
 
         if (state.globalSearchState.isEnabled) {
@@ -179,6 +184,7 @@ private fun HomeScaffold(
     onMenuActionClick: (RoomListMenuAction) -> Unit,
     onSwitchToAccount: (SessionId) -> Unit,
     tasksTab: @Composable (PaddingValues) -> Unit,
+    notesTab: @Composable (PaddingValues) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     fun onRoomClick(room: RoomListRoomSummary) {
@@ -203,6 +209,7 @@ private fun HomeScaffold(
 
     val roomsLazyListState = rememberLazyListState()
     val spacesLazyListState = rememberLazyListState()
+    val channelsLazyListState = rememberLazyListState()
     // The list keeps clear of the floating action button; the Scaffold padding already covers the bars and the insets.
     val listContentPadding = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues() + PaddingValues(bottom = 88.dp)
 
@@ -256,12 +263,43 @@ private fun HomeScaffold(
                 onExploreClick = {},
             )
         }
-        // The Matcha renderer draws its own list and its New task button, within the bars' padding.
+        // The Matcha renderers draw their own list and action button, within the bars' padding.
         HomeNavigationBarItem.Tasks -> HomeTabContent(
             lazyListState = null,
             floatingActionButton = null,
         ) { padding ->
             tasksTab(padding)
+        }
+        HomeNavigationBarItem.Notes -> HomeTabContent(
+            lazyListState = null,
+            floatingActionButton = null,
+        ) { padding ->
+            notesTab(padding)
+        }
+        // The Spaces tab as WhatsApp's Communities: the same action, the space rows open the space as on the Spaces tab.
+        HomeNavigationBarItem.Channels -> HomeTabContent(
+            lazyListState = channelsLazyListState,
+            floatingActionButton = {
+                HomeFloatingActionButton(CompoundIcons.Plus(), CommonStrings.action_create_space, onCreateSpaceClick)
+            },
+        ) { padding ->
+            val roomsContentState = roomListState.contentState as? RoomListContentState.Rooms
+            HomeChannelsView(
+                state = state.homeSpacesState,
+                lazyListState = channelsLazyListState,
+                contentPadding = listContentPadding,
+                selectedRoomId = if (hasTwoPaneWindowSize()) roomListState.selectedRoomId else null,
+                showUnreadCount = roomsContentState?.showUnreadCount ?: false,
+                showAllActivity = roomsContentState?.showAllActivity ?: false,
+                onSpaceClick = onRoomClick,
+                onRoomClick = onRoomClick,
+                onCreateSpaceClick = onCreateSpaceClick,
+                roomListEventSink = roomListState.eventSink,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .consumeWindowInsets(padding),
+            )
         }
     }
 
@@ -377,7 +415,7 @@ private fun HomeFloatingActionButton(
 
 @Composable
 private fun HomeBottomBar(
-    items: List<HomeNavigationBarItem>,
+    items: ImmutableList<HomeNavigationBarItem>,
     totalUnreadCount: Int,
     currentHomeNavigationBarItem: HomeNavigationBarItem,
     onItemClick: (HomeNavigationBarItem) -> Unit,
@@ -419,6 +457,7 @@ internal fun HomeViewPreview(@PreviewParameter(HomeStatePreviewParam::class) sta
         onDeclineInviteAndBlockUser = {},
         acceptDeclineInviteView = {},
         tasksTab = {},
+        notesTab = {},
         leaveRoomView = {}
     )
 }
@@ -442,6 +481,7 @@ internal fun HomeViewA11yPreview() = ElementPreview {
         onDeclineInviteAndBlockUser = {},
         acceptDeclineInviteView = {},
         tasksTab = {},
+        notesTab = {},
         leaveRoomView = {}
     )
 }

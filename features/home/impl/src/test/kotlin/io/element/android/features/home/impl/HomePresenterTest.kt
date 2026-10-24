@@ -316,13 +316,13 @@ class HomePresenterTest {
     }
 
     @Test
-    fun `present - the Tasks tab sits between Chats and Spaces only with the Matcha workspaces`() = runTest {
+    fun `present - the bar is Chats, Tasks, Notes, Channels with the Matcha workspaces, and Chats, Spaces without`() = runTest {
         val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false))
         createHomePresenter(featureFlagService = featureFlagService).test {
             assertThat(awaitItem().navigationBarItems).containsExactly(HomeNavigationBarItem.Chats, HomeNavigationBarItem.Spaces).inOrder()
             featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, true)
             assertThat(awaitItem().navigationBarItems)
-                .containsExactly(HomeNavigationBarItem.Chats, HomeNavigationBarItem.Tasks, HomeNavigationBarItem.Spaces)
+                .containsExactly(HomeNavigationBarItem.Chats, HomeNavigationBarItem.Tasks, HomeNavigationBarItem.Notes, HomeNavigationBarItem.Channels)
                 .inOrder()
         }
     }
@@ -331,13 +331,40 @@ class HomePresenterTest {
     fun `present - the Tasks tab can be selected, and falls back to Chats once the Matcha workspaces are off`() = runTest {
         val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true))
         createHomePresenter(featureFlagService = featureFlagService).test {
-            val initialState = consumeItemsUntilPredicate { it.isTasksTabEnabled }.last()
+            val initialState = consumeItemsUntilPredicate { it.isMatchaWorkspacesEnabled }.last()
             initialState.eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Tasks))
             val tasksState = awaitItem()
             assertThat(tasksState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Tasks)
             assertThat(tasksState.currentHomeNavigationBarItem.homeTab).isEqualTo(HomeTab.Tasks)
             featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, false)
             assertThat(awaitItem().currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Chats)
+        }
+    }
+
+    @Test
+    fun `present - the Notes tab can be selected`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true))
+        createHomePresenter(featureFlagService = featureFlagService).test {
+            val initialState = consumeItemsUntilPredicate { it.isMatchaWorkspacesEnabled }.last()
+            initialState.eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Notes))
+            val notesState = awaitItem()
+            assertThat(notesState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Notes)
+            assertThat(notesState.currentHomeNavigationBarItem.homeTab).isEqualTo(HomeTab.Notes)
+        }
+    }
+
+    @Test
+    fun `present - the selected Spaces tab becomes Channels with the Matcha workspaces, and back`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false))
+        createHomePresenter(featureFlagService = featureFlagService).test {
+            awaitItem().eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Spaces))
+            assertThat(awaitItem().currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Spaces)
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, true)
+            val channelsState = awaitItem()
+            assertThat(channelsState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Channels)
+            assertThat(channelsState.currentHomeNavigationBarItem.homeTab).isEqualTo(HomeTab.Channels)
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, false)
+            assertThat(awaitItem().currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Spaces)
         }
     }
 
