@@ -505,7 +505,7 @@ class RoomDocumentSessionTest {
                 if (pagesRead == PAGES) fixture.timeline.backwardPaginationStatus.value = Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = false)
                 Result.success(pagesRead < PAGES)
             },
-            fetchRelatedEventsJsonResult = { eventId, _, _ ->
+            fetchRelatedEventsJsonResult = { eventId, _, _, _ ->
                 if (related == null) {
                     Result.failure(UnsupportedOperationException("No Matcha SDK patch"))
                 } else {

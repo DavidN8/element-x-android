@@ -100,7 +100,7 @@ class DocsRoomFixture(
     enableEncryptionResult: () -> Result<Unit> = { Result.success(Unit) },
     /** The id of the room's `m.room.create` event in the room state, if the SDK has it. */
     createEventId: String? = ANCHOR,
-    fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?) -> Result<RawEventsPage> = { _, _, _ ->
+    fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?, Int) -> Result<RawEventsPage> = { _, _, _, _ ->
         Result.success(RawEventsPage(emptyList(), null))
     },
 ) {
