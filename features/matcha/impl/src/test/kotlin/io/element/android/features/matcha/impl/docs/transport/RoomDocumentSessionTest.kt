@@ -276,6 +276,31 @@ class RoomDocumentSessionTest {
     }
 
     @Test
+    fun `the text is read back from the engine only when an update was applied`() = runTest {
+        val fixture = DocsRoomFixture(listOf(aCreateItem(), aFrameItem("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single())))
+        val session = fixture.session(backgroundScope)
+        settle()
+        backgroundScope.launch { session.edit("Hello", "Hello!") }
+        settle()
+        val document = fixture.engine.documents.single()
+        val reads = document.snapshotCount
+        // The echo of our own frame, a frame of another document and a duplicate are skipped without reading the text back.
+        fixture.timelineItems.value += listOf(
+            aFrameItem("\$echo", fixture.sent.single().second, sender = fixture.room.sessionId.value),
+            aFrameItem("\$f2", DocsProtocol.frames(update(operation("x", text = "Other")), ANCHOR, "u2", DocsProtocol.CATALOG_DOCUMENT_ID).single()),
+            aFrameItem("\$f3", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single()),
+        )
+        settle()
+        assertThat(document.snapshotCount).isEqualTo(reads)
+        assertThat(session.state.value.text).isEqualTo("Hello!")
+        val remote = update(operation("b", text = "Hi", deps = listOf("a")))
+        fixture.timelineItems.value += aFrameItem("\$f4", DocsProtocol.frames(remote, ANCHOR, "u4", "main").single())
+        settle()
+        assertThat(document.snapshotCount).isEqualTo(reads + 1)
+        assertThat(session.state.value.text).isEqualTo("Hi")
+    }
+
+    @Test
     fun `without permission the document is view only`() = runTest {
         val fixture = DocsRoomFixture(listOf(aCreateItem()), canSend = false)
         val session = fixture.session(backgroundScope)
