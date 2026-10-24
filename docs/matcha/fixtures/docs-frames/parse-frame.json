@@ -842,6 +842,7 @@
                 "anchor": "$create:example.org",
                 "documentId": "main"
             },
+            "note": "The web client checks Number.isInteger, which also accepts 1.0.",
             "expect": {
                 "result": "invalid"
             }

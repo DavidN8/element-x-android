@@ -1373,6 +1373,106 @@
                 },
                 "showToRoom": false
             }
+        },
+        {
+            "name": "a thread id may hold a no-break space",
+            "input": {
+                "rootId": "$board:example.org",
+                "event": {
+                    "type": "com.matchahoneylatte.kanban.card",
+                    "event_id": "$e87:example.org",
+                    "sender": "@alice:example.org",
+                    "origin_server_ts": 1767225600000,
+                    "content": {
+                        "version": 1,
+                        "card_id": "c-1",
+                        "title": "Write spec",
+                        "description": "",
+                        "column": "doing",
+                        "archived": false,
+                        "thread_id": "$t x:example.org",
+                        "m.relates_to": {
+                            "rel_type": "m.reference",
+                            "event_id": "$board:example.org"
+                        }
+                    }
+                }
+            },
+            "note": "JavaScript's \\S excludes U+00A0, so the web client drops this thread id.",
+            "expect": {
+                "cardId": "c-1",
+                "title": "Write spec",
+                "description": "",
+                "status": "doing",
+                "archived": false,
+                "threadId": "$t x:example.org",
+                "dueAt": null,
+                "reminderRequested": null,
+                "showToRoom": true
+            }
+        },
+        {
+            "name": "a thread id of 511 emoji is kept: its length counts code points",
+            "input": {
+                "rootId": "$board:example.org",
+                "event": {
+                    "type": "com.matchahoneylatte.kanban.card",
+                    "event_id": "$e88:example.org",
+                    "sender": "@alice:example.org",
+                    "origin_server_ts": 1767225600000,
+                    "content": {
+                        "version": 1,
+                        "card_id": "c-1",
+                        "title": "Write spec",
+                        "description": "",
+                        "column": "doing",
+                        "archived": false,
+                        "thread_id": "$😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+                        "m.relates_to": {
+                            "rel_type": "m.reference",
+                            "event_id": "$board:example.org"
+                        }
+                    }
+                }
+            },
+            "note": "JavaScript's \\S without the u flag counts UTF-16 code units, so the web client drops this thread id.",
+            "expect": {
+                "cardId": "c-1",
+                "title": "Write spec",
+                "description": "",
+                "status": "doing",
+                "archived": false,
+                "threadId": "$😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+                "dueAt": null,
+                "reminderRequested": null,
+                "showToRoom": true
+            }
+        },
+        {
+            "name": "a title of only U+001C is blank",
+            "input": {
+                "rootId": "$board:example.org",
+                "event": {
+                    "type": "com.matchahoneylatte.kanban.card",
+                    "event_id": "$e89:example.org",
+                    "sender": "@alice:example.org",
+                    "origin_server_ts": 1767225600000,
+                    "content": {
+                        "version": 1,
+                        "card_id": "c-1",
+                        "title": "\u001c",
+                        "description": "",
+                        "column": "doing",
+                        "archived": false,
+                        "m.relates_to": {
+                            "rel_type": "m.reference",
+                            "event_id": "$board:example.org"
+                        }
+                    }
+                }
+            },
+            "note": "JavaScript's trim() keeps U+001C to U+001F, so the web client reads this revision.",
+            "expect": null
         }
     ]
 }
