@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.impl.store
 
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
 import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
@@ -176,8 +177,8 @@ data class MatchaRoomSnapshot(
 class MatchaRoomStore(
     private val room: JoinedRoom,
     private val coroutineScope: CoroutineScope,
-    /** More event types to read into [MatchaRoomSnapshot.events], such as `m.room.encrypted` for documents. */
-    private val extraEventTypes: Set<String> = emptySet(),
+    /** Also reads the events related to the room's `m.room.create` event, which document frames relate to. */
+    private val readsDocumentAnchor: Boolean = false,
     /** The board pointer the homeserver already returned to the caller, so the store starts from it instead of asking again. */
     knownServerPointer: String? = null,
     /**
@@ -263,7 +264,7 @@ class MatchaRoomStore(
     private fun openTimeline() {
         coroutineScope.launch {
             // Undecryptable events are read too, so the board can say when some of it can't be decrypted.
-            val types = MatchaConfig.MESSAGE_LIKE_EVENT_TYPES + MatchaConfig.STATE_EVENT_TYPES + EVENT_ROOM_ENCRYPTED + extraEventTypes
+            val types = MatchaConfig.MESSAGE_LIKE_EVENT_TYPES + MatchaConfig.STATE_EVENT_TYPES + DocsProtocol.EVENT_ROOM_ENCRYPTED
             val created = room.createTimeline(CreateTimelineParams.OnlyEventTypes(types))
                 .onFailure { Timber.w(it, "Could not open the Matcha timeline") }
                 .getOrNull()
@@ -307,7 +308,7 @@ class MatchaRoomStore(
                 liveEvents.update { list -> if (list.any { it.eventId == event.eventId }) list else listOf(event) + list }
             }
             .launchIn(coroutineScope)
-        if (extraEventTypes.isNotEmpty()) coroutineScope.launch { requestDocumentAnchor() }
+        if (readsDocumentAnchor) coroutineScope.launch { requestDocumentAnchor() }
         room.threadsListService.subscribeToItemUpdates()
             .onEach { threadItems.value = it }
             .launchIn(coroutineScope)
@@ -647,7 +648,7 @@ class MatchaRoomStore(
         // An undecryptable event's relation stays readable: one referring to the board or a thread is Matcha data.
         val matchaTargets = threadIds + listOfNotNull(boardRootId)
         val unreadableCauses = events
-            .filter { it.type == EVENT_ROOM_ENCRYPTED && it.content.referenceTarget() in matchaTargets }
+            .filter { it.type == DocsProtocol.EVENT_ROOM_ENCRYPTED && it.content.referenceTarget() in matchaTargets }
             .map { event -> event.eventId?.let(health.utdCauses::get) }
         val unreadableRootCauses = threadList
             .filter { item -> item.rootEvent.content is UnableToDecryptContent }
@@ -693,7 +694,7 @@ class MatchaRoomStore(
                 .also { readFailed.value = it.isFailure }
                 .onFailure { Timber.w(it, "Could not read older Matcha history") }
             if ((threadsPaginationStatus.value as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) paginateThreads()
-            if (extraEventTypes.isNotEmpty()) requestDocumentAnchor()
+            if (readsDocumentAnchor) requestDocumentAnchor()
             // Related events are read in full per anchor, so "no more history" also means every anchor has been read.
             if (history.isSuccess) withTimeoutOrNull(ANCHORS_TIMEOUT) { anchorsLoading.first { it.isEmpty() } }
             history.map { timeline.backwardPaginationStatus.value.hasMoreToLoad }
@@ -770,7 +771,6 @@ class MatchaRoomStore(
     companion object {
         /** Pages of 50 events read when the store opens. */
         const val INITIAL_HISTORY_PAGES = 10
-        private const val EVENT_ROOM_ENCRYPTED = "m.room.encrypted"
         private const val PAGINATION_ATTEMPTS = 5
         private const val MAX_CONCURRENT_ANCHORS = 4
         private const val RELATIONS_PAGE_SIZE = 100

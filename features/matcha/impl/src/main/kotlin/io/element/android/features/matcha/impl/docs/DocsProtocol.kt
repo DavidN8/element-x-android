@@ -59,7 +59,6 @@ class DocTooLargeException : Exception("Document update too large")
 object DocsProtocol {
     const val MAIN_DOCUMENT_ID = "main"
     const val CATALOG_DOCUMENT_ID = "catalog"
-    const val EVENT_ROOM_CREATE = "m.room.create"
     const val EVENT_ROOM_ENCRYPTED = "m.room.encrypted"
     const val EVENT_POWER_LEVELS = "m.room.power_levels"
     const val ENCRYPTION_ALGORITHM = "m.megolm.v1.aes-sha2"

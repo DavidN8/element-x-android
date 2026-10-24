@@ -140,7 +140,7 @@ class DocsRoomFixture(
         fetchRelatedEventsJsonResult = fetchRelatedEventsJsonResult,
     )
 
-    fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))
+    fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, readsDocumentAnchor = true)
 
     fun session(
         scope: CoroutineScope,
