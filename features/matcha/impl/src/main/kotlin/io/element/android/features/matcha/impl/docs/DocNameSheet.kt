@@ -34,6 +34,8 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.R
+import io.element.android.features.matcha.impl.docs.transport.CatalogException
+import io.element.android.features.matcha.impl.docs.transport.DocumentCatalog
 import io.element.android.features.matcha.impl.ui.SheetHeader
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -44,7 +46,7 @@ import io.element.android.libraries.designsystem.theme.components.TextFieldValid
 import io.element.android.libraries.designsystem.theme.components.hide
 import io.element.android.libraries.ui.strings.CommonStrings
 
-/** The New doc and Rename doc sheet. */
+/** The New note and Rename note sheet. */
 data class DocNameSheetState(
     /** Null for a new doc. */
     val documentId: String?,
@@ -71,6 +73,25 @@ enum class DocNameError { Empty, TooLong, SaveFailed }
 
 /** The error to show for [name] while typing; an empty name is only reported on submit. */
 fun docNameError(name: String): DocNameError? = if (name.trim().length > MatchaConfig.DOCUMENT_NAME_MAX_LENGTH) DocNameError.TooLong else null
+
+/** The sheet showing why its name can't be saved, or null when it can. */
+fun DocNameSheetState.withNameError(): DocNameSheetState? {
+    val error = if (name.isBlank()) DocNameError.Empty else docNameError(name)
+    return error?.let { copy(error = it) }
+}
+
+/** Saves the sheet's name in [catalog]: renames its doc, or creates a new one. Returns the doc's id. */
+suspend fun DocNameSheetState.saveIn(catalog: DocumentCatalog): Result<String> {
+    val existingId = documentId ?: unsavedDocumentId
+    return if (existingId != null) catalog.rename(existingId, name).map { existingId } else catalog.create(name)
+}
+
+/** The sheet after a failed save: kept open, and a new doc whose entry was kept locally is saved again rather than added twice. */
+fun DocNameSheetState.saveFailed(error: Throwable) = copy(
+    isSaving = false,
+    error = DocNameError.SaveFailed,
+    unsavedDocumentId = (error as? CatalogException)?.documentId ?: documentId ?: unsavedDocumentId,
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

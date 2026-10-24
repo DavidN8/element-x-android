@@ -19,18 +19,20 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.docs.DocNameError
 import io.element.android.features.matcha.impl.docs.DocNameSheetState
 import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.docs.SpaceDocsContext
 import io.element.android.features.matcha.impl.docs.docNameError
+import io.element.android.features.matcha.impl.docs.saveFailed
+import io.element.android.features.matcha.impl.docs.saveIn
 import io.element.android.features.matcha.impl.docs.setup.SpaceDocsSetup
 import io.element.android.features.matcha.impl.docs.setup.SpaceDocsSetupStatus
-import io.element.android.features.matcha.impl.docs.transport.CatalogException
 import io.element.android.features.matcha.impl.docs.transport.CatalogState
 import io.element.android.features.matcha.impl.docs.transport.DocumentCatalog
 import io.element.android.features.matcha.impl.docs.transport.DocumentError
 import io.element.android.features.matcha.impl.docs.transport.DocumentSync
+import io.element.android.features.matcha.impl.docs.transport.SpaceDocument
+import io.element.android.features.matcha.impl.docs.withNameError
 import io.element.android.features.matcha.impl.protocol.RawEvent
 import io.element.android.features.matcha.impl.protocol.stringOrNull
 import io.element.android.libraries.architecture.Presenter
@@ -81,23 +83,19 @@ class SpaceDocsListPresenter(
 
         fun submitName() = coroutineScope.launch {
             val sheet = nameSheet?.takeIf { !it.isSaving } ?: return@launch
-            val error = if (sheet.name.isBlank()) DocNameError.Empty else docNameError(sheet.name)
-            if (error != null) {
-                nameSheet = sheet.copy(error = error)
+            sheet.withNameError()?.let {
+                nameSheet = it
                 return@launch
             }
             nameSheet = sheet.copy(isSaving = true, error = null)
-            val existingId = sheet.documentId ?: sheet.unsavedDocumentId
-            val result = if (existingId != null) catalog.rename(existingId, sheet.name).map { existingId } else catalog.create(sheet.name)
-            result
+            sheet.saveIn(catalog)
                 .onSuccess { documentId ->
                     nameSheet = null
                     if (sheet.documentId == null) navigator.openDocument(documentId)
                 }
                 .onFailure {
                     Timber.w(it, "Could not save a doc name")
-                    nameSheet =
-                        sheet.copy(isSaving = false, error = DocNameError.SaveFailed, unsavedDocumentId = (it as? CatalogException)?.documentId ?: existingId)
+                    nameSheet = sheet.saveFailed(it)
                 }
         }
 
@@ -121,10 +119,10 @@ class SpaceDocsListPresenter(
         val content = when {
             status == null -> SpaceDocsListContent.Loading
             !status.isConfigured -> SpaceDocsListContent.NotSetUp(canSetUp = status.canSetup)
-            catalogState.error in LOAD_ERRORS -> SpaceDocsListContent.LoadError
+            catalogState.error in CATALOG_LOAD_ERRORS -> SpaceDocsListContent.LoadError
             // Partial content is shown as soon as it exists, so a skeleton only stands for an empty catalog.
             catalogState.sync == DocumentSync.Loading && catalogState.documents.size <= 1 -> SpaceDocsListContent.Loading
-            else -> SpaceDocsListContent.Documents(rows(catalogState, lastEdits).toImmutableList())
+            else -> SpaceDocsListContent.Documents(docRows(catalogState.documents, lastEdits, dateFormatter).toImmutableList())
         }
         return SpaceDocsListState(
             spaceName = roomInfo.name,
@@ -136,29 +134,32 @@ class SpaceDocsListPresenter(
         )
     }
 
-    private fun rows(state: CatalogState, lastEdits: Map<String, Long>): List<DocRow> {
-        fun editedAt(id: String, createdAt: Long) = lastEdits[id] ?: createdAt.takeIf { it > 0 }
-        val (main, others) = state.documents.partition { it.id == DocsProtocol.MAIN_DOCUMENT_ID }
-        return (main + others.sortedByDescending { editedAt(it.id, it.createdAt) ?: 0 }).map { document ->
-            DocRow(
-                id = document.id,
-                title = document.title,
-                editedAt = editedAt(document.id, document.createdAt)?.let { dateFormatter.format(it, DateFormatterMode.TimeOrDate, useRelative = true) },
-            )
-        }
-    }
-
-    /** The newest frame time of each document; frames are read newest first. */
-    private fun lastEdits(events: List<RawEvent>): Map<String, Long> = buildMap {
-        events.filter { it.type == MatchaConfig.EVENT_DOCS_UPDATE }.forEach { event ->
-            val documentId = event.content.stringOrNull("doc")
-            val timestamp = event.timestamp
-            if (documentId != null && timestamp != null && documentId !in this) put(documentId, timestamp)
-        }
-    }
-
     private companion object {
-        val LOAD_ERRORS = setOf(DocumentError.LoadError, DocumentError.AnchorError, DocumentError.InvalidUpdate)
         val UNREADABLE_ERRORS = setOf(DocumentError.DecryptError, DocumentError.IncompleteUpdate)
+    }
+}
+
+/** Catalog errors that leave nothing to show, only Retry. */
+internal val CATALOG_LOAD_ERRORS = setOf(DocumentError.LoadError, DocumentError.AnchorError, DocumentError.InvalidUpdate)
+
+/** A space's docs as its list shows them: Space notes first, then the others by last edit, each with when it was last edited. */
+internal fun docRows(documents: List<SpaceDocument>, lastEdits: Map<String, Long>, dateFormatter: DateFormatter): List<DocRow> {
+    fun editedAt(id: String, createdAt: Long) = lastEdits[id] ?: createdAt.takeIf { it > 0 }
+    val (main, others) = documents.partition { it.id == DocsProtocol.MAIN_DOCUMENT_ID }
+    return (main + others.sortedByDescending { editedAt(it.id, it.createdAt) ?: 0 }).map { document ->
+        DocRow(
+            id = document.id,
+            title = document.title,
+            editedAt = editedAt(document.id, document.createdAt)?.let { dateFormatter.format(it, DateFormatterMode.TimeOrDate, useRelative = true) },
+        )
+    }
+}
+
+/** The newest frame time of each document; frames are read newest first. */
+internal fun lastEdits(events: List<RawEvent>): Map<String, Long> = buildMap {
+    events.filter { it.type == MatchaConfig.EVENT_DOCS_UPDATE }.forEach { event ->
+        val documentId = event.content.stringOrNull("doc")
+        val timestamp = event.timestamp
+        if (documentId != null && timestamp != null && documentId !in this) put(documentId, timestamp)
     }
 }
