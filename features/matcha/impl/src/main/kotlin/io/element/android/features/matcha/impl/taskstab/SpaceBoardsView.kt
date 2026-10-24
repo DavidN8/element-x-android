@@ -19,11 +19,18 @@ import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarHost
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
+import io.element.android.libraries.designsystem.utils.snackbar.rememberSnackbarHostState
 
-/** All boards of a space: the Tasks tab's list under a top bar with the space's name, as the space's notes have. */
+/**
+ * All boards of a space: the Tasks tab's list under a top bar with the space's name, as the space's notes have. It shows the
+ * snackbars itself, such as Archive's Undo: on a phone, Home isn't drawn under it.
+ */
 @Composable
 fun SpaceBoardsView(
     state: TasksTabState,
+    snackbarMessage: SnackbarMessage?,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -37,6 +44,7 @@ fun SpaceBoardsView(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(rememberSnackbarHostState(snackbarMessage)) },
     ) { padding ->
         TasksTabView(state = state, contentPadding = padding)
     }
@@ -51,5 +59,5 @@ class SpaceBoardsTasksTabStatePreviewParam : PreviewParameterProvider<TasksTabSt
 @PreviewsDayNight
 @Composable
 internal fun SpaceBoardsViewPreview(@PreviewParameter(SpaceBoardsTasksTabStatePreviewParam::class) state: TasksTabState) = ElementPreview {
-    SpaceBoardsView(state = state, onBackClick = {})
+    SpaceBoardsView(state = state, snackbarMessage = null, onBackClick = {})
 }

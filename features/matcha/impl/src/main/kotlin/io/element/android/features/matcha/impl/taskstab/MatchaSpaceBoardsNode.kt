@@ -8,6 +8,7 @@
 package io.element.android.features.matcha.impl.taskstab
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.core.node.Node
@@ -19,6 +20,8 @@ import io.element.android.features.matcha.api.MatchaSpaceBoardsEntryPoint
 import io.element.android.libraries.architecture.NodeInputs
 import io.element.android.libraries.architecture.callback
 import io.element.android.libraries.architecture.inputs
+import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
+import io.element.android.libraries.designsystem.utils.snackbar.collectSnackbarMessageAsState
 import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.matrix.api.core.RoomId
 
@@ -32,6 +35,7 @@ class MatchaSpaceBoardsNode(
     @Assisted buildContext: BuildContext,
     @Assisted plugins: List<Plugin>,
     private val presenter: TasksTabPresenter,
+    private val snackbarDispatcher: SnackbarDispatcher,
 ) : Node(buildContext, plugins = plugins) {
     data class Inputs(val spaceId: RoomId) : NodeInputs
 
@@ -41,7 +45,8 @@ class MatchaSpaceBoardsNode(
     @Composable
     override fun View(modifier: Modifier) {
         val state = presenter.present(onOpenRoom = callback::navigateToRoom, onOpenThread = callback::navigateToThread, spaceId = spaceId)
+        val snackbarMessage by snackbarDispatcher.collectSnackbarMessageAsState()
         // Nothing is drawn while the Matcha workspaces are off, as for the docs.
-        if (state.isVisible) SpaceBoardsView(state = state, onBackClick = callback::close, modifier = modifier)
+        if (state.isVisible) SpaceBoardsView(state = state, snackbarMessage = snackbarMessage, onBackClick = callback::close, modifier = modifier)
     }
 }
