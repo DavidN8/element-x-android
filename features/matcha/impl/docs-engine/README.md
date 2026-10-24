@@ -14,8 +14,11 @@ WEB=~/Code/mozart-dm-group/element-web/node_modules/.pnpm && NODE_PATH=$WEB/yjs@
 ```
 
 Then check the bundle: `applyAll`, which replays a history in one bridge call, must leave the same document as one `apply` per
-update, and stop at the same malformed update. It needs only Node:
+update, and stop at the same malformed update. Given the bundle as it was before the change, the check also replays every case
+through both bundles (two writers in order, shuffled, with a gap filled later, with malformed updates, with local edits and
+entries in between, a catalog, and a long note) and fails unless they answer every call alike. It needs only Node:
 
 ```sh
-node features/matcha/impl/docs-engine/parity-check.mjs
+git show HEAD:features/matcha/impl/src/main/assets/matcha-docs/engine.js > /tmp/engine-before.js
+node features/matcha/impl/docs-engine/parity-check.mjs /tmp/engine-before.js
 ```
