@@ -12,9 +12,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.api.isReminderBotJoined
 import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 
@@ -26,7 +25,7 @@ import kotlinx.coroutines.flow.map
 internal fun rememberCanRemind(room: JoinedRoom, canSendMessages: Boolean): Boolean {
     val isDm by remember { room.roomInfoFlow.map { it.isDm }.distinctUntilChanged() }.collectAsState(initial = room.isDm())
     val isBotJoined by produceState(initialValue = false, isDm) {
-        if (isDm) value = room.getUpdatedMember(MatchaConfig.reminderBotUserId(room.sessionId)).getOrNull()?.membership == RoomMembershipState.JOIN
+        if (isDm) value = room.isReminderBotJoined()
     }
     return canSendMessages && (!isDm || isBotJoined)
 }

@@ -187,7 +187,7 @@ class TasksTabPresenter(
                 is TasksTabEvent.SetArchived -> {
                     sheetTarget = null
                     val task = find(event.roomId, event.taskId)?.task ?: return
-                    val board = boards[event.roomId]?.takeIf { it.snapshot.permissions.canArchive(task) } ?: return
+                    val board = boards[event.roomId]?.takeIf { it.snapshot.permissions.canArchive(task.threadId) } ?: return
                     board.listActions().setArchived(event.taskId, event.archived)
                 }
                 is TasksTabEvent.EditTask -> {
@@ -227,7 +227,7 @@ class TasksTabPresenter(
             SheetTarget.ChoosePerson -> TasksTabSheet.ChoosePerson(people.toImmutableList(), selectedUserId = personFilter?.userId)
             is SheetTarget.Actions -> find(target.roomId, target.taskId)?.let { task ->
                 val permissions = boards[target.roomId]?.snapshot?.permissions ?: MatchaPermissions()
-                TasksTabSheet.Actions(task = task, canEdit = permissions.canWriteCards, canArchive = permissions.canArchive(task.task))
+                TasksTabSheet.Actions(task = task, canEdit = permissions.canWriteCards, canArchive = permissions.canArchive(task.task.threadId))
             }
         }
 
@@ -385,14 +385,7 @@ private fun TasksTabFilter.newTaskStatus() = when (this) {
 /** The chat's store is still reading; one whose read failed offers "Load older tasks" instead of checking forever. */
 private fun TabChat.isLoading() = !snapshot.isLoaded && !snapshot.loadFailed && snapshot.warning != MatchaWarning.Network
 
-/** Adding a task also creates its thread. */
-private fun TabChat.canAddTasks(): Boolean {
-    val permissions = snapshot.permissions
-    return snapshot.board != null && permissions.canWriteCards && permissions.canManageThreads && permissions.canSendMessages
-}
-
-/** Archiving and restoring a thread's task also changes the thread. */
-private fun MatchaPermissions.canArchive(task: TaskItem) = canWriteCards && (task.threadId == null || canManageThreads)
+private fun TabChat.canAddTasks(): Boolean = snapshot.board != null && snapshot.permissions.canAddTasks
 
 private fun TabChat.toTasksTabChat() = TasksTabChat(
     roomId = roomId,

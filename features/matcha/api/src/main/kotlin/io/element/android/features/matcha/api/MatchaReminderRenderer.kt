@@ -9,8 +9,11 @@ package io.element.android.features.matcha.api
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import io.element.android.appconfig.MatchaConfig
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
+import io.element.android.libraries.matrix.api.room.BaseRoom
+import io.element.android.libraries.matrix.api.room.RoomMembershipState
 
 /**
  * The "Remind me" sheet: the reminder bot posts the reminder in the chat. Room scoped.
@@ -38,3 +41,7 @@ data class MatchaReminderTarget(
     /** Set when reminding about a task, so its card records the request. */
     val cardId: String? = null,
 )
+
+/** Whether the reminder bot, which posts the reminders, has joined this room; in a DM it must, since inviting it would make a group. */
+suspend fun BaseRoom.isReminderBotJoined(): Boolean =
+    getUpdatedMember(MatchaConfig.reminderBotUserId(sessionId)).getOrNull()?.membership == RoomMembershipState.JOIN

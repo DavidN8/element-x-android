@@ -104,7 +104,16 @@ data class MatchaPermissions(
     val canWriteCards: Boolean = false,
     val canCreateBoard: Boolean = false,
     val canInvite: Boolean = false,
-)
+) {
+    /** A new thread is a message and its name. */
+    val canCreateThreads: Boolean get() = canManageThreads && canSendMessages
+
+    /** Adding a task also creates its thread. */
+    val canAddTasks: Boolean get() = canWriteCards && canCreateThreads
+
+    /** Archiving and restoring a thread's task also changes the thread. */
+    fun canArchive(threadId: ThreadId?): Boolean = canWriteCards && (threadId == null || canManageThreads)
+}
 
 /** Why some of a room's Matcha data may be missing or out of date: one line for the user, the plan's merged warning. */
 enum class MatchaWarning {

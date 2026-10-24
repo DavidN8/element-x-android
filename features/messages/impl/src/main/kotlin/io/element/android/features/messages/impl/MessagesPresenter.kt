@@ -25,12 +25,12 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.PinUnpinAction
-import io.element.android.appconfig.MatchaConfig
 import io.element.android.appconfig.MessageComposerConfig
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
 import io.element.android.features.location.api.live.isCurrentlySharing
 import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.api.MatchaRoomController
+import io.element.android.features.matcha.api.isReminderBotJoined
 import io.element.android.features.messages.api.timeline.HtmlConverterProvider
 import io.element.android.features.messages.impl.MessagesState.Threads
 import io.element.android.features.messages.impl.actionlist.ActionListState
@@ -89,7 +89,6 @@ import io.element.android.libraries.matrix.api.permalink.PermalinkParser
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMembersState
-import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import io.element.android.libraries.matrix.api.room.history.RoomHistoryVisibility
 import io.element.android.libraries.matrix.api.room.powerlevels.permissionsAsState
 import io.element.android.libraries.matrix.api.timeline.Timeline
@@ -398,7 +397,7 @@ class MessagesPresenter(
         val threads by controller.threads.collectAsState()
         // The reminder bot posts the reminders; in a DM it must already be there, since inviting it would turn the DM into a group.
         val isReminderBotJoined by produceState(initialValue = false, isDm) {
-            if (isDm) value = isReminderBotJoined()
+            if (isDm) value = room.isReminderBotJoined()
         }
         return MatchaChatState(
             hasChatBar = hasChatBar,
@@ -409,9 +408,6 @@ class MessagesPresenter(
             canCreateThread = canCreateThread,
         )
     }
-
-    private suspend fun isReminderBotJoined(): Boolean =
-        room.getUpdatedMember(MatchaConfig.reminderBotUserId(room.sessionId)).getOrNull()?.membership == RoomMembershipState.JOIN
 
     /**
      * Opens "Seen by" for one of your messages. A read receipt sits on the newest event its user has read, so everyone with a receipt on this

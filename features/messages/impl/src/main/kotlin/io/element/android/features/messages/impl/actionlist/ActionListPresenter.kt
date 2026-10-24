@@ -20,7 +20,7 @@ import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import dev.zacsweers.metro.ContributesBinding
-import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.api.isReminderBotJoined
 import io.element.android.features.messages.impl.UserEventPermissions
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemActionComparator
@@ -51,7 +51,6 @@ import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.room.BaseRoom
-import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.preferences.api.store.AppPreferencesStore
 import kotlinx.collections.immutable.ImmutableList
@@ -271,9 +270,6 @@ class DefaultActionListPresenter(
             .let(postProcessor::process)
     }
 }
-
-private suspend fun BaseRoom.isReminderBotJoined(): Boolean =
-    getUpdatedMember(MatchaConfig.reminderBotUserId(sessionId)).getOrNull()?.membership == RoomMembershipState.JOIN
 
 /**
  * Post filter the actions based on the content of the event.
