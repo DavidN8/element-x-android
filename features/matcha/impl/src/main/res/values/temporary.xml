@@ -194,4 +194,8 @@
     <string name="a11y_matcha_doc_edit">Edit note</string>
     <string name="a11y_matcha_docs_more">More options</string>
     <string name="screen_matcha_docs_heading_glyph" translatable="false">H</string>
+    <!-- The Notes tab on Home: the notes of every space -->
+    <string name="screen_matcha_notes_tab_empty_title">No notes yet</string>
+    <string name="screen_matcha_notes_tab_empty_body">Notes live in spaces. Join or create a space to write notes together.</string>
+    <string name="screen_matcha_notes_tab_none_on_body">None of your spaces has notes turned on yet. Ask a space admin to turn them on.</string>
 </resources>
