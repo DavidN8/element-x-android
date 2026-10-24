@@ -38,6 +38,7 @@ import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.MessagesMenuActions
 import io.element.android.features.messages.impl.SharedHistoryIcon
+import io.element.android.features.messages.impl.matcha.MatchaMenuActions
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roomcall.api.aStandByCallState
 import io.element.android.features.roomcall.api.anOngoingCallState
@@ -209,6 +210,8 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         dmUserStatus: DisplayedStatus? = null,
         displayThreads: Boolean = false,
         subtitle: TopBarSubtitle? = null,
+        // With the Matcha workspaces on: the open task count on the board button.
+        matchaOpenTaskCount: Int? = null,
     ) = MessagesViewTopBar(
         roomName = roomName,
         roomAvatar = roomAvatar,
@@ -221,12 +224,28 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         onRoomDetailsClick = {},
         onBackClick = {},
         menuActions = {
-            MessagesMenuActions(
-                roomCallState = roomCallState,
-                displayThreads = displayThreads,
-                onJoinCallClick = {},
-                onThreadsListClick = {},
-            )
+            if (matchaOpenTaskCount == null) {
+                MessagesMenuActions(
+                    roomCallState = roomCallState,
+                    displayThreads = displayThreads,
+                    onJoinCallClick = {},
+                    onThreadsListClick = {},
+                )
+            } else {
+                MatchaMenuActions(
+                    openTaskCount = matchaOpenTaskCount,
+                    roomCallState = roomCallState,
+                    canCreateThread = true,
+                    canRemind = true,
+                    canOpenSpaceDocs = false,
+                    onJoinCallClick = {},
+                    onAllThreadsClick = {},
+                    onTasksClick = {},
+                    onNewThreadClick = {},
+                    onRemindMeClick = {},
+                    onSpaceDocsClick = {},
+                )
+            }
         }
     )
     Column {
@@ -285,6 +304,24 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         HorizontalDivider()
         AMessagesViewTopBar(
             subtitle = TopBarSubtitle(text = AnnotatedString("Alice is typing…"), isTyping = true),
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+            roomCallState = aStandByCallState(),
+            matchaOpenTaskCount = 0,
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+            roomCallState = aStandByCallState(),
+            matchaOpenTaskCount = 7,
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+            roomCallState = anOngoingCallState(),
+            matchaOpenTaskCount = 120,
         )
     }
 }

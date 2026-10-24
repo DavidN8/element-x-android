@@ -14,8 +14,6 @@ sealed interface ChatBarEvent {
     /** A chip was tapped; tapping the selected one does nothing. */
     data class Select(val target: MatchaChatBarSelection) : ChatBarEvent
 
-    /** Pushes the list of all threads. */
-    data object OpenAllThreads : ChatBarEvent
     data object OpenSpaceDocs : ChatBarEvent
 
     /** Opens the reminder sheet about [threadId], or about the open thread when null. */

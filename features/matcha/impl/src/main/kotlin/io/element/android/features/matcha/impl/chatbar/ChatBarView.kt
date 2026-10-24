@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
@@ -110,8 +109,9 @@ private fun ChipRow(state: ChatBarState) {
     val listState = rememberLazyListState()
     val selectedIndex = when (val selection = state.selection) {
         MatchaChatBarSelection.General -> 0
-        MatchaChatBarSelection.Tasks -> 1
-        is MatchaChatBarSelection.Thread -> state.threads.indexOfFirst { it.id == selection.threadId }.takeIf { it >= 0 }?.plus(2)
+        // The board is opened from the top bar, so no chip stands for it.
+        MatchaChatBarSelection.Tasks -> null
+        is MatchaChatBarSelection.Thread -> state.threads.indexOfFirst { it.id == selection.threadId }.takeIf { it >= 0 }?.plus(1)
     }
     LaunchedEffect(selectedIndex) {
         if (selectedIndex == null) return@LaunchedEffect
@@ -137,19 +137,6 @@ private fun ChipRow(state: ChatBarState) {
                 onClick = { eventSink(ChatBarEvent.Select(MatchaChatBarSelection.General)) },
             )
         }
-        item(key = "tasks") {
-            val label = stringResource(CommonStrings.common_matcha_tasks)
-            val count = state.openTaskCount
-            val description = if (count > 0) "$label, ${pluralStringResource(R.plurals.a11y_matcha_open_tasks, count, count)}" else null
-            PillFilterChip(
-                label = label,
-                selected = state.selection == MatchaChatBarSelection.Tasks,
-                role = Role.Tab,
-                trailingText = count.takeIf { it > 0 }?.toString(),
-                onClick = { eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Tasks)) },
-                modifier = if (description != null) Modifier.semantics { contentDescription = description } else Modifier,
-            )
-        }
         items(state.threads.size, key = { state.threads[it].id.value }) { index ->
             ThreadChip(
                 thread = state.threads[index],
@@ -167,15 +154,6 @@ private fun ChipRow(state: ChatBarState) {
                     onClick = { eventSink(ChatBarEvent.NewThread) },
                 )
             }
-        }
-        item(key = "all") {
-            PillFilterChip(
-                label = stringResource(CommonStrings.common_matcha_all_threads),
-                selected = false,
-                role = Role.Button,
-                leadingIcon = CompoundIcons.Threads(),
-                onClick = { eventSink(ChatBarEvent.OpenAllThreads) },
-            )
         }
         if (state.showMore) {
             item(key = "more") {

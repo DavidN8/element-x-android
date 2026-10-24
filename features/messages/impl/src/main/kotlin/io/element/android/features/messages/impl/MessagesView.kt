@@ -76,7 +76,7 @@ import io.element.android.features.messages.impl.crypto.identity.IdentityChangeS
 import io.element.android.features.messages.impl.link.LinkEvent
 import io.element.android.features.messages.impl.link.LinkView
 import io.element.android.features.messages.impl.matcha.LocalMatchaThreads
-import io.element.android.features.messages.impl.matcha.MatchaOverflowMenu
+import io.element.android.features.messages.impl.matcha.MatchaMenuActions
 import io.element.android.features.messages.impl.matcha.NoopMatchaChatBarActions
 import io.element.android.features.messages.impl.messagecomposer.AttachmentsBottomSheet
 import io.element.android.features.messages.impl.messagecomposer.ComposerSlotPill
@@ -598,29 +598,31 @@ private fun MessagesViewTopBars(
         onRoomDetailsClick = onRoomDetailsClick,
         isBackAlwaysShown = threadMode != null,
         menuActions = {
-            MessagesMenuActions(
-                // With the Matcha workspaces, All threads is a chip of the chip bar.
-                displayThreads = threadMode == null && state.matcha == null && state.threads.hasThreads,
-                roomCallState = state.roomCallState,
-                onJoinCallClick = onJoinCallClick,
-                onThreadsListClick = onThreadsListClick,
-                overflowMenu = {
-                    // Until the chat uses named threads or a board, the chip bar's entries are here.
-                    if (state.matcha != null && !state.matcha.hasChatBar) {
-                        MatchaOverflowMenu(
-                            canCreateThread = state.userEventPermissions.canSendMessage,
-                            hasThreads = state.threads.hasThreads,
-                            canRemind = state.matcha.canRemind,
-                            canOpenSpaceDocs = matchaActions.openSpaceDocs != null,
-                            onNewThreadClick = { state.eventSink(MessagesEvent.MatchaNewThread) },
-                            onTasksClick = matchaActions::openTasks,
-                            onAllThreadsClick = matchaActions::openAllThreads,
-                            onRemindMeClick = { state.eventSink(MessagesEvent.MatchaRemindMe) },
-                            onSpaceDocsClick = { matchaActions.openSpaceDocs?.invoke() },
-                        )
-                    }
-                },
-            )
+            val matcha = state.matcha
+            if (matcha == null) {
+                MessagesMenuActions(
+                    displayThreads = threadMode == null && state.threads.hasThreads,
+                    roomCallState = state.roomCallState,
+                    onJoinCallClick = onJoinCallClick,
+                    onThreadsListClick = onThreadsListClick,
+                )
+            } else {
+                // Until the chat uses named threads, the chip bar's entries are in ⋮.
+                val inMenu = !matcha.hasChatBar
+                MatchaMenuActions(
+                    openTaskCount = matcha.openTaskCount,
+                    roomCallState = state.roomCallState,
+                    canCreateThread = inMenu && state.userEventPermissions.canSendMessage,
+                    canRemind = inMenu && matcha.canRemind,
+                    canOpenSpaceDocs = inMenu && matchaActions.openSpaceDocs != null,
+                    onJoinCallClick = onJoinCallClick,
+                    onAllThreadsClick = { hidingKeyboard(matchaActions::openAllThreads) },
+                    onTasksClick = { hidingKeyboard(matchaActions::openTasks) },
+                    onNewThreadClick = { state.eventSink(MessagesEvent.MatchaNewThread) },
+                    onRemindMeClick = { state.eventSink(MessagesEvent.MatchaRemindMe) },
+                    onSpaceDocsClick = { matchaActions.openSpaceDocs?.invoke() },
+                )
+            }
         }
     )
 }
@@ -631,7 +633,6 @@ internal fun RowScope.MessagesMenuActions(
     roomCallState: RoomCallState,
     onJoinCallClick: (isAudioCall: Boolean) -> Unit,
     onThreadsListClick: () -> Unit,
-    overflowMenu: @Composable () -> Unit = {},
 ) {
     if (displayThreads) {
         IconButton(onClick = onThreadsListClick) {
@@ -645,7 +646,6 @@ internal fun RowScope.MessagesMenuActions(
         roomCallState = roomCallState,
         onJoinCallClick = onJoinCallClick,
     )
-    overflowMenu()
     Spacer(Modifier.width(8.dp))
 }
 

@@ -16,8 +16,8 @@ import kotlinx.collections.immutable.toImmutableList
 open class ChatBarStatePreviewParam : PreviewParameterProvider<ChatBarState> {
     override val values: Sequence<ChatBarState>
         get() = sequenceOf(
-            // Loading: General and Tasks only.
-            aChatBarState(threads = emptyList(), openTaskCount = 0),
+            // Loading: General only.
+            aChatBarState(threads = emptyList()),
             aChatBarState(),
             aChatBarState(selection = MatchaChatBarSelection.Thread(ThreadId("\$t2"))),
             // An archived thread opened from a link, without permission to create threads.
@@ -56,7 +56,6 @@ private val previewThreads = listOf(
 
 internal fun aChatBarState(
     selection: MatchaChatBarSelection = MatchaChatBarSelection.General,
-    openTaskCount: Int = 3,
     threads: List<ChatBarThread> = previewThreads,
     canCreateThread: Boolean = true,
     canManageThreads: Boolean = true,
@@ -69,7 +68,6 @@ internal fun aChatBarState(
     isVisible = true,
     showBar = true,
     selection = selection,
-    openTaskCount = openTaskCount,
     threads = threads.toImmutableList(),
     canCreateThread = canCreateThread,
     canManageThreads = canManageThreads,

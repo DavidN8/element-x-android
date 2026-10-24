@@ -16,6 +16,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -61,6 +62,7 @@ import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
 import io.element.android.features.messages.impl.timeline.sendfailure.SendFailureDialogState
 import io.element.android.features.roomcall.api.aStandByCallState
+import io.element.android.features.roomcall.api.anOngoingCallState
 import io.element.android.libraries.emoji.impl.picker.DefaultEmojiPickerRenderer
 import io.element.android.libraries.emoji.impl.picker.anEmojiPickerState
 import io.element.android.libraries.matrix.api.core.RoomId
@@ -757,21 +759,78 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
-    fun `until the chat has a chip bar, its entries are in the top bar's menu`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<MessagesEvent>()
+    fun `with the Matcha workspaces, the top bar opens All threads and the board, and shows the open task count`() = runAndroidComposeUiTest {
+        val context = activity!!
+        val openAllThreads = lambdaRecorder<Unit> {}
         val openTasks = lambdaRecorder<Unit> {}
         val actions = object : MatchaChatBarActions by NoopMatchaChatBarActions {
+            override fun openAllThreads() = openAllThreads()
             override fun openTasks() = openTasks()
         }
+        setMessagesView(state = aMessagesState(matcha = aMatchaChatState(openTaskCount = 3)), matchaActions = actions)
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_all_threads)).performClick()
+        openAllThreads.assertions().isCalledOnce()
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_tasks) + ", 3 open tasks").performClick()
+        openTasks.assertions().isCalledOnce()
+        // The badge's digits are read in the button's label only.
+        onNodeWithText("3").assertDoesNotExist()
+    }
+
+    @Test
+    fun `with the Matcha workspaces, starting a call moves into the menu`() = runAndroidComposeUiTest {
+        val context = activity!!
+        ensureCalledOnceWithParam(false) { callback ->
+            setMessagesView(
+                state = aMessagesState(roomCallState = aStandByCallState(), matcha = aMatchaChatState(hasChatBar = true)),
+                onJoinCallClick = callback,
+            )
+            onNodeWithContentDescription(context.getString(CommonStrings.a11y_start_call)).assertDoesNotExist()
+            onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+            assertNoNodeWithText(CommonStrings.action_voice_call)
+            clickOn(CommonStrings.action_video_call)
+        }
+    }
+
+    @Test
+    fun `with the Matcha workspaces, a voice call is offered in the menu of a DM`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(true) { callback ->
+            setMessagesView(
+                state = aMessagesState(roomCallState = aStandByCallState(isDM = true), matcha = aMatchaChatState()),
+                onJoinCallClick = callback,
+            )
+            onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_more)).performClick()
+            clickOn(CommonStrings.action_voice_call)
+        }
+    }
+
+    @Test
+    fun `with the Matcha workspaces, a call that can't be started is disabled in the menu`() = runAndroidComposeUiTest {
+        val context = activity!!
+        setMessagesView(state = aMessagesState(roomCallState = aStandByCallState(canStartCall = false), matcha = aMatchaChatState()))
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+        onNodeWithText(context.getString(CommonStrings.action_video_call)).assertIsNotEnabled()
+    }
+
+    @Test
+    fun `with the Matcha workspaces, an ongoing call keeps its Join button in the bar`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(false) { callback ->
+            setMessagesView(
+                state = aMessagesState(roomCallState = anOngoingCallState(), matcha = aMatchaChatState(hasChatBar = true)),
+                onJoinCallClick = callback,
+            )
+            // Nothing else is in the menu, so there is none.
+            onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_more)).assertDoesNotExist()
+            clickOn(CommonStrings.action_join)
+        }
+    }
+
+    @Test
+    fun `until the chat has a chip bar, its entries are in the top bar's menu`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<MessagesEvent>()
         setMessagesView(
             state = aMessagesState(matcha = aMatchaChatState(hasChatBar = false), eventSink = eventsRecorder),
-            matchaActions = actions,
         )
         val more = activity!!.getString(CommonStrings.common_matcha_more)
-        onNodeWithContentDescription(more).performClick()
-        clickOn(CommonStrings.common_matcha_tasks)
-        openTasks.assertions().isCalledOnce()
-
         onNodeWithContentDescription(more).performClick()
         clickOn(CommonStrings.common_matcha_new_thread)
         onNodeWithContentDescription(more).performClick()
@@ -780,9 +839,13 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
-    fun `once the chat has a chip bar, the top bar has no Matcha menu`() = runAndroidComposeUiTest {
+    fun `once the chat has a chip bar, the top bar's menu only starts calls`() = runAndroidComposeUiTest {
+        val context = activity!!
         setMessagesView(state = aMessagesState(matcha = aMatchaChatState(hasChatBar = true)))
-        onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_more)).assertDoesNotExist()
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+        onNodeWithText(context.getString(CommonStrings.action_video_call)).assertExists()
+        assertNoNodeWithText(CommonStrings.common_matcha_new_thread)
+        assertNoNodeWithText(CommonStrings.action_matcha_remind_me)
     }
 
     @Test

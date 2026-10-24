@@ -11,6 +11,7 @@ import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.SingleIn
 import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.matcha.api.MatchaThreadInfo
+import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
@@ -46,6 +47,11 @@ class DefaultMatchaRoomController(
         .distinctUntilChanged()
         .stateIn(coroutineScope, SharingStarted.Eagerly, false)
 
+    override val openTaskCount: StateFlow<Int> = store.snapshot
+        .map { it.openTaskCount() }
+        .distinctUntilChanged()
+        .stateIn(coroutineScope, SharingStarted.Eagerly, 0)
+
     override val threads: StateFlow<ImmutableMap<ThreadId, MatchaThreadInfo>> = store.snapshot
         .map { snapshot ->
             snapshot.threads.associate { thread ->
@@ -78,6 +84,13 @@ class DefaultMatchaRoomController(
     }
 }
 
-/** The chat uses the workspace features: it has a board, or an active thread someone named. */
+/**
+ * The chip bar has something to show: an active thread someone named. The board alone doesn't count, since the top bar opens it,
+ * and a chat without named threads would only get a bar with General.
+ */
 internal fun MatchaRoomSnapshot.hasChatBar(): Boolean =
-    board != null || threads.any { !it.metadata.archived && it.metadata.nameSource == ThreadNameSource.Explicit }
+    threads.any { !it.metadata.archived && it.metadata.nameSource == ThreadNameSource.Explicit }
+
+/** To do and In progress tasks on the board, once loaded. */
+internal fun MatchaRoomSnapshot.openTaskCount(): Int =
+    if (isLoaded) board?.cards?.count { !it.archived && it.status != TaskStatus.Done } ?: 0 else 0

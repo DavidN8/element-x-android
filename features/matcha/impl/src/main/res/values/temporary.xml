@@ -22,10 +22,6 @@
     <string name="screen_matcha_threads_warning_access">"You can't see thread names from before you joined."</string>
     <string name="screen_matcha_threads_warning_network">"Thread names may be out of date. Check your connection."</string>
     <string name="a11y_matcha_thread_archived">"Archived thread"</string>
-    <plurals name="a11y_matcha_open_tasks">
-        <item quantity="one">"%1$d open task"</item>
-        <item quantity="other">"%1$d open tasks"</item>
-    </plurals>
     <!-- End of track B: chip bar. -->
     <!-- Track B: task board. -->
     <!-- Not in WHATSAPP_DESIGN.md §5: joins a relative day and a time, e.g. "Tomorrow 09:00". -->
