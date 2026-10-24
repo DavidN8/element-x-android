@@ -62,6 +62,8 @@ data class ProjectedCard(
      * in the history.
      */
     val hasRevision: Boolean,
+    /** Who the task involves (see [TaskParticipants]), the current user included when they are; filled in by the room's store. */
+    val participants: Set<String> = emptySet(),
 )
 
 /**
@@ -102,6 +104,7 @@ object KanbanProtocol {
         val description = content.stringOrNull("description")?.takeIf(::isValidDescription) ?: return null
         val status = TaskStatus.fromWire(content.stringOrNull("column")) ?: return null
         val archived = content.booleanOrNull("archived") ?: return null
+        // Absent on older cards, which stay visible to everyone; any other value makes the revision invalid.
         val showToRoom = if (content.containsKey("show_to_room")) {
             content.booleanOrNull("show_to_room") ?: return null
         } else {

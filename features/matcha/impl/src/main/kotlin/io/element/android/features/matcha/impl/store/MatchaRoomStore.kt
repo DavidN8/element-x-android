@@ -13,6 +13,7 @@ import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
 import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
 import io.element.android.features.matcha.impl.protocol.RawEvent
+import io.element.android.features.matcha.impl.protocol.TaskParticipants
 import io.element.android.features.matcha.impl.protocol.ThreadMetadata
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
@@ -80,6 +81,15 @@ data class MatchaThread(
     val isRootUnreadable: Boolean = false,
     /** True when the thread was created with a name, so its first reply is the hidden bootstrap reply that [numberOfReplies] counts. */
     val hasHiddenFirstReply: Boolean = false,
+    /** The sender of the thread root, or null while the thread isn't in the thread list read so far. */
+    val rootSenderId: String? = null,
+    /**
+     * Who the thread involves: its root sender and everyone who replied in it, as far as read.
+     *
+     * ponytail: replies are read from the thread's newest page of 100 (and its latest reply), so in a longer thread someone who only
+     * replied further back is missed; reading every page would lift that.
+     */
+    val participants: Set<String> = emptySet(),
 ) {
     /** The replies people can see. */
     fun visibleReplies(): Int = (numberOfReplies - if (hasHiddenFirstReply) 1 else 0).coerceAtLeast(0).toInt()
@@ -141,6 +151,8 @@ data class MatchaRoomSnapshot(
     val isBoardResolved: Boolean = false,
     /** The Matcha timeline could not be opened; [MatchaRoomStore.retryLoad] tries again. */
     val loadFailed: Boolean = false,
+    /** The room is a direct chat, whose members are involved in every task. */
+    val isDirect: Boolean = false,
 )
 
 /**
@@ -167,6 +179,12 @@ class MatchaRoomStore(
     /** New Matcha events from sync, newest first; timelines of this SDK drop custom message-like events, so they come from here. */
     private val liveEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val anchorsLoading = MutableStateFlow<Set<String>>(emptySet())
+
+    /** The senders of each thread's replies, from its newest page of replies, by thread root id. */
+    private val threadRepliers = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
+
+    /** The reply count each thread had when its replies were last requested, by thread root id. */
+    private val repliesRequestedAt = HashMap<String, Long>()
     private val relationsUnavailable = MutableStateFlow(false)
     private val requestedAnchors = HashSet<String>()
     private val anchorPermits = Semaphore(MAX_CONCURRENT_ANCHORS)
@@ -283,7 +301,7 @@ class MatchaRoomStore(
             combine(scanEvents, liveEvents, relationEvents, optimisticEvents) { scan, live, related, optimistic ->
                 merge((live + related.values.flatten() + scan).distinctBy { it.eventId ?: it }, optimistic)
             },
-            threadItems,
+            combine(threadItems, threadRepliers, directMembersFlow(), ::ThreadData),
             storedState,
             permissions,
             combine(
@@ -294,14 +312,14 @@ class MatchaRoomStore(
                 combine(utdCauses, loadFailed, readFailed, anchorsLoading, relationsUnavailable, ::Health),
                 ::Status,
             ),
-        ) { events, threads, state, perms, status ->
-            buildSnapshot(events, threads, state, perms, status)
+        ) { events, threadData, state, perms, status ->
+            buildSnapshot(events, threadData, state, perms, status)
         }
             .distinctUntilChanged()
             .onEach { snapshot ->
                 _snapshot.value = snapshot
                 requestAnchors(listOfNotNull(snapshot.board?.rootId) + snapshot.threads.map { it.id.value })
-                requestAnchors(snapshot.bootstrapCandidates(), RawRelationType.Thread)
+                requestReplies(snapshot.threads)
             }
             .launchIn(coroutineScope)
     }
@@ -311,62 +329,100 @@ class MatchaRoomStore(
         room.getStateEventId(StateEventType.RoomCreate, "").getOrNull()?.let { requestAnchors(listOf(it.value)) }
     }
 
-    /**
-     * Threads whose reply count may include the hidden bootstrap reply, checked through their `m.thread` relations. A thread named
-     * when it was created usually takes its name from the root message, so any thread may have one.
-     *
-     * ponytail: one request per thread, and only threads that fit in one page of replies are checked; a longer thread may count one
-     * reply too many.
-     */
-    private fun MatchaRoomSnapshot.bootstrapCandidates(): List<String> =
-        threads.filter { !it.hasHiddenFirstReply && it.numberOfReplies in 1L..RELATIONS_PAGE_SIZE }.map { it.id.value }
+    /** The current user and the other members of a direct chat, or empty in any other chat. */
+    private fun directMembersFlow() = room.roomInfoFlow
+        .map { info -> if (info.isDirect) setOf(room.sessionId.value) + info.heroes.map { it.userId.value } else emptySet() }
+        .distinctUntilChanged()
 
-    /**
-     * Fetches, once each, the events related to new anchors by [relation], a few anchors at a time.
-     * For thread relations only the hidden bootstrap replies are kept, from one page.
-     */
-    private fun requestAnchors(anchors: Collection<String>, relation: RawRelationType = RawRelationType.Reference) {
-        val byKey = anchors.filter { it.startsWith("$") }.associateBy { if (relation == RawRelationType.Thread) "$it$THREAD_KEY_SUFFIX" else it }
-        val fresh = synchronized(requestedAnchors) { byKey.keys.filter { requestedAnchors.add(it) } }
-        if (fresh.isEmpty()) return
-        anchorsLoading.update { it + fresh }
-        for (key in fresh) {
-            coroutineScope.launch {
-                try {
-                    anchorPermits.withPermit { fetchAllRelated(byKey.getValue(key), relation) }
-                        .onSuccess { events -> relationEvents.update { it + (key to events) } }
-                        .onFailure { error ->
-                            if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
-                            Timber.w(error, "Could not read the events related to a Matcha anchor")
-                        }
-                } finally {
-                    anchorsLoading.update { it - key }
-                }
+    /** Fetches, once each, the events related to new anchors by an `m.reference` relation, a few anchors at a time. */
+    private fun requestAnchors(anchors: Collection<String>) {
+        val fresh = synchronized(requestedAnchors) { anchors.filter { it.startsWith("$") && requestedAnchors.add(it) } }
+        for (anchor in fresh) {
+            launchRelationsRead(anchor, isFirstRead = true, read = { fetchAllRelated(anchor) }) { events ->
+                relationEvents.update { it + (anchor to events) }
             }
         }
     }
 
     /**
-     * Reads every event related to [anchor] by [relation], newest first, page by page; for threads, the bootstrap replies of one page.
+     * Reads the newest page of each thread's replies: their senders are the thread's participants, and the hidden bootstrap reply
+     * among them makes [MatchaThread.hasHiddenFirstReply]. A thread is read again whenever its reply count changes, so new repliers
+     * are seen; only its first read holds up [MatchaRoomSnapshot.isLoaded].
+     *
+     * ponytail: one request per thread and per change of its reply count, of the newest [RELATIONS_PAGE_SIZE] replies; a longer
+     * thread may count its hidden reply as a visible one, and misses repliers further back.
+     */
+    private fun requestReplies(threads: List<MatchaThread>) {
+        // Without the SDK's related events, every read would fail the same way.
+        if (relationsUnavailable.value) return
+        val fresh = synchronized(repliesRequestedAt) {
+            threads
+                // A listed thread without replies has none to read; a card's thread that isn't listed yet may have some.
+                .filter { it.numberOfReplies > 0 || it.rootSenderId == null }
+                .mapNotNull { thread ->
+                    val previous = repliesRequestedAt.put(thread.id.value, thread.numberOfReplies)
+                    (thread.id.value to (previous == null)).takeIf { previous != thread.numberOfReplies }
+                }
+        }
+        for ((threadId, isFirstRead) in fresh) {
+            val read = suspend {
+                room.fetchRelatedEventsJson(EventId(threadId), RawRelationType.Thread, null, RELATIONS_PAGE_SIZE)
+                    .map { page -> page.events.mapNotNull { RawEvent.parse(it) } }
+            }
+            val key = "$threadId$THREAD_KEY_SUFFIX"
+            launchRelationsRead(key, isFirstRead, read) { replies ->
+                val repliers = TaskParticipants.repliers(replies)[threadId].orEmpty()
+                threadRepliers.update { it + (threadId to it[threadId].orEmpty() + repliers) }
+                // Only the hidden bootstrap replies are kept with the Matcha events. A later read adds to the earlier ones: once a thread
+                // has grown past one page, its newest page no longer holds the bootstrap reply.
+                val bootstrap = replies.filter { event -> event.type == MatchaConfig.EVENT_THREAD_METADATA }
+                relationEvents.update { it + (key to (it[key].orEmpty() + bootstrap).distinctBy { event -> event.eventId ?: event }) }
+            }
+        }
+    }
+
+    /** Runs [read] a few at a time, then [onRead] with what it read; a first read is waited for by [MatchaRoomSnapshot.isLoaded]. */
+    private fun launchRelationsRead(key: String, isFirstRead: Boolean, read: suspend () -> Result<List<RawEvent>>, onRead: (List<RawEvent>) -> Unit) {
+        if (isFirstRead) anchorsLoading.update { it + key }
+        coroutineScope.launch {
+            try {
+                anchorPermits.withPermit { read() }
+                    .onSuccess(onRead)
+                    .onFailure { error ->
+                        if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
+                        Timber.w(error, "Could not read the events related to a Matcha anchor")
+                    }
+            } finally {
+                if (isFirstRead) anchorsLoading.update { it - key }
+            }
+        }
+    }
+
+    /**
+     * Reads every event related to [anchor] by an `m.reference` relation, newest first, page by page.
      *
      * ponytail: a fixed page cap bounds very long histories (MAX_RELATION_PAGES × 100 events); add paging on demand if one anchor
      * ever needs more.
      */
-    private suspend fun fetchAllRelated(anchor: String, relation: RawRelationType): Result<List<RawEvent>> {
-        if (relation == RawRelationType.Thread) {
-            return room.fetchRelatedEventsJson(EventId(anchor), relation, null, RELATIONS_PAGE_SIZE)
-                .map { page -> page.events.mapNotNull { RawEvent.parse(it) }.filter { it.type == MatchaConfig.EVENT_THREAD_METADATA } }
-        }
+    private suspend fun fetchAllRelated(anchor: String): Result<List<RawEvent>> {
         val events = ArrayList<RawEvent>()
         var from: String? = null
         repeat(MAX_RELATION_PAGES) {
-            val page = room.fetchRelatedEventsJson(EventId(anchor), relation, from, RELATIONS_PAGE_SIZE).getOrElse { return Result.failure(it) }
+            val page = room.fetchRelatedEventsJson(EventId(anchor), RawRelationType.Reference, from, RELATIONS_PAGE_SIZE)
+                .getOrElse { return Result.failure(it) }
             page.events.mapNotNullTo(events) { RawEvent.parse(it) }
             from = page.nextBatch ?: return Result.success(events)
         }
         Timber.w("Stopped reading the events related to a Matcha anchor after %d pages", MAX_RELATION_PAGES)
         return Result.success(events)
     }
+
+    /** The thread list, the repliers read from each thread, and the members of a direct chat. */
+    private data class ThreadData(
+        val items: List<ThreadListItem>,
+        val repliers: Map<String, Set<String>>,
+        val directMembers: Set<String>,
+    )
 
     private data class Status(
         val pagination: Timeline.PaginationStatus,
@@ -452,12 +508,13 @@ class MatchaRoomStore(
 
     private fun buildSnapshot(
         events: List<RawEvent>,
-        threadList: List<ThreadListItem>,
+        threadData: ThreadData,
         state: StoredState,
         permissions: MatchaPermissions,
         status: Status,
     ): MatchaRoomSnapshot {
         val health = status.health
+        val threadList = threadData.items
         // Only a pointer makes a board, as on the web client. A root without one is never a board: it is left behind by a create
         // whose pointer failed, and the pointer of a real board is newer than its root, so the scan holds it whenever it holds the
         // root. Cards are newer than the pointer, so the board they refer to stands in for a pointer older than the scan.
@@ -476,6 +533,8 @@ class MatchaRoomStore(
         }
         val listed = threadList.associateBy { it.threadId.value }
         val bootstrapped = events.mapNotNullTo(HashSet()) { it.bootstrapRootId() }
+        // The hidden replies this client sent are among the Matcha events before the thread's replies are read again.
+        val eventRepliers = TaskParticipants.repliers(events)
         val threadIds = LinkedHashSet<String>().apply {
             addAll(listed.keys)
             latestCards.mapNotNullTo(this) { it.threadId }
@@ -494,11 +553,23 @@ class MatchaRoomStore(
                 rootTimestamp = item?.rootEvent?.timestamp ?: 0,
                 isRootUnreadable = item?.rootEvent?.content is UnableToDecryptContent,
                 hasHiddenFirstReply = id in bootstrapped,
+                rootSenderId = item?.rootEvent?.senderId?.value,
+                participants = buildSet {
+                    item?.rootEvent?.senderId?.let { add(it.value) }
+                    item?.latestEvent?.senderId?.let { add(it.value) }
+                    addAll(threadData.repliers[id].orEmpty())
+                    addAll(eventRepliers[id].orEmpty())
+                },
             )
         }.sortedByDescending { it.lastActivityTimestamp }
 
         val board = boardRootId?.let { root ->
-            MatchaBoard(rootId = root, cards = KanbanProtocol.project(latestCards, threads.associate { it.id.value to it.metadata }))
+            val threadParticipants = threads.associate { it.id.value to it.participants }
+            val standaloneAuthors = TaskParticipants.standaloneAuthors(events, root)
+            val cards = KanbanProtocol.project(latestCards, threads.associate { it.id.value to it.metadata }).map { card ->
+                card.copy(participants = TaskParticipants.of(card, threadParticipants, standaloneAuthors, threadData.directMembers))
+            }
+            MatchaBoard(rootId = root, cards = cards)
         }
         val historyRead = !status.pagination.hasMoreToLoad || status.pagesRead >= INITIAL_HISTORY_PAGES
         val threadsRead = status.threads is ThreadListPaginationStatus.Idle
@@ -528,6 +599,7 @@ class MatchaRoomStore(
             // ponytail: history hidden from a member who joined later may hide an older pointer too; Path B reads it from the server.
             isBoardResolved = boardRootId != null || !status.pagination.hasMoreToLoad,
             loadFailed = health.loadFailed,
+            isDirect = threadData.directMembers.isNotEmpty(),
         )
     }
 

@@ -13,6 +13,9 @@ import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.MessageEventType
+import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
+import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
@@ -25,6 +28,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemD
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+import io.element.android.libraries.matrix.test.room.aRoomInfo
 import io.element.android.libraries.matrix.test.room.powerlevels.FakeRoomPermissions
 import io.element.android.libraries.matrix.test.room.threads.FakeThreadsListService
 import io.element.android.libraries.matrix.test.timeline.FakeTimeline
@@ -49,6 +53,7 @@ internal fun aMatchaRoomStore(
     boardPointerResult: (() -> Result<Map<String, String>>)? = null,
     olderPages: List<List<MatrixTimelineItem>> = emptyList(),
     paginateResult: () -> Result<Unit> = { Result.success(Unit) },
+    roomInfo: RoomInfo = aRoomInfo(),
     sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
 ): MatchaRoomStore = MatchaRoomStore(
     aMatchaJoinedRoom(
@@ -63,6 +68,7 @@ internal fun aMatchaRoomStore(
         sendRawStateEventResult = sendRawStateEventResult,
         boardPointerResult = boardPointerResult,
         sendRawEventResult = sendRawEventResult,
+        roomInfo = roomInfo,
     ),
     scope,
 )
@@ -87,12 +93,18 @@ internal fun aMatchaJoinedRoom(
     paginateResult: () -> Result<Unit> = { Result.success(Unit) },
     /** Overrides opening the Matcha timeline; by default it opens on [items]. */
     createTimelineResult: (() -> Result<Timeline>)? = null,
+    roomInfo: RoomInfo = aRoomInfo(id = roomId),
+    /** The replies of each thread, as raw event JSON, by thread root id. */
+    threadReplies: Map<String, List<String>> = emptyMap(),
+    userDisplayNameResult: (UserId) -> Result<String?> = { Result.success(null) },
 ): FakeJoinedRoom {
     val timeline = aMatchaTimeline(items, olderPages, paginateResult)
     return FakeJoinedRoom(
         baseRoom = FakeBaseRoom(
             roomId = roomId,
+            initialRoomInfo = roomInfo,
             roomPermissions = FakeRoomPermissions(canSendMessage = canSendMessage, canSendState = { canSendState }, canInvite = true),
+            userDisplayNameResult = userDisplayNameResult,
         ),
         roomCoroutineScope = roomCoroutineScope,
         threadsListService = FakeThreadsListService(
@@ -105,6 +117,9 @@ internal fun aMatchaJoinedRoom(
         },
         sendRawEventResult = sendRawEventResult,
         sendRawStateEventResult = sendRawStateEventResult,
+        fetchRelatedEventsJsonResult = { eventId, relation, _ ->
+            Result.success(RawEventsPage(if (relation == RawRelationType.Thread) threadReplies[eventId.value].orEmpty() else emptyList(), null))
+        },
         getStateEventsJsonResult = { type ->
             when {
                 type != StateEventType.Custom(MatchaConfig.STATE_KANBAN) -> Result.success(emptyMap())
@@ -137,14 +152,14 @@ internal fun aMatchaTimeline(
 }
 
 /** A timeline item carrying a Matcha event with the given raw [content], sent at [index] ms; a state event with a [stateKey]. */
-internal fun aMatchaEventItem(index: Int, type: String, content: String, stateKey: String? = null) = MatrixTimelineItem.Event(
+internal fun aMatchaEventItem(index: Int, type: String, content: String, stateKey: String? = null, sender: String = "@bob:x") = MatrixTimelineItem.Event(
     uniqueId = UniqueId("item-$index"),
     event = anEventTimelineItem(
         eventId = EventId("\$e$index"),
         debugInfoProvider = TimelineItemDebugInfoProvider {
             val stateKeyField = stateKey?.let { """"state_key": "$it", """ }.orEmpty()
             aTimelineItemDebugInfo(
-                originalJson = """{"type": "$type", $stateKeyField"event_id": "${'$'}e$index", "sender": "@bob:x", "origin_server_ts": $index, """ +
+                originalJson = """{"type": "$type", $stateKeyField"event_id": "${'$'}e$index", "sender": "$sender", "origin_server_ts": $index, """ +
                     """"content": $content}"""
             )
         },
@@ -160,10 +175,11 @@ internal fun aThreadListItem(
     body: String = "Root of $id",
     timestamp: Long = 10,
     content: EventContent? = aMessageContent(body = body),
+    senderId: UserId = UserId("@bob:x"),
 ) = ThreadListItem(
     rootEvent = ThreadListItemEvent(
         eventId = EventId(id),
-        senderId = UserId("@bob:x"),
+        senderId = senderId,
         senderProfile = ProfileDetails.Unavailable,
         isOwn = false,
         content = content,
