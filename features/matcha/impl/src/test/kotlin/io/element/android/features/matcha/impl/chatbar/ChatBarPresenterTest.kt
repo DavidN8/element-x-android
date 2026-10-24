@@ -37,6 +37,7 @@ import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecry
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
+import io.element.android.tests.testutils.consumeItemsUntilTimeout
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -383,6 +384,26 @@ class ChatBarPresenterTest {
     }
 
     @Test
+    fun `a new task in a chat whose board the user can't add to opens the board, which says why`() = runTest {
+        val actions = FakeMatchaChatBarActions()
+        val readOnly = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            canSendMessage = { it != MessageEventType.Other(MatchaConfig.EVENT_KANBAN_CARD) },
+        )
+        val controller = DefaultMatchaRoomController(readOnly, backgroundScope)
+        aPresenter(readOnly, controller = controller, actions = actions).test {
+            val ready = awaitUntil { it.canCreateThread }
+            readOnly.snapshot.first { it.isLoaded && it.board != null }
+            controller.openNewTask()
+            awaitUntil { controller.requests.value == null }
+            assertThat(actions.calls).containsExactly("tasks")
+            assertThat(latest(ready).editor).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `without permission threads cannot be created or managed`() = runTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
@@ -477,6 +498,10 @@ class ChatBarPresenterTest {
 
     private suspend fun TurbineTestContext<ChatBarState>.awaitUntil(predicate: (ChatBarState) -> Boolean): ChatBarState =
         consumeItemsUntilPredicate(predicate = predicate).last()
+
+    /** The newest state once the emissions settle, or [previous] when nothing changed since. */
+    private suspend fun TurbineTestContext<ChatBarState>.latest(previous: ChatBarState): ChatBarState =
+        consumeItemsUntilTimeout().lastOrNull() ?: previous
 
     private class FakeMatchaChatBarActions(hasSpaceDocs: Boolean = true) : MatchaChatBarActions {
         val calls = mutableListOf<String>()

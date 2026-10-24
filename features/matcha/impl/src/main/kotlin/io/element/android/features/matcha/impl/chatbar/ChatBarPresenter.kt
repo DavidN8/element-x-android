@@ -95,10 +95,11 @@ class ChatBarPresenter(
             if (!isEnabled) return@LaunchedEffect
             when (current) {
                 ChatBarRequest.NewThread -> if (canCreate) sheet = ChatBarSheet.ThreadName(threadId = null, name = "", error = null, isSending = false)
-                ChatBarRequest.NewTask -> when {
-                    // Without a board, the board's setup explains how to start one.
-                    snapshot.board == null -> currentActions.openTasks()
-                    canAddTask -> editorTarget = TaskEditorTarget.New(TaskStatus.Todo)
+                // Without a board, the board's setup explains how to start one; without the right to add, the board says why.
+                ChatBarRequest.NewTask -> if (snapshot.board != null && canAddTask) {
+                    editorTarget = TaskEditorTarget.New(TaskStatus.Todo)
+                } else {
+                    currentActions.openTasks()
                 }
             }
             controller.consume(current)
