@@ -828,6 +828,17 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `with the Matcha workspaces, All threads stays in the bar while the user is already in the call`() = runAndroidComposeUiTest {
+        setMessagesView(
+            state = aMessagesState(
+                roomCallState = anOngoingCallState(isUserInTheCall = true),
+                matcha = aMatchaChatState(hasChatBar = true),
+            ),
+        )
+        onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_all_threads)).assertExists()
+    }
+
+    @Test
     fun `until the chat has a chip bar, its entries are in the top bar's menu`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<MessagesEvent>()
         setMessagesView(

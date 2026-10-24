@@ -168,6 +168,8 @@ class MatchaRoomStore(
     private val coroutineScope: CoroutineScope,
     /** More event types to read into [MatchaRoomSnapshot.events], such as `m.room.encrypted` for documents. */
     private val extraEventTypes: Set<String> = emptySet(),
+    /** The board pointer the homeserver already returned to the caller, so the store starts from it instead of asking again. */
+    knownServerPointer: String? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
@@ -192,7 +194,14 @@ class MatchaRoomStore(
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
     private val storedState = MutableStateFlow(
-        StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false, serverPointer = null, isServerRead = false),
+        StoredState(
+            boardPointer = null,
+            legacyArchive = emptyMap(),
+            createdBoardRoot = null,
+            isRead = false,
+            serverPointer = knownServerPointer,
+            isServerRead = knownServerPointer != null,
+        ),
     )
     private val utdCauses = MutableStateFlow<Map<String, UtdCause>>(emptyMap())
     private val loadFailed = MutableStateFlow(false)
@@ -274,7 +283,7 @@ class MatchaRoomStore(
     @OptIn(FlowPreview::class)
     private fun start() {
         openTimeline()
-        coroutineScope.launch { readServerPointer() }
+        if (!storedState.value.isServerRead) coroutineScope.launch { readServerPointer() }
         room.subscribeToRawMessageLikeEvents(MatchaConfig.MESSAGE_LIKE_EVENT_TYPES)
             .onEach { json ->
                 val event = RawEvent.parse(json) ?: return@onEach
@@ -521,6 +530,9 @@ class MatchaRoomStore(
 
     private fun recordServerPointer(pointer: String?) = storedState.update { it.copy(serverPointer = pointer, isServerRead = true) }
 
+    /** The homeserver has answered whether the room has a board pointer, so [readBoardPointer]'s null proves there is none. */
+    val isServerPointerRead: Boolean get() = storedState.value.isServerRead
+
     /**
      * The board pointer from the homeserver: the root id, or null when the room has none. Returns null itself when the Rust SDK
      * in use can't fetch state from the homeserver (it needs the Matcha SDK patch).
@@ -725,7 +737,11 @@ class MatchaRoomStore(
 
     /** Sends a state event; it is read back from the stored state once synced. */
     suspend fun sendState(eventType: String, stateKey: String, contentJson: String): Result<EventId> = writeMutex.withLock {
-        room.sendRawStateEvent(eventType, stateKey, contentJson).onSuccess { readStoredState() }
+        room.sendRawStateEvent(eventType, stateKey, contentJson).onSuccess {
+            // The Tasks tab may remember that this chat had no board; it has one now.
+            if (eventType == MatchaConfig.STATE_KANBAN) NoBoardAnswers.forget(room.sessionId, room.roomId)
+            readStoredState()
+        }
     }
 
     /** Shows the board this client created until its pointer is read back from the room. */

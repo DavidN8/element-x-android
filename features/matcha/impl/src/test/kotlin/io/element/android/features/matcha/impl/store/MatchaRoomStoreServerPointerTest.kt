@@ -8,6 +8,8 @@
 package io.element.android.features.matcha.impl.store
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.features.matcha.impl.tasks.CreateBoardResult
+import io.element.android.features.matcha.impl.tasks.TaskWriter
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -77,6 +79,33 @@ class MatchaRoomStoreServerPointerTest {
         settle()
         assertThat(store.readBoardPointer().getOrNull()).isEqualTo(root)
         assertThat(asked).isEqualTo(2)
+    }
+
+    @Test
+    fun `a pointer the caller already read is used without asking again`() = runTest {
+        var asked = 0
+        val room = aMatchaJoinedRoom(roomCoroutineScope = backgroundScope, olderPages = longHistory) {
+            asked++
+            Result.failure(IllegalStateException("network"))
+        }
+        val store = MatchaRoomStore(room, backgroundScope, knownServerPointer = root)
+        settle()
+        assertThat(store.snapshot.value.board?.rootId).isEqualTo(root)
+        assertThat(asked).isEqualTo(0)
+    }
+
+    @Test
+    fun `once the homeserver says there is no board, creating one doesn't read the whole history`() = runTest {
+        val room = aMatchaJoinedRoom(
+            roomCoroutineScope = backgroundScope,
+            olderPages = longHistory,
+            // Any history read past the first pages fails, so creating would fail if it read the history.
+            paginateResult = { Result.failure(IllegalStateException("history")) },
+            serverPointerResult = { Result.success(null) },
+        )
+        val store = MatchaRoomStore(room, backgroundScope)
+        settle()
+        assertThat(TaskWriter(store).createBoard()).isEqualTo(CreateBoardResult.Created)
     }
 
     @Test

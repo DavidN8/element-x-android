@@ -8,6 +8,8 @@
 package io.element.android.features.matcha.impl.taskstab
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.roomlist.RoomList
@@ -73,6 +75,34 @@ class TasksTabRoomsTest {
         val chats = check(TasksTabRooms(aClient(listOf(roomId to room))))
         assertThat(chats.boards).isEmpty()
         assertThat(chats.failedCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `a board this device creates is found at once, despite a recent no-board answer`() = runTest {
+        val roomId = aRoomId("created")
+        var answer: Result<String?> = Result.success(null)
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope) { answer }
+        val client = aClient(listOf(roomId to room))
+        assertThat(check(TasksTabRooms(client)).boards).isEmpty()
+        MatchaRoomStore(room, backgroundScope).sendState(MatchaConfig.STATE_KANBAN, "", pointer)
+        answer = Result.success(pointer)
+        assertThat(check(TasksTabRooms(client)).boards.map { it.roomId }).containsExactly(roomId)
+    }
+
+    @Test
+    fun `a clock moved back doesn't stretch a no-board answer`() = runTest {
+        val roomId = aRoomId("clock")
+        var asked = 0
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope) {
+            asked++
+            Result.success(null)
+        }
+        var now = 1_000_000L
+        val client = aClient(listOf(roomId to room))
+        check(TasksTabRooms(client, clock = { now }))
+        now = 0
+        check(TasksTabRooms(client, clock = { now }))
+        assertThat(asked).isEqualTo(2)
     }
 
     @Test

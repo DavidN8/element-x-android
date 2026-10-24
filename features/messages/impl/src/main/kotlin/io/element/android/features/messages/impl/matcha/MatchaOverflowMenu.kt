@@ -64,8 +64,9 @@ internal fun RowScope.MatchaMenuActions(
     onRemindMeClick: () -> Unit,
     onSpaceDocsClick: () -> Unit,
 ) {
-    val isCallOngoing = roomCallState is RoomCallState.OnGoing
-    if (!isCallOngoing) {
+    // Join is drawn only while the user isn't in the call yet; only then does it need All threads' place.
+    val isJoinShown = roomCallState is RoomCallState.OnGoing && !roomCallState.isUserLocallyInTheCall
+    if (!isJoinShown) {
         IconButton(onClick = onAllThreadsClick) {
             Icon(
                 imageVector = CompoundIcons.Threads(),
@@ -97,12 +98,12 @@ internal fun RowScope.MatchaMenuActions(
             )
         }
     }
-    if (isCallOngoing) {
+    if (roomCallState is RoomCallState.OnGoing) {
         CallMenuItem(roomCallState = roomCallState, onJoinCallClick = onJoinCallClick)
     }
     MatchaOverflowMenu(
         roomCallState = roomCallState,
-        showAllThreads = isCallOngoing,
+        showAllThreads = isJoinShown,
         onAllThreadsClick = onAllThreadsClick,
         canCreateThread = canCreateThread,
         canRemind = canRemind,
@@ -211,7 +212,7 @@ internal class MatchaMenuRoomCallStatePreviewParam : PreviewParameterProvider<Ro
 internal fun MatchaOverflowMenuPreview(@PreviewParameter(MatchaMenuRoomCallStatePreviewParam::class) roomCallState: RoomCallState) = ElementPreview {
     MatchaOverflowMenu(
         roomCallState = roomCallState,
-        showAllThreads = roomCallState is RoomCallState.OnGoing,
+        showAllThreads = roomCallState is RoomCallState.OnGoing && !roomCallState.isUserLocallyInTheCall,
         canCreateThread = true,
         canRemind = true,
         canOpenSpaceDocs = true,

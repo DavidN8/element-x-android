@@ -49,15 +49,18 @@ enum class CreateBoardResult {
 class TaskWriter(private val store: MatchaRoomStore) {
     /**
      * Creates the board: sends the root, then the state pointing at it. A board made elsewhere, whose cards may not be loaded, is never
-     * replaced: the stored state only holds what the sync asked for, so the history is read back to the start of the room first.
-     * A root whose pointer failed is pointed at again rather than sent twice.
+     * replaced: the homeserver is asked for the pointer first; when this SDK can't ask, the history is read back to the start of the
+     * room instead, since the stored state only holds what the sync asked for. A root whose pointer failed is pointed at again rather
+     * than sent twice.
      */
     suspend fun createBoard(): CreateBoardResult {
         val existing = store.readBoardPointer().getOrElse { return CreateBoardResult.Failed }
         if (existing != null) return CreateBoardResult.AlreadyExists
-        store.loadHistoryUntil { it.board != null }.onFailure {
-            Timber.w(it, "Could not make sure the room has no board")
-            return CreateBoardResult.Failed
+        if (!store.isServerPointerRead) {
+            store.loadHistoryUntil { it.board != null }.onFailure {
+                Timber.w(it, "Could not make sure the room has no board")
+                return CreateBoardResult.Failed
+            }
         }
         if (store.snapshot.value.board != null) return CreateBoardResult.AlreadyExists
         val root = store.unpointedBoardRoot ?: store.send(MatchaConfig.EVENT_KANBAN_BOARD, KanbanProtocol.boardRootContent()).getOrElse {
