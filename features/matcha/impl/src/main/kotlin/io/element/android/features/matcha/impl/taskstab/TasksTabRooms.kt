@@ -7,11 +7,15 @@
 
 package io.element.android.features.matcha.impl.taskstab
 
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.NoBoardAnswers
+import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.BaseRoom
@@ -19,11 +23,13 @@ import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.roomlist.RoomList
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -38,10 +44,13 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** A chat with a board, held open by the Tasks tab. */
@@ -74,24 +83,32 @@ internal data class TabChats(
 )
 
 /**
- * The chats the Tasks tab reads. [run] checks every joined chat that isn't a space for a task board, a few at a time, keeps a
- * [MatchaRoomStore] open for each chat that has one, and destroys every room it opened once the user leaves that chat or [run] ends.
+ * The chats the Tasks tab reads, one per session. [run] checks every joined chat that isn't a space for a task board, a few at a
+ * time, keeps a [MatchaRoomStore] open for each chat that has one, and destroys every room it opened once the user leaves that chat,
+ * or [KEEP_ALIVE] after [run] ends unless it runs again: coming back to the tab, or from a task's thread, finds every board read.
  * A chat has a board when its board pointer is set, as on the web client. A pointer in the stored room state proves it, but the
  * sync only stores the custom state it asked for, so a chat without one is read like the board does: it has a board when its
  * store finds one in the history it reads first.
  *
- * It runs on the caller's dispatcher (the main thread, for a composition), which is the only one that changes its state.
+ * It runs on the caller's dispatcher (the main thread, for a composition) and the session's (also main), the only ones that change its
+ * state; one [run] goes at a time.
  *
  * ponytail: at most [MAX_CONCURRENT_CHECKS] chats are opened and read at once, but every chat without a stored pointer has its
- * recent history read each time the tab is shown, a board older than that history is missed (the chat's own board finds it),
- * every chat with a board stays open while the tab is shown, and a chat without one is only checked again the next time.
- * A session-wide cache of board presence and stores, and reading the pointer from the server (Path B), would lift these ceilings.
+ * recent history read each time the tab is shown after [KEEP_ALIVE], a board older than that history is missed (the chat's own board
+ * finds it), every chat with a board stays open while the tab is shown and for [KEEP_ALIVE] after, and a chat without one is only
+ * checked again the next time. Remembering board presence too, and reading the pointer from the server (Path B), would lift these.
  */
+@SingleIn(SessionScope::class)
 internal class TasksTabRooms(
     private val client: MatrixClient,
     /** Monotonic milliseconds, for how long a "no board" answer is reused. */
     private val clock: () -> Long = NoBoardAnswers::now,
+    /** Where each board's store parses events and builds snapshots, see [MatchaRoomStore]. */
+    private val computation: CoroutineDispatcher? = null,
 ) {
+    @Inject
+    constructor(client: MatrixClient, dispatchers: CoroutineDispatchers) : this(client, NoBoardAnswers::now, dispatchers.computation)
+
     private sealed interface Check {
         data object Pending : Check
 
@@ -109,6 +126,10 @@ internal class TasksTabRooms(
     /** The joined chats, or null until the room list has loaded. */
     private val joinedChats = MutableStateFlow<Map<RoomId, ChatInfo>?>(null)
     private val retries = MutableStateFlow(0)
+    private val runLock = Mutex()
+
+    /** Closes everything once the tab has been gone for [KEEP_ALIVE]; the next [run] cancels it. */
+    private var closeJob: Job? = null
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val chats: Flow<TabChats> = combine(checks, joinedChats, ::Pair).flatMapLatest { (checks, joined) ->
@@ -125,8 +146,10 @@ internal class TasksTabRooms(
     /** Checks the chats again that could not be checked, and opens again the boards that failed to open. */
     fun retry() = retries.update { it + 1 }
 
-    /** Follows the user's joined chats until cancelled, then destroys every room it opened. */
-    suspend fun run() {
+    /** Follows the user's joined chats until cancelled, then destroys every room it opened once [KEEP_ALIVE] passes without another run. */
+    suspend fun run() = runLock.withLock {
+        closeJob?.cancel()
+        closeJob = null
         val semaphore = Semaphore(MAX_CONCURRENT_CHECKS)
         val jobs = HashMap<RoomId, Job>()
         var handledRetries = retries.value
@@ -157,8 +180,14 @@ internal class TasksTabRooms(
                 }
             }
         } finally {
-            checks.value.keys.forEach(::close)
-            joinedChats.value = null
+            // A check cut short is done again next time, rather than counting as checking for ever.
+            checks.update { current -> current.filterValues { it != Check.Pending } }
+            closeJob = client.sessionCoroutineScope.launch {
+                delay(KEEP_ALIVE)
+                // Everything goes, chats without a board too, so a board made meanwhile is found next time.
+                checks.value.keys.forEach(::close)
+                joinedChats.value = null
+            }
         }
     }
 
@@ -202,7 +231,12 @@ internal class TasksTabRooms(
         var isKept = false
         try {
             // The store starts from the homeserver's answer rather than asking again, so a failed second read can't lose the board.
-            val store = MatchaRoomStore(room, room.roomCoroutineScope, knownServerPointer = (serverPointer as? ServerPointer.Present)?.rootId)
+            val store = MatchaRoomStore(
+                room = room,
+                coroutineScope = room.roomCoroutineScope,
+                knownServerPointer = (serverPointer as? ServerPointer.Present)?.rootId,
+                computation = computation,
+            )
             fun keep() = record(roomId, Check.Board(TabRoom(room, store, newWriteScope())))
             // Either way, keep the permit while the store reads the chat's history, so only a few chats read at once.
             if (hasStoredPointer || serverPointer is ServerPointer.Present) {
@@ -289,6 +323,9 @@ internal class TasksTabRooms(
 
     companion object {
         const val MAX_CONCURRENT_CHECKS = 4
+
+        /** How long the boards stay open after the tab is left. */
+        val KEEP_ALIVE = 2.minutes
         private val STORE_LOAD_TIMEOUT = 30.seconds
     }
 }

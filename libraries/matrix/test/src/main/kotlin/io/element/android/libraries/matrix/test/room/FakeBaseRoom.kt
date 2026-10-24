@@ -117,7 +117,8 @@ class FakeBaseRoom(
         return powerLevelsResult()
     }
 
-    private var isDestroyed = false
+    var isDestroyed = false
+        private set
 
     override fun destroy() {
         isDestroyed = true

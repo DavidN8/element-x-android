@@ -201,7 +201,7 @@ class TasksTabPresenterTest {
     }
 
     @Test
-    fun `leaving a chat drops its tasks at once, and leaving the tab lets every chat go`() = runTest {
+    fun `leaving a chat drops its tasks at once, and every chat goes a while after leaving the tab`() = runTest {
         val designRoom = aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue"))
         val launchRoom = aBoardRoom(launch, linkedCard(1, "\$t2", "Print the flyers"))
         val summaries = MutableStateFlow(listOf(aSummary(design), aSummary(launch)))
@@ -214,6 +214,9 @@ class TasksTabPresenterTest {
             launchRoom.baseRoom.assertDestroyed()
             cancelAndIgnoreRemainingEvents()
         }
+        settle()
+        assertThat(designRoom.baseRoom.isDestroyed).isFalse()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE)
         settle()
         designRoom.baseRoom.assertDestroyed()
     }
@@ -351,7 +354,7 @@ class TasksTabPresenterTest {
     }
 
     @Test
-    fun `Undo still works after leaving the tab, and the chat goes once its snackbar is gone`() = runTest {
+    fun `Undo still works after leaving the tab, and the chat goes once its snackbar is gone and the tab has been away a while`() = runTest {
         val sent = mutableListOf<String>()
         val snackbarDispatcher = SnackbarDispatcher()
         val designRoom = aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue")) { _, content ->
@@ -371,6 +374,7 @@ class TasksTabPresenterTest {
         assertThat(sent).hasSize(4)
         assertThat(sent.drop(2).all { it.contains("\"archived\":false") }).isTrue()
         snackbarDispatcher.clear()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE)
         settle()
         designRoom.baseRoom.assertDestroyed()
     }
@@ -657,6 +661,7 @@ class TasksTabPresenterTest {
     ): PresenterUnderTest {
         val presenter = TasksTabPresenter(
             client = client,
+            rooms = TasksTabRooms(client),
             featureFlagService = FakeFeatureFlagService(mapOf(FeatureFlags.MatchaWorkspaces.key to isEnabled)),
             appNavigationStateService = navigation,
             snackbarDispatcher = snackbarDispatcher,

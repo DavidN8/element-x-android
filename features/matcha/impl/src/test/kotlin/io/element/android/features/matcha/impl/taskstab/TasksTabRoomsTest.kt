@@ -14,6 +14,7 @@ import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.BaseRoom
+import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
@@ -21,12 +22,14 @@ import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomSummary
 import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
 import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import kotlin.time.Duration.Companion.seconds
 
 class TasksTabRoomsTest {
     private val pointer = """{"version": 1, "event_id": "${'$'}board-root"}"""
@@ -144,5 +147,80 @@ class TasksTabRoomsTest {
         now += 11 * 60_000
         check(TasksTabRooms(client, clock = { now }))
         assertThat(asked).isEqualTo(2)
+    }
+
+    @Test
+    fun `coming back within a while finds the boards read without checking again, and a longer absence lets them go`() = runTest {
+        val roomId = aRoomId("kept")
+        var asked = 0
+        var timelines = 0
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope, onCreateTimeline = { timelines++ }) {
+            asked++
+            Result.success(pointer)
+        }
+        val rooms = TasksTabRooms(aClient(listOf(roomId to room)))
+        val shown = backgroundScope.launch { rooms.run() }
+        rooms.chats.first { it.boards.isNotEmpty() && it.checkingCount == 0 }
+        shown.cancel()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE - 1.seconds)
+        testScheduler.runCurrent()
+        assertThat(room.baseRoom.isDestroyed).isFalse()
+
+        val shownAgain = backgroundScope.launch { rooms.run() }
+        assertThat(rooms.chats.first().boards.map { it.roomId }).containsExactly(roomId)
+        testScheduler.advanceTimeBy(1.seconds)
+        testScheduler.runCurrent()
+        assertThat(asked).isEqualTo(1)
+        assertThat(timelines).isEqualTo(1)
+
+        shownAgain.cancel()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE + 1.seconds)
+        testScheduler.runCurrent()
+        room.baseRoom.assertDestroyed()
+        // Everything was let go, so the next time every chat is checked again.
+        assertThat(check(rooms).boards.map { it.roomId }).containsExactly(roomId)
+        assertThat(asked).isEqualTo(2)
+    }
+
+    @Test
+    fun `a check cut short by leaving the tab is done again next time`() = runTest {
+        val roomId = aRoomId("slow")
+        var timelines = 0
+        // The thread list never finishes loading, so the chat is still being checked when the tab goes.
+        val room = aMatchaJoinedRoom(
+            roomId = roomId,
+            roomCoroutineScope = backgroundScope,
+            threadsPaginationStatus = ThreadListPaginationStatus.Loading,
+            onCreateTimeline = { timelines++ },
+        )
+        val rooms = TasksTabRooms(aClient(listOf(roomId to room)))
+        val shown = backgroundScope.launch { rooms.run() }
+        testScheduler.advanceTimeBy(1.seconds)
+        testScheduler.runCurrent()
+        assertThat(timelines).isEqualTo(1)
+        shown.cancel()
+        testScheduler.runCurrent()
+        backgroundScope.launch { rooms.run() }
+        testScheduler.advanceTimeBy(1.seconds)
+        testScheduler.runCurrent()
+        assertThat(timelines).isEqualTo(2)
+    }
+
+    @Test
+    fun `a write started from the tab still finishes after the tab has been gone a while, and its chat goes once it is done`() = runTest {
+        val roomId = aRoomId("writing")
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope) { Result.success(pointer) }
+        val rooms = TasksTabRooms(aClient(listOf(roomId to room)))
+        val shown = backgroundScope.launch { rooms.run() }
+        val board = rooms.chats.first { it.boards.isNotEmpty() }.boards.single()
+        val write = CompletableDeferred<Unit>()
+        board.room.writeScope.launch { write.await() }
+        shown.cancel()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE + 1.seconds)
+        testScheduler.runCurrent()
+        assertThat(room.baseRoom.isDestroyed).isFalse()
+        write.complete(Unit)
+        testScheduler.runCurrent()
+        room.baseRoom.assertDestroyed()
     }
 }

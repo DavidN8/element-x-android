@@ -54,11 +54,12 @@ import kotlin.time.Clock
  * The Tasks tab: the user's tasks from every joined chat with a board, narrowed by status, chat and person, grouped by deadline or in
  * a table, and the sheets that act on them. Like the web client's personal board, it only holds the tasks that involve the user:
  * their threads and the tasks of their direct chats. A task is changed through its chat's own store, which the tab holds while it
- * is shown, so no chat has to be opened.
+ * is shown (see [TasksTabRooms]), so no chat has to be opened.
  */
 @Inject
-class TasksTabPresenter(
+class TasksTabPresenter internal constructor(
     private val client: MatrixClient,
+    private val rooms: TasksTabRooms,
     private val featureFlagService: FeatureFlagService,
     private val appNavigationStateService: AppNavigationStateService,
     private val snackbarDispatcher: SnackbarDispatcher,
@@ -83,9 +84,8 @@ class TasksTabPresenter(
     @Composable
     fun present(onOpenRoom: (RoomId) -> Unit, onOpenThread: (RoomId, ThreadId) -> Unit): TasksTabState {
         val isEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
-        val rooms = remember { TasksTabRooms(client) }
         if (isEnabled) {
-            // Leaving the tab cancels this, which destroys every room the tab opened.
+            // Leaving the tab cancels this; the rooms the tab opened stay open for a while, in case it comes back.
             LaunchedEffect(Unit) { rooms.run() }
         }
         val chats by rooms.chats.collectAsState(initial = TabChats())
