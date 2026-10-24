@@ -55,6 +55,7 @@ fun HomeSpacesView(
 ) {
     if (state.spaceRooms.isEmpty()) {
         EmptySpaceHomeView(
+            title = stringResource(CommonStrings.screen_space_list_empty_state_title),
             modifier = modifier.padding(contentPadding),
             onCreateSpaceClick = onCreateSpaceClick,
             onExploreClick = onExploreClick,
@@ -106,7 +107,8 @@ fun HomeSpacesView(
  * Ref: https://www.figma.com/design/pDlJZGBsri47FNTXMnEdXB/Compound-Android-Templates?node-id=1763-74215&t=9IGKMXHDfTGAqzQK-4
  */
 @Composable
-private fun EmptySpaceHomeView(
+internal fun EmptySpaceHomeView(
+    title: String,
     onCreateSpaceClick: () -> Unit,
     onExploreClick: () -> Unit,
     canExploreSpaces: Boolean,
@@ -126,7 +128,7 @@ private fun EmptySpaceHomeView(
                     style = BigIcon.Style.Default(CompoundIcons.SpaceSolid())
                 )
                 Text(
-                    text = stringResource(CommonStrings.screen_space_list_empty_state_title),
+                    text = title,
                     style = ElementTheme.typography.fontHeadingMdBold,
                     color = ElementTheme.colors.textPrimary,
                     textAlign = TextAlign.Center,

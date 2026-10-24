@@ -78,6 +78,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
 import timber.log.Timber
 
 internal val minHeight = 76.dp
+private val compactMinHeight = 64.dp
+private val compactAvatarSize = 40.dp
 
 @Composable
 internal fun RoomSummaryRow(
@@ -89,6 +91,8 @@ internal fun RoomSummaryRow(
     modifier: Modifier = Modifier,
     showUnreadCount: Boolean = false,
     showAllActivity: Boolean = false,
+    /** A smaller avatar and less padding, for the channels listed under their space. */
+    isCompact: Boolean = false,
     eventSink: (RoomListEvent) -> Unit,
 ) {
     val background = if (isSelected) Modifier.background(ElementTheme.colors.rowSelected) else Modifier
@@ -101,6 +105,7 @@ internal fun RoomSummaryRow(
                 RoomSummaryScaffoldRow(
                     room = room,
                     isSelected = isSelected,
+                    isCompact = isCompact,
                     hideAvatarImage = hideInviteAvatars,
                     onClick = onClick,
                     onLongClick = {
@@ -132,6 +137,7 @@ internal fun RoomSummaryRow(
                 RoomSummaryScaffoldRow(
                     room = room,
                     isSelected = isSelected,
+                    isCompact = isCompact,
                     onClick = onClick,
                     onLongClick = {
                         eventSink(RoomListEvent.ShowContextMenu(room))
@@ -150,6 +156,7 @@ internal fun RoomSummaryRow(
                 RoomSummaryScaffoldRow(
                     room = room,
                     isSelected = isSelected,
+                    isCompact = isCompact,
                     onClick = onClick,
                     onLongClick = {
                         Timber.d("Long click on knocked room")
@@ -191,6 +198,7 @@ private fun RoomSummaryScaffoldRow(
     onClick: (RoomListRoomSummary) -> Unit,
     onLongClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     hideAvatarImage: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -208,9 +216,9 @@ private fun RoomSummaryScaffoldRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = minHeight)
+            .heightIn(min = if (isCompact) compactMinHeight else minHeight)
             .then(clickModifier)
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = if (isCompact) 8.dp else 12.dp)
             .height(IntrinsicSize.Min),
     ) {
         Avatar(
@@ -223,6 +231,7 @@ private fun RoomSummaryScaffoldRow(
                     isTombstoned = room.isTombstoned,
                 )
             },
+            forcedAvatarSize = compactAvatarSize.takeIf { isCompact },
             hideImage = hideAvatarImage,
         )
         Spacer(modifier = Modifier.width(16.dp))

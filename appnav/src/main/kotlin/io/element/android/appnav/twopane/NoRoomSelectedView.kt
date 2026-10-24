@@ -58,6 +58,8 @@ fun NoRoomSelectedView(
             HomeTab.Chats -> CommonStrings.common_no_chat_selected to CommonStrings.common_no_room_selected
             HomeTab.Tasks -> CommonStrings.common_matcha_no_task_selected to CommonStrings.common_matcha_select_task
             HomeTab.Spaces -> CommonStrings.common_matcha_no_space_selected to CommonStrings.common_matcha_select_space
+            HomeTab.Notes -> CommonStrings.common_matcha_no_note_selected to CommonStrings.common_matcha_select_note
+            HomeTab.Channels -> CommonStrings.common_matcha_no_channel_selected to CommonStrings.common_matcha_select_channel
         }
         IconTitleSubtitleMolecule(
             title = stringResource(title),
@@ -67,6 +69,8 @@ fun NoRoomSelectedView(
                     HomeTab.Chats -> CompoundIcons.Chat()
                     HomeTab.Tasks -> CompoundIcons.CheckCircle()
                     HomeTab.Spaces -> CompoundIcons.Space()
+                    HomeTab.Notes -> CompoundIcons.Document()
+                    HomeTab.Channels -> CompoundIcons.Room()
                 }
             ),
             modifier = Modifier

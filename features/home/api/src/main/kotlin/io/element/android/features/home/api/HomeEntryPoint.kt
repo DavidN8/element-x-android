@@ -42,5 +42,8 @@ interface HomeEntryPoint : FeatureEntryPoint {
 
         /** Opens a thread of a chat, such as a task's thread from the Tasks tab. */
         fun navigateToThread(roomId: RoomId, threadId: ThreadId)
+
+        /** Opens a note of a space from the Notes tab, or the space's notes when [documentId] is null. */
+        fun navigateToSpaceNote(spaceId: RoomId, documentId: String?)
     }
 }

@@ -14,4 +14,8 @@ enum class HomeTab {
     Chats,
     Tasks,
     Spaces,
+    Notes,
+
+    /** Replaces Spaces while the Matcha workspaces are on. */
+    Channels,
 }
