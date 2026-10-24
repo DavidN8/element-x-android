@@ -292,12 +292,17 @@ class TasksTabRoomsTest {
         testScheduler.runCurrent()
         assertThat(rooms.chats.first().boards).isEmpty()
         rooms.release(first)
+        write.complete(Unit)
         testScheduler.runCurrent()
+        // The tab's write is done and one screen has let go, but the other still holds the room.
         assertThat(room.baseRoom.isDestroyed).isFalse()
+        // An Undo tapped while the screen still held the room is still written.
+        val undo = CompletableDeferred<Unit>()
+        board.room.writeScope.launch { undo.await() }
         rooms.release(second)
         testScheduler.runCurrent()
         assertThat(room.baseRoom.isDestroyed).isFalse()
-        write.complete(Unit)
+        undo.complete(Unit)
         testScheduler.runCurrent()
         room.baseRoom.assertDestroyed()
     }
