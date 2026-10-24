@@ -18,6 +18,7 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMember
 import io.element.android.libraries.matrix.api.room.RoomMembersState
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.draft.ComposerDraft
 import io.element.android.libraries.matrix.api.room.powerlevels.RoomPermissions
 import io.element.android.libraries.matrix.api.room.powerlevels.RoomPowerLevelsValues
@@ -65,6 +66,11 @@ class FakeBaseRoom(
     private val reportRoomResult: (String?) -> Result<Unit> = { lambdaError() },
     private val predecessorRoomResult: () -> PredecessorRoom? = { null },
     private val threadRootIdForEventResult: (EventId) -> Result<ThreadId?> = { lambdaError() },
+    private val getStateEventsJsonResult: (StateEventType) -> Result<Map<String, String>> = { Result.success(emptyMap()) },
+    /** By default the SDK can't read state from the server, like the published SDK. */
+    private val fetchStateEventContentJsonResult: (String, String) -> Result<String?> = { _, _ ->
+        Result.failure(UnsupportedOperationException("No Matcha SDK patch"))
+    },
 ) : BaseRoom {
     private val _roomInfoFlow: MutableStateFlow<RoomInfo> = MutableStateFlow(initialRoomInfo)
     override val roomInfoFlow: StateFlow<RoomInfo> = _roomInfoFlow
@@ -85,6 +91,14 @@ class FakeBaseRoom(
 
     override suspend fun getUpdatedMember(userId: UserId): Result<RoomMember> {
         return getUpdatedMemberResult(userId)
+    }
+
+    override suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>> {
+        return getStateEventsJsonResult(eventType)
+    }
+
+    override suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?> {
+        return fetchStateEventContentJsonResult(eventType, stateKey)
     }
 
     override suspend fun getMembers(limit: Int): Result<List<RoomMember>> {

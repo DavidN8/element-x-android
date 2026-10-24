@@ -166,6 +166,7 @@ class FakeMatrixClient(
     var createDmResult: (UserId, Boolean) -> Result<RoomId> = { _, _ -> Result.success(A_ROOM_ID) }
     private var findDmResult: Result<RoomId?> = Result.success(A_ROOM_ID)
     private val getRoomResults = mutableMapOf<RoomId, BaseRoom>()
+    private val getBaseRoomResults = mutableMapOf<RoomId, BaseRoom>()
     private val searchUserResults = mutableMapOf<String, Result<MatrixSearchUserResults>>()
     private val getProfileResults = mutableMapOf<UserId, Result<MatrixUser>>()
     private var uploadMediaResult: Result<String> = Result.success(AN_AVATAR_URL)
@@ -188,7 +189,7 @@ class FakeMatrixClient(
     var logoutLambda: (Boolean, Boolean) -> Unit = { _, _ -> }
 
     override suspend fun getRoom(roomId: RoomId): BaseRoom? {
-        return getRoomResults[roomId]
+        return getBaseRoomResults[roomId] ?: getRoomResults[roomId]
     }
 
     override suspend fun getJoinedRoom(roomId: RoomId): JoinedRoom? {
@@ -343,6 +344,11 @@ class FakeMatrixClient(
         } else {
             getRoomResults[roomId] = result
         }
+    }
+
+    /** Makes [getRoom] return [result] instead of the room given to [givenGetRoomResult], as the SDK gives a lighter room than [getJoinedRoom]. */
+    fun givenGetBaseRoomResult(roomId: RoomId, result: BaseRoom) {
+        getBaseRoomResults[roomId] = result
     }
 
     fun givenSearchUsersResult(searchTerm: String, result: Result<MatrixSearchUserResults>) {

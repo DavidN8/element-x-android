@@ -9,11 +9,14 @@ package io.element.android.features.matcha.impl.taskstab
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.impl.store.FakePointerRoom
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.test.FakeMatrixClient
+import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomSummary
 import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
@@ -31,7 +34,7 @@ class TasksTabRoomsTest {
     /** Room ids are unique per test: the "no board" answers are remembered process-wide. */
     private fun aRoomId(name: String) = RoomId("!$name-${System.nanoTime()}:x")
 
-    private fun TestScope.aClient(rooms: List<Pair<RoomId, FakeJoinedRoom>>) = FakeMatrixClient(
+    private fun TestScope.aClient(rooms: List<Pair<RoomId, BaseRoom>>) = FakeMatrixClient(
         sessionCoroutineScope = backgroundScope,
         roomListService = FakeRoomListService(
             allRooms = FakeDynamicRoomList(
@@ -39,7 +42,12 @@ class TasksTabRoomsTest {
                 loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(rooms.size)),
             ),
         ),
-    ).apply { rooms.forEach { (roomId, room) -> givenGetRoomResult(roomId, room) } }
+    ).apply {
+        rooms.forEach { (roomId, room) ->
+            givenGetRoomResult(roomId, room)
+            if (room is FakeJoinedRoom) givenGetBaseRoomResult(roomId, FakePointerRoom(room))
+        }
+    }
 
     /** Runs [rooms] until every chat is checked and returns what it found. */
     private suspend fun TestScope.check(rooms: TasksTabRooms): TabChats {
@@ -58,6 +66,21 @@ class TasksTabRoomsTest {
         assertThat(chats.boards).isEmpty()
         assertThat(chats.failedCount).isEqualTo(0)
         assertThat(timelines).isEqualTo(0)
+    }
+
+    @Test
+    fun `a chat is checked through a room without a timeline, which is let go, and only a chat with a board is opened in full`() = runTest {
+        // Only a room without a timeline is given for this chat, so opening it in full would fail its check.
+        val plainId = aRoomId("light")
+        val plain = FakeBaseRoom(roomId = plainId, fetchStateEventContentJsonResult = { _, _ -> Result.success(null) })
+        val boardId = aRoomId("full")
+        val board = aMatchaJoinedRoom(roomId = boardId, roomCoroutineScope = backgroundScope) { Result.success(pointer) }
+        val client = aClient(listOf(plainId to plain, boardId to board))
+        val chats = check(TasksTabRooms(client))
+        assertThat(chats.boards.map { it.roomId }).containsExactly(boardId)
+        assertThat(chats.failedCount).isEqualTo(0)
+        plain.assertDestroyed()
+        assertThat((client.getRoom(boardId) as FakePointerRoom).isDestroyed).isTrue()
     }
 
     @Test

@@ -14,6 +14,7 @@ import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.NoBoardAnswers
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.StateEventType
@@ -176,25 +177,30 @@ internal class TasksTabRooms(
     }
 
     private suspend fun check(roomId: RoomId) {
-        val room = client.getJoinedRoom(roomId)
-        if (room == null) {
+        fun recordUnopened() {
             Timber.w("Could not open %s to look for its board", roomId)
             record(roomId, Check.Failed)
-            return
         }
-        var isKept = false
-        try {
-            val hasStoredPointer = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
+        // The pointer is read from a room without a timeline; only a chat that has or may have a board is opened in full.
+        val pointerRoom = client.getRoom(roomId) ?: return recordUnopened()
+        val (hasStoredPointer, serverPointer) = try {
+            val isStored = pointerRoom.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
                 .onFailure { Timber.w(it, "Could not read the board pointer of %s", roomId) }
                 .getOrNull()
                 ?.get("")
                 ?.let(KanbanProtocol::parseBoardPointerJson) != null
             // The sync doesn't store the pointer, so ask the homeserver; a chat without a board is then skipped unread.
-            val serverPointer = if (hasStoredPointer) ServerPointer.Unknown else readServerPointer(room) ?: return
-            if (serverPointer == ServerPointer.Absent) {
-                record(roomId, Check.NoBoard)
-                return
-            }
+            isStored to (if (isStored) ServerPointer.Unknown else readServerPointer(pointerRoom) ?: return)
+        } finally {
+            pointerRoom.destroy()
+        }
+        if (serverPointer == ServerPointer.Absent) {
+            record(roomId, Check.NoBoard)
+            return
+        }
+        val room = client.getJoinedRoom(roomId) ?: return recordUnopened()
+        var isKept = false
+        try {
             // The store starts from the homeserver's answer rather than asking again, so a failed second read can't lose the board.
             val store = MatchaRoomStore(room, room.roomCoroutineScope, knownServerPointer = (serverPointer as? ServerPointer.Present)?.rootId)
             fun keep() = record(roomId, Check.Board(TabRoom(room, store, newWriteScope())))
@@ -229,7 +235,7 @@ internal class TasksTabRooms(
      * Asks the homeserver whether [room] has a board pointer; returns null after recording a failed check. A recent "no board"
      * answer is reused (see [NoBoardAnswers]), so showing the tab again doesn't ask every chat again.
      */
-    private suspend fun readServerPointer(room: JoinedRoom): ServerPointer? {
+    private suspend fun readServerPointer(room: BaseRoom): ServerPointer? {
         if (NoBoardAnswers.isRecent(room.sessionId, room.roomId, clock())) return ServerPointer.Absent
         val read = room.fetchStateEventContentJson(MatchaConfig.STATE_KANBAN, "")
         return when {

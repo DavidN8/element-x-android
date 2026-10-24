@@ -12,6 +12,7 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.UniqueId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.MessageEventType
 import io.element.android.libraries.matrix.api.room.RawEventsPage
 import io.element.android.libraries.matrix.api.room.RawRelationType
@@ -137,6 +138,19 @@ internal fun aMatchaJoinedRoom(
             if (type == MatchaConfig.STATE_KANBAN && key.isEmpty()) serverPointerResult() else Result.success(null)
         },
     )
+}
+
+/**
+ * The room [io.element.android.libraries.matrix.api.MatrixClient.getRoom] gives for [room]: like the SDK's, it has no timeline, reads
+ * the same state, and is destroyed on its own.
+ */
+internal class FakePointerRoom(room: FakeJoinedRoom) : BaseRoom by room {
+    var isDestroyed = false
+        private set
+
+    override fun destroy() {
+        isDestroyed = true
+    }
 }
 
 /** A Matcha timeline holding [items] (oldest first), which reads [olderPages] one backward page at a time. */

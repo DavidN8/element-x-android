@@ -16,6 +16,7 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.store.FakePointerRoom
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
 import io.element.android.features.matcha.impl.store.aMatchaTimeline
@@ -638,7 +639,13 @@ class TasksTabPresenterTest {
         roomListService = FakeRoomListService(
             allRooms = FakeDynamicRoomList(summaries = summaries, loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(rooms.size))),
         ),
-    ).apply { rooms.forEach { (roomId, room) -> givenGetRoomResult(roomId, room) } }
+    ).apply {
+        rooms.forEach { (roomId, room) ->
+            givenGetRoomResult(roomId, room)
+            // The board pointer is read from another room instance, so a chat's own room is only destroyed when the tab lets it go.
+            givenGetBaseRoomResult(roomId, FakePointerRoom(room))
+        }
+    }
 
     private fun TestScope.aPresenter(
         client: FakeMatrixClient,
