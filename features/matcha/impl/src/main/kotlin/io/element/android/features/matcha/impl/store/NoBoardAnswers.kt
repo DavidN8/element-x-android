@@ -37,4 +37,16 @@ internal object NoBoardAnswers {
     fun forget(sessionId: SessionId, roomId: RoomId) {
         answeredAt.remove(sessionId to roomId)
     }
+
+    /** Chats this client pointed at a board, until the Tasks tab, which may still hold "no board" for them, takes the news. */
+    private val pointed: MutableSet<Pair<SessionId, RoomId>> = ConcurrentHashMap.newKeySet()
+
+    /** This client pointed [roomId] at a board: its answer is forgotten, and the Tasks tab checks the chat again. */
+    fun pointed(sessionId: SessionId, roomId: RoomId) {
+        forget(sessionId, roomId)
+        pointed += sessionId to roomId
+    }
+
+    /** Whether this client pointed [roomId] at a board since this was last asked. */
+    fun takePointed(sessionId: SessionId, roomId: RoomId): Boolean = pointed.remove(sessionId to roomId)
 }

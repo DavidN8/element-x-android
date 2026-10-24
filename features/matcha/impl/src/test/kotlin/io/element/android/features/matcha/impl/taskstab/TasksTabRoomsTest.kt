@@ -183,6 +183,32 @@ class TasksTabRoomsTest {
     }
 
     @Test
+    fun `coming back within a while checks again a chat this device has given a board since, and a chat that failed`() = runTest {
+        val createdId = aRoomId("created-meanwhile")
+        var answer: Result<String?> = Result.success(null)
+        val created = aMatchaJoinedRoom(roomId = createdId, roomCoroutineScope = backgroundScope) { answer }
+        val failedId = aRoomId("failed-meanwhile")
+        var failedAnswer: Result<String?> = Result.failure(IllegalStateException("network"))
+        val failed = aMatchaJoinedRoom(roomId = failedId, roomCoroutineScope = backgroundScope) { failedAnswer }
+        val rooms = TasksTabRooms(aClient(listOf(createdId to created, failedId to failed)))
+        val shown = backgroundScope.launch { rooms.run() }
+        val first = rooms.chats.first { it.isRoomListLoaded && it.checkingCount == 0 }
+        assertThat(first.boards).isEmpty()
+        assertThat(first.failedCount).isEqualTo(1)
+        shown.cancel()
+        testScheduler.runCurrent()
+
+        MatchaRoomStore(created, backgroundScope).sendState(MatchaConfig.STATE_KANBAN, "", pointer)
+        answer = Result.success(pointer)
+        failedAnswer = Result.success(null)
+        backgroundScope.launch { rooms.run() }
+        testScheduler.runCurrent()
+        val again = rooms.chats.first { it.checkingCount == 0 }
+        assertThat(again.boards.map { it.roomId }).containsExactly(createdId)
+        assertThat(again.failedCount).isEqualTo(0)
+    }
+
+    @Test
     fun `a check cut short by leaving the tab is done again next time`() = runTest {
         val roomId = aRoomId("slow")
         var timelines = 0

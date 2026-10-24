@@ -757,7 +757,7 @@ class MatchaRoomStore(
     suspend fun sendState(eventType: String, stateKey: String, contentJson: String): Result<EventId> = writeMutex.withLock {
         room.sendRawStateEvent(eventType, stateKey, contentJson).onSuccess {
             // The Tasks tab may remember that this chat had no board; it has one now.
-            if (eventType == MatchaConfig.STATE_KANBAN) NoBoardAnswers.forget(room.sessionId, room.roomId)
+            if (eventType == MatchaConfig.STATE_KANBAN) NoBoardAnswers.pointed(room.sessionId, room.roomId)
             readStoredState()
         }
     }

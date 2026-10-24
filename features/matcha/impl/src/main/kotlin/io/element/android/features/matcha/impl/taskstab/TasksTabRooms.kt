@@ -96,7 +96,8 @@ internal data class TabChats(
  * ponytail: at most [MAX_CONCURRENT_CHECKS] chats are opened and read at once, but every chat without a stored pointer has its
  * recent history read each time the tab is shown after [KEEP_ALIVE], a board older than that history is missed (the chat's own board
  * finds it), every chat with a board stays open while the tab is shown and for [KEEP_ALIVE] after, and a chat without one is only
- * checked again the next time. Remembering board presence too, and reading the pointer from the server (Path B), would lift these.
+ * checked again the next time after [KEEP_ALIVE], or once this client gives it a board. Remembering board presence too, and
+ * reading the pointer from the server (Path B), would lift these.
  */
 @SingleIn(SessionScope::class)
 internal class TasksTabRooms(
@@ -150,6 +151,9 @@ internal class TasksTabRooms(
     suspend fun run() = runLock.withLock {
         closeJob?.cancel()
         closeJob = null
+        // A chat found without a board that this client has given one since is checked again.
+        val pointed = checks.value.filter { (roomId, check) -> check == Check.NoBoard && NoBoardAnswers.takePointed(client.sessionId, roomId) }
+        checks.update { it - pointed.keys }
         val semaphore = Semaphore(MAX_CONCURRENT_CHECKS)
         val jobs = HashMap<RoomId, Job>()
         var handledRetries = retries.value
@@ -180,8 +184,8 @@ internal class TasksTabRooms(
                 }
             }
         } finally {
-            // A check cut short is done again next time, rather than counting as checking for ever.
-            checks.update { current -> current.filterValues { it != Check.Pending } }
+            // A check cut short is done again next time, rather than counting as checking for ever, and so is one that failed.
+            checks.update { current -> current.filterValues { it != Check.Pending && it != Check.Failed } }
             closeJob = client.sessionCoroutineScope.launch {
                 delay(KEEP_ALIVE)
                 // Everything goes, chats without a board too, so a board made meanwhile is found next time.
