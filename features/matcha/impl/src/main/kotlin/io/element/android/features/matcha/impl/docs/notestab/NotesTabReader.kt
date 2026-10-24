@@ -22,8 +22,6 @@ import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.room.CurrentUserMembership
-import io.element.android.libraries.matrix.api.roomlist.RoomList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -31,7 +29,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -74,8 +71,8 @@ sealed interface SpaceNotes {
 }
 
 /**
- * The notes of every joined space, for the Notes tab. The spaces come from the room list, in its order, and whether each has
- * notes is checked from its stored state, a few at a time.
+ * The notes of every joined space, for the Notes tab. The spaces come from the space service, in the order of the Spaces list (the
+ * room list never holds joined spaces), and whether each has notes is checked from its stored state, a few at a time.
  *
  * A space's catalog is expensive to read: it is a Yjs document replayed from the space's history, which takes a Matcha timeline,
  * a scan of that history, the events related to the space's create event and an engine document. So [run] reads catalogs only
@@ -88,7 +85,9 @@ sealed interface SpaceNotes {
  *
  * ponytail: a closed catalog is read in full again each time its space comes back on screen, setup is checked again for every space
  * each time the tab is shown, and the engine WebView is created again after the tab has been left. A persistent cache of names, or
- * reading the catalog's frames from the server without a timeline (the port plan's Path B), would lift these ceilings.
+ * reading the catalog's frames from the server without a timeline (the port plan's Path B), would lift these ceilings. Only top-level
+ * spaces are listed, as the space service gives them: a joined subspace of a joined space is reached from its parent's screen;
+ * walking each space's children would list it here too.
  */
 @SingleIn(SessionScope::class)
 @Inject
@@ -98,13 +97,13 @@ class NotesTabReader(
 ) {
     private data class JoinedSpace(val spaceId: RoomId, val name: String?, val avatarUrl: String?)
 
-    /** The joined spaces in the room list's order; null until the room list has loaded once. */
+    /** The joined spaces in the Spaces list's order; null until the space service has listed them once. */
     private val joined = MutableStateFlow<List<JoinedSpace>?>(null)
     private val notes = MutableStateFlow<Map<RoomId, SpaceNotes>>(emptyMap())
     private val shown = MutableStateFlow<Set<RoomId>>(emptySet())
     private val runLock = Mutex()
 
-    /** The joined spaces in the room list's order, or null until the room list has loaded. */
+    /** The joined spaces in the Spaces list's order, or null until the space service has listed them. */
     val spaces: Flow<List<NotesSpace>?> = combine(joined, notes) { joined, notes ->
         joined?.map { NotesSpace(it.spaceId, it.name, it.avatarUrl, notes[it.spaceId] ?: SpaceNotes.Unknown) }
     }
@@ -160,19 +159,10 @@ class NotesTabReader(
         }
     }
 
-    private fun joinedSpacesFlow(): Flow<List<JoinedSpace>> {
-        val roomList = client.roomListService.allRooms
-        return combine(roomList.loadingState, roomList.summaries) { loadingState, summaries ->
-            summaries.takeIf { loadingState is RoomList.LoadingState.Loaded }
-        }
-            .filterNotNull()
-            .map { summaries ->
-                summaries
-                    .filter { it.info.isSpace && it.info.currentUserMembership == CurrentUserMembership.JOINED }
-                    .map { JoinedSpace(spaceId = it.roomId, name = it.info.name, avatarUrl = it.info.avatarUrl) }
-            }
-            .distinctUntilChanged()
-    }
+    /** The user's joined top-level spaces; it replays the latest list. */
+    private fun joinedSpacesFlow(): Flow<List<JoinedSpace>> = client.spaceService.topLevelSpacesFlow
+        .map { spaces -> spaces.map { JoinedSpace(spaceId = it.roomId, name = it.displayName, avatarUrl = it.avatarUrl) } }
+        .distinctUntilChanged()
 
     /** Whether the space has notes on, from its stored state. A space that can't be checked is left out until the next run. */
     private suspend fun check(spaceId: RoomId) {

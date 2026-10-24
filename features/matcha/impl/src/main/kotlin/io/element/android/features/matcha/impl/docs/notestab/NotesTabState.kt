@@ -40,7 +40,7 @@ sealed interface NotesTabContent {
     /** No space to list: the user has none, or none has notes and the user can't turn them on in any. */
     data class Empty(val hasSpaces: Boolean) : NotesTabContent
 
-    /** A section per space, in the room list's order. */
+    /** A section per space, in the Spaces list's order. */
     data class Spaces(val sections: ImmutableList<NotesSection>) : NotesTabContent
 }
 

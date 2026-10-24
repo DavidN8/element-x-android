@@ -28,13 +28,11 @@ import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.roomlist.RoomList
-import io.element.android.libraries.matrix.api.roomlist.RoomSummary
+import io.element.android.libraries.matrix.api.spaces.SpaceService
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.test.FakeMatrixClient
-import io.element.android.libraries.matrix.test.room.aRoomSummary
-import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
-import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
+import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
+import io.element.android.libraries.previewutils.room.aSpaceRoom
 import io.element.android.tests.testutils.WarmUpRule
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.testCoroutineDispatchers
@@ -52,7 +50,6 @@ class NotesTabPresenterTest {
     private val design = RoomId("!design:matrix.org")
     private val launch = RoomId("!launch:matrix.org")
     private val company = RoomId("!company:matrix.org")
-    private val chat = RoomId("!chat:matrix.org")
     private val plans = "11111111-1111-4111-8111-111111111111"
     private val guide = "22222222-2222-4222-8222-222222222222"
     private val opened = mutableListOf<Pair<RoomId, String?>>()
@@ -63,7 +60,7 @@ class NotesTabPresenterTest {
         tab.test {
             assertThat(awaitItem().isVisible).isFalse()
             settle()
-            // The room list is never followed.
+            // The spaces are never followed.
             assertThat(tab.reader.spaces.first()).isNull()
             cancelAndIgnoreRemainingEvents()
         }
@@ -76,9 +73,9 @@ class NotesTabPresenterTest {
         val canTurnOn = DocsRoomFixture(listOf(aCreateItem()), roomId = company, canSendState = true)
         val cannotTurnOn = DocsRoomFixture(listOf(aCreateItem()), roomId = launch)
         val engine = FakeYjsEngine()
-        aTab(aClient(listOf(canTurnOn, designSpace, cannotTurnOn), others = listOf(aRoomSummary(roomId = chat))), engine).test {
+        aTab(aClient(listOf(canTurnOn, designSpace, cannotTurnOn)), engine).test {
             val listed = awaitUntil { it.sections().size == 2 }
-            // In the room list's order.
+            // In the Spaces list's order.
             assertThat(listed.sections().map { it.space.spaceId }).containsExactly(company, design).inOrder()
             assertThat(listed.sections().first().content).isEqualTo(NotesSectionContent.TurnOn)
             // Nothing is read before it is on screen.
@@ -102,7 +99,7 @@ class NotesTabPresenterTest {
 
     @Test
     fun `without a space, or without a space with notes, the tab says where notes live`() = runTest {
-        aTab(aClient(emptyList(), others = listOf(aRoomSummary(roomId = chat)))).test {
+        aTab(aClient(emptyList())).test {
             assertThat(awaitUntil { it.content is NotesTabContent.Empty }.content).isEqualTo(NotesTabContent.Empty(hasSpaces = false))
             cancelAndIgnoreRemainingEvents()
         }
@@ -207,19 +204,14 @@ class NotesTabPresenterTest {
     private fun aNotesSpace(roomId: RoomId, items: List<MatrixTimelineItem> = emptyList()) =
         DocsRoomFixture(listOf(aCreateItem()) + items, roomId = roomId, stateEvents = CONFIGURED_STATE)
 
-    /** A client whose room list holds [spaces], as joined spaces in this order, then [others]. */
-    private fun TestScope.aClient(spaces: List<DocsRoomFixture>, others: List<RoomSummary> = emptyList()): FakeMatrixClient {
-        val summaries =
-            spaces.map { aRoomSummary(roomId = it.room.roomId, name = it.room.roomId.value.removePrefix("!").substringBefore(":"), isSpace = true) } +
-            others
+    /** A client whose space service lists [spaces] as its joined top-level spaces, in this order, replaying them like the real one. */
+    private fun TestScope.aClient(spaces: List<DocsRoomFixture>): FakeMatrixClient {
+        val spaceRooms = spaces.map { aSpaceRoom(roomId = it.room.roomId, displayName = it.room.roomId.value.removePrefix("!").substringBefore(":")) }
         return FakeMatrixClient(
             sessionCoroutineScope = backgroundScope,
-            roomListService = FakeRoomListService(
-                allRooms = FakeDynamicRoomList(
-                    summaries = MutableStateFlow(summaries),
-                    loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(summaries.size))
-                ),
-            ),
+            spaceService = object : SpaceService by FakeSpaceService() {
+                override val topLevelSpacesFlow = MutableStateFlow(spaceRooms)
+            },
         ).apply { spaces.forEach { givenGetRoomResult(it.room.roomId, it.room) } }
     }
 
