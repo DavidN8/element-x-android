@@ -96,7 +96,8 @@ class DefaultMatchaRoomController(
  * and a chat without named threads would only get a bar with General.
  */
 internal fun MatchaRoomSnapshot.hasChatBar(): Boolean =
-    threads.any { !it.metadata.archived && it.metadata.nameSource == ThreadNameSource.Explicit }
+    // A thread named when it was created keeps the name as its root message, so its hidden first reply is what marks it as named.
+    threads.any { !it.metadata.archived && (it.metadata.nameSource == ThreadNameSource.Explicit || it.hasHiddenFirstReply) }
 
 /** To do and In progress tasks the board shows [userId], once loaded; tasks hidden from them don't count. */
 internal fun MatchaRoomSnapshot.openTaskCount(userId: String): Int =

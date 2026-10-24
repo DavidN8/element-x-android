@@ -192,7 +192,7 @@ class MatchaRoomStore(
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
     private val storedState = MutableStateFlow(
-        StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false),
+        StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false, serverPointer = null, isServerRead = false),
     )
     private val utdCauses = MutableStateFlow<Map<String, UtdCause>>(emptyMap())
     private val loadFailed = MutableStateFlow(false)
@@ -225,9 +225,9 @@ class MatchaRoomStore(
         /** The stored state was read at least once, successfully or not. */
         val isRead: Boolean,
         /** The board pointer the homeserver returned, which the sync doesn't store; null when it has none or wasn't asked. */
-        val serverPointer: String? = null,
+        val serverPointer: String?,
         /** The homeserver answered whether the room has a board pointer, so a missing board is really missing. */
-        val isServerRead: Boolean = false,
+        val isServerRead: Boolean,
     )
 
     init {

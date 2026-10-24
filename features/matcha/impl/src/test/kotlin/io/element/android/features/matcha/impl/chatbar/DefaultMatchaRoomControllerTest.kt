@@ -12,6 +12,7 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
@@ -28,6 +29,25 @@ class DefaultMatchaRoomControllerTest {
     @Test
     fun `the chat has a chip bar once an active thread is named`() = runTest {
         assertThat(hasChatBar(threads = listOf("\$t1"), items = listOf(namePatch(1, "\$t1", "Launch plan")))).isTrue()
+    }
+
+    @Test
+    fun `a thread named when it was created gives a chip bar, through its hidden first reply`() = runTest {
+        val bootstrap = ThreadMetadataProtocol.bootstrapReplyContent("\$t1", "Launch plan")
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            threads = listOf(aThreadListItem("\$t1", body = "Launch plan")),
+            threadReplies = mapOf(
+                "\$t1" to
+                    listOf(
+                        """{"type": "${MatchaConfig.EVENT_THREAD_METADATA}", "event_id": "${'$'}b1", "sender": "@bob:x", "origin_server_ts": 2, "content": $bootstrap}"""
+                    ),
+            ),
+        )
+        val controller = DefaultMatchaRoomController(store, backgroundScope)
+        store.snapshot.first { it.isLoaded && it.threads.singleOrNull()?.hasHiddenFirstReply == true }
+        settle()
+        assertThat(controller.hasChatBar.value).isTrue()
     }
 
     @Test

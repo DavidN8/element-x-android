@@ -54,6 +54,8 @@ internal fun aMatchaRoomStore(
     olderPages: List<List<MatrixTimelineItem>> = emptyList(),
     paginateResult: () -> Result<Unit> = { Result.success(Unit) },
     roomInfo: RoomInfo = aRoomInfo(),
+    /** The replies of each thread, as raw event JSON, by thread root id. */
+    threadReplies: Map<String, List<String>> = emptyMap(),
     sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
 ): MatchaRoomStore = MatchaRoomStore(
     aMatchaJoinedRoom(
@@ -69,6 +71,7 @@ internal fun aMatchaRoomStore(
         boardPointerResult = boardPointerResult,
         sendRawEventResult = sendRawEventResult,
         roomInfo = roomInfo,
+        threadReplies = threadReplies,
     ),
     scope,
 )

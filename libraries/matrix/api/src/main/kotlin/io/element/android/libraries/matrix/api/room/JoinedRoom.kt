@@ -357,11 +357,10 @@ interface JoinedRoom : BaseRoom {
     suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?>
 
     /**
-     * Fetches one page of the events related to [eventId] by [relation] from the homeserver, newest first,
+     * Fetches one page of at most [limit] events related to [eventId] by [relation] from the homeserver, newest first,
      * decrypted when possible, as raw event JSON. Unlike timelines this includes custom event types; an event that can't be
-     * decrypted comes back encrypted. Fails when the Rust SDK in use doesn't offer it (it needs the Matcha SDK patch).
-     *
-     * @param from the [RawEventsPage.nextBatch] of the previous page, or null for the newest page.
+     * decrypted comes back encrypted. [from] is the [RawEventsPage.nextBatch] of the previous page, or null for the newest page.
+     * Fails when the Rust SDK in use doesn't offer it (it needs the Matcha SDK patch).
      */
     suspend fun fetchRelatedEventsJson(eventId: EventId, relation: RawRelationType, from: String?, limit: Int): Result<RawEventsPage>
 
