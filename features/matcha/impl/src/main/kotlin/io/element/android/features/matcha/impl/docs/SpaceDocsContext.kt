@@ -64,7 +64,7 @@ class SpaceDocsContextFactory(
         }
         val scope = CoroutineScope(parentScope.coroutineContext + dispatchers.main + SupervisorJob(parentScope.coroutineContext.job))
         // Undecryptable frames must be noticed rather than skipped.
-        val store = MatchaRoomStore(room, scope, extraEventTypes = setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))
+        val store = MatchaRoomStore(room, scope, extraEventTypes = setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED), computation = dispatchers.computation)
         fun session(documentId: String) = RoomDocumentSession(
             documentId = documentId,
             room = room,
