@@ -77,6 +77,23 @@ class DefaultMatchaRoomControllerTest {
     }
 
     @Test
+    fun `a task hidden from the user is not counted`() = runTest {
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            items = listOf(
+                card(1, "c-shared", TaskStatus.Todo),
+                // Written by someone else, not shared with the chat: only the people it involves see it.
+                card(2, "c-private", TaskStatus.Todo, showToRoom = false),
+            ),
+        )
+        val controller = DefaultMatchaRoomController(store, backgroundScope)
+        store.snapshot.first { it.isLoaded && it.board != null }
+        settle()
+        assertThat(controller.openTaskCount.value).isEqualTo(1)
+    }
+
+    @Test
     fun `without a board there are no open tasks`() = runTest {
         val store = aMatchaRoomStore(scope = backgroundScope, threads = listOf(aThreadListItem("\$t1")))
         val controller = DefaultMatchaRoomController(store, backgroundScope)
@@ -111,7 +128,7 @@ class DefaultMatchaRoomControllerTest {
         """{"version": 1, $field, "m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
     )
 
-    private fun card(index: Int, id: String, status: TaskStatus, archived: Boolean = false) = aMatchaEventItem(
+    private fun card(index: Int, id: String, status: TaskStatus, archived: Boolean = false, showToRoom: Boolean = true) = aMatchaEventItem(
         index,
         MatchaConfig.EVENT_KANBAN_CARD,
         KanbanProtocol.cardContent(
@@ -124,7 +141,7 @@ class DefaultMatchaRoomControllerTest {
                 threadId = null,
                 dueAt = null,
                 reminderRequested = null,
-                showToRoom = true,
+                showToRoom = showToRoom,
             ),
             boardRoot,
         ),

@@ -13,6 +13,7 @@ import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.protocol.ThreadNameSource
+import io.element.android.features.matcha.impl.protocol.isShownOnBoard
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.libraries.di.RoomScope
@@ -48,7 +49,7 @@ class DefaultMatchaRoomController(
         .stateIn(coroutineScope, SharingStarted.Eagerly, false)
 
     override val openTaskCount: StateFlow<Int> = store.snapshot
-        .map { it.openTaskCount() }
+        .map { it.openTaskCount(store.sessionUserId) }
         .distinctUntilChanged()
         .stateIn(coroutineScope, SharingStarted.Eagerly, 0)
 
@@ -97,6 +98,6 @@ class DefaultMatchaRoomController(
 internal fun MatchaRoomSnapshot.hasChatBar(): Boolean =
     threads.any { !it.metadata.archived && it.metadata.nameSource == ThreadNameSource.Explicit }
 
-/** To do and In progress tasks on the board, once loaded. */
-internal fun MatchaRoomSnapshot.openTaskCount(): Int =
-    if (isLoaded) board?.cards?.count { !it.archived && it.status != TaskStatus.Done } ?: 0 else 0
+/** To do and In progress tasks the board shows [userId], once loaded; tasks hidden from them don't count. */
+internal fun MatchaRoomSnapshot.openTaskCount(userId: String): Int =
+    if (isLoaded) board?.cards?.count { it.isShownOnBoard(userId) && !it.archived && it.status != TaskStatus.Done } ?: 0 else 0

@@ -210,6 +210,9 @@ class MatchaRoomStore(
     /** A board root this client sent without managing to point the room at it; creating the board again points at this one. */
     internal var unpointedBoardRoot: String? = null
 
+    /** The current user, whose view of the board the snapshot is: a task not shared with the chat shows only to the people it involves. */
+    val sessionUserId: String get() = room.sessionId.value
+
     private val _snapshot = MutableStateFlow(MatchaRoomSnapshot())
     val snapshot: StateFlow<MatchaRoomSnapshot> = _snapshot.asStateFlow()
 
