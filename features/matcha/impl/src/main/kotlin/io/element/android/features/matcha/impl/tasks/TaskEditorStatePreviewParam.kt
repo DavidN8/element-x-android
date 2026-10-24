@@ -29,6 +29,8 @@ open class TaskEditorStatePreviewParam : PreviewParameterProvider<TaskEditorStat
             aTaskEditorState(title = "Book the venue", showDiscardDialog = true),
             aTaskEditorState(title = "Book the venue", saveError = TaskWriteError.ThreadSetupFailed),
             aTaskEditorState(isNew = false, title = "Book the venue", saveError = TaskWriteError.HistoryIncomplete),
+            aTaskEditorState(isNew = false, title = "Book the venue", showToRoom = true),
+            aTaskEditorState(isNew = false, title = "Book the venue", showToRoom = null),
         )
 }
 
@@ -40,6 +42,7 @@ internal fun aTaskEditorState(
     deadline: String? = null,
     canRename: Boolean = true,
     canRemind: Boolean = false,
+    showToRoom: Boolean? = false,
     reminderRequestedAt: String? = null,
     earlierCards: List<String> = emptyList(),
     titleError: TaskFieldError? = null,
@@ -57,6 +60,7 @@ internal fun aTaskEditorState(
     deadline = deadline,
     canRename = canRename,
     canRemind = canRemind,
+    showToRoom = showToRoom,
     reminderRequestedAt = reminderRequestedAt,
     earlierCards = earlierCards.toImmutableList(),
     titleMaxLength = MatchaConfig.THREAD_NAME_MAX_LENGTH,

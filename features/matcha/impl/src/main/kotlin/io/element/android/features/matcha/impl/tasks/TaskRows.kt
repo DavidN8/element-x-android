@@ -61,7 +61,7 @@ import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
  * A task as a chat-style row: status tile, name and deadline, then the description or the replies. Across chats (the Tasks tab),
- * the tile is the chat's avatar with a status badge and the second line starts with [chatName].
+ * the tile is the chat's avatar with a status badge, the second line starts with [chatName], and [people] adds a third line.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -74,6 +74,8 @@ internal fun TaskRow(
     chatAvatar: AvatarData? = null,
     /** The task's thread is open next to the list (two-pane). */
     isSelected: Boolean = false,
+    /** Who else the task involves, e.g. "With Bob, Carol". */
+    people: String? = null,
 ) {
     Row(
         modifier = modifier
@@ -121,10 +123,23 @@ internal fun TaskRow(
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
+                if (task.isSharedWithChat) {
+                    Spacer(Modifier.width(8.dp))
+                    SharedWithChatIcon(size = 16.dp)
+                }
                 if (task.hasReminder) {
                     Spacer(Modifier.width(8.dp))
                     ReminderIcon(size = 16.dp)
                 }
+            }
+            if (people != null) {
+                Text(
+                    text = people,
+                    style = ElementTheme.typography.fontBodySmRegular,
+                    color = ElementTheme.colors.textSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -180,7 +195,7 @@ internal fun TaskCard(
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
         )
-        if (task.deadline != null || task.hasReminder || task.replyCount != null) {
+        if (task.hasMetaLine()) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -197,6 +212,7 @@ internal fun TaskCard(
                     }
                 }
                 if (task.hasReminder) ReminderIcon(size = 14.dp)
+                if (task.isSharedWithChat) SharedWithChatIcon(size = 14.dp)
                 if (task.replyCount != null) {
                     val replies = pluralStringResource(CommonPlurals.common_replies, task.replyCount, task.replyCount)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -350,6 +366,19 @@ private fun ReminderIcon(size: Dp) {
     )
 }
 
+private fun TaskItem.hasMetaLine() = deadline != null || hasReminder || isSharedWithChat || replyCount != null
+
+/** The quiet mark of a task shown to everyone in the chat. */
+@Composable
+internal fun SharedWithChatIcon(size: Dp, modifier: Modifier = Modifier) {
+    Icon(
+        imageVector = CompoundIcons.Group(),
+        contentDescription = stringResource(R.string.a11y_matcha_task_shown_to_room),
+        tint = ElementTheme.colors.iconSecondary,
+        modifier = modifier.size(size),
+    )
+}
+
 /** The description's first line, or the replies when there is no description. */
 @Composable
 private fun TaskItem.secondLine(): String = when {
@@ -369,7 +398,7 @@ internal fun TaskStatus.label(): String = stringResource(
 )
 
 @Composable
-private fun TaskStatus.tint(): Color = if (this == TaskStatus.Todo) ElementTheme.colors.iconSecondary else ElementTheme.colors.iconAccentPrimary
+internal fun TaskStatus.tint(): Color = if (this == TaskStatus.Todo) ElementTheme.colors.iconSecondary else ElementTheme.colors.iconAccentPrimary
 
 @Composable
 internal fun TaskStatus.icon(): ImageVector = when (this) {
@@ -378,11 +407,15 @@ internal fun TaskStatus.icon(): ImageVector = when (this) {
     TaskStatus.Done -> CompoundIcons.CheckCircleSolid()
 }
 
+private val aSharedTaskItem = aTaskItem(id = "shared", title = "Plan the offsite", deadline = "Fri 10:00", hasReminder = true, isSharedWithChat = true)
+
 @PreviewsDayNight
 @Composable
 internal fun TaskRowPreview() = ElementPreview {
     Column {
         aTaskItemList().forEach { TaskRow(task = it, onClick = {}, onLongClick = {}) }
+        TaskRow(task = aSharedTaskItem, onClick = {}, onLongClick = {})
+        TaskRow(task = aSharedTaskItem, onClick = {}, onLongClick = {}, people = "With Bob, Carol")
         ArchivedTasksRow(count = 3, onClick = {})
         LoadOlderTasksRow(isLoading = false, onClick = {})
         LoadOlderTasksRow(isLoading = true, onClick = {})
@@ -394,6 +427,7 @@ internal fun TaskRowPreview() = ElementPreview {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             aTaskItemList().forEach { TaskCard(task = it, onClick = {}, onLongClick = {}) }
+            TaskCard(task = aSharedTaskItem, onClick = {}, onLongClick = {})
         }
     }
 }

@@ -85,6 +85,9 @@ class TaskEditorPresenter(
         var description by rememberSaveable { mutableStateOf(initial?.description.orEmpty()) }
         var status by rememberSaveable { mutableStateOf(initial?.status ?: (target as? TaskEditorTarget.New)?.status ?: TaskStatus.Todo) }
         var dueAt by rememberSaveable { mutableStateOf(initial?.dueAt) }
+        // A new task is only on the boards of the people it involves until it is shared with the chat, as on the web client.
+        val initialShowToRoom = initial?.showToRoom ?: false
+        var showToRoom by rememberSaveable { mutableStateOf(initialShowToRoom) }
         var deadlineError by remember { mutableStateOf<TaskDeadlineError?>(null) }
         var showErrors by remember { mutableStateOf(false) }
         var saveError by remember { mutableStateOf<TaskWriteError?>(null) }
@@ -105,7 +108,7 @@ class TaskEditorPresenter(
         val canRename = threadId == null || permissions.canManageThreads
         val canRemind = rememberCanRemind(room, permissions.canSendMessages) && onRemind != null && initial != null && !initial.archived
         val hasChanges = title != initialTitle || description != initial?.description.orEmpty() ||
-            dueAt != initial?.dueAt || initial != null && status != initial.status
+            dueAt != initial?.dueAt || initial != null && status != initial.status || showToRoom != initialShowToRoom
         val titleError = titleError(title.trim(), titleMaxLength, includeEmpty = showErrors).takeIf { canRename }
         val descriptionError = TaskFieldError.TooLong(MatchaConfig.CARD_DESCRIPTION_MAX_LENGTH)
             .takeIf { description.length > MatchaConfig.CARD_DESCRIPTION_MAX_LENGTH }
@@ -145,7 +148,7 @@ class TaskEditorPresenter(
                     threadId = thread,
                     dueAt = dueAt,
                     reminderRequested = null,
-                    showToRoom = true,
+                    showToRoom = showToRoom,
                 )
                 // A retry after the name was changed renames the thread created by the first attempt.
                 writer.create(root, card, renameThread = rename)
@@ -157,6 +160,7 @@ class TaskEditorPresenter(
                         description = if (description != initial.description) description else current.description,
                         status = if (status != initial.status) status else current.status,
                         dueAt = if (dueAt != initial.dueAt) dueAt else current.dueAt,
+                        showToRoom = if (showToRoom != initial.showToRoom) showToRoom else current.showToRoom,
                     )
                 }
             }
@@ -181,6 +185,7 @@ class TaskEditorPresenter(
                     dueAt = null
                     deadlineError = null
                 }
+                is TaskEditorEvent.SetShowToRoom -> if (!isSaving && !snapshot.isDirect) showToRoom = event.showToRoom
                 TaskEditorEvent.Save -> {
                     if (isSaving) return
                     showErrors = true
@@ -223,6 +228,8 @@ class TaskEditorPresenter(
             deadline = dueAt?.let(deadlineFormatter::format),
             canRename = canRename,
             canRemind = canRemind,
+            // In a direct chat the card keeps the value it has, which changes nothing there.
+            showToRoom = showToRoom.takeUnless { snapshot.isDirect },
             reminderRequestedAt = initial?.let { card -> snapshot.board?.cards?.firstOrNull { it.id == card.id } }?.reminderRequested?.at?.let(
                 deadlineFormatter::format
             ),

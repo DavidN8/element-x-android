@@ -25,6 +25,7 @@ import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.chatbar.rememberCanRemind
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.protocol.isShownOnBoard
 import io.element.android.features.matcha.impl.store.MatchaPermissions
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
@@ -98,7 +99,10 @@ class TaskBoardPresenter(
 
         val permissions = snapshot.permissions
         val canRemind = rememberCanRemind(room, permissions.canSendMessages)
-        val tasks = remember(snapshot) { snapshot.toTaskItems(deadlineFormatter, clock.now().toEpochMilliseconds()) }
+        // A task that isn't shared with the chat is only shown to the people it involves, and left out of every count.
+        val tasks = remember(snapshot) {
+            snapshot.toTaskItems(deadlineFormatter, clock.now().toEpochMilliseconds()) { it.isShownOnBoard(room.sessionId.value) }
+        }
         val content = boardContent(snapshot, tasks, canRemind, isCreatingBoard, createFailed, searchFailed)
 
         // A board made elsewhere may lie further back than the history read so far: offering to create one could orphan its cards.

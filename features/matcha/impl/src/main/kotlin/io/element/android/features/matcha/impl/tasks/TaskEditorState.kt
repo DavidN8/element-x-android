@@ -38,6 +38,11 @@ data class TaskEditorState(
     val canRename: Boolean,
     /** Remind me is offered (edit mode, when reminders are available here). */
     val canRemind: Boolean,
+    /**
+     * Show to everyone in channel: on, the task is on everyone's board; off, only on the boards of the people it involves.
+     * Null in a direct chat, whose members are involved in every task, so the switch isn't shown.
+     */
+    val showToRoom: Boolean?,
     /** When the requested reminder is due, formatted, or null when none was requested. */
     val reminderRequestedAt: String?,
     /** Names of older cards linked to the same thread. */

@@ -111,6 +111,11 @@
         <item quantity="other">"Couldn't check %1$d chats"</item>
     </plurals>
     <!-- End of track B: Tasks tab. -->
+    <!-- Channel tasks, people and the table of tasks. -->
+    <string name="screen_matcha_tasks_show_to_room">"Show to everyone in channel"</string>
+    <string name="screen_matcha_tasks_show_to_room_hint">"Controls visibility on this board. Channel members can still read the linked conversation."</string>
+    <string name="a11y_matcha_task_shown_to_room">"Shown to everyone in the channel"</string>
+    <!-- End of channel tasks. -->
     <!-- Track C: reminders -->
     <string name="screen_matcha_reminder_title">Remind me</string>
     <string name="screen_matcha_reminder_helper">The reminder bot posts it in this chat, so everyone here can see it.</string>

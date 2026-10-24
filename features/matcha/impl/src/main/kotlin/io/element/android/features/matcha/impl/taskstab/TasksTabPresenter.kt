@@ -227,7 +227,7 @@ class TasksTabPresenter(
             .flatMap { board ->
                 val chat = board.toTasksTabChat()
                 val rootTimestamps = board.snapshot.threads.associate { it.id to it.rootTimestamp }
-                board.snapshot.toTaskItems(deadlineFormatter, nowMillis).map { task ->
+                board.snapshot.toTaskItems(deadlineFormatter, nowMillis) { true }.map { task ->
                     TabTask(
                         chat = chat,
                         task = task,

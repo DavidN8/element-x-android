@@ -18,6 +18,7 @@ sealed interface TaskEditorEvent {
     /** A deadline picked as a local date and time, in the device's time zone. */
     data class SetDeadline(val dateTime: LocalDateTime) : TaskEditorEvent
     data object ClearDeadline : TaskEditorEvent
+    data class SetShowToRoom(val showToRoom: Boolean) : TaskEditorEvent
     data object Save : TaskEditorEvent
     data object RemindMe : TaskEditorEvent
     data object OpenThread : TaskEditorEvent
