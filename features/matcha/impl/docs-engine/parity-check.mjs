@@ -5,23 +5,34 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-// Checks the bundled engine: replaying a history through one applyAll call leaves the same document as one apply per update,
-// including updates waiting for missing predecessors, and both stop at the same malformed update.
-// Run from the repository root after rebuilding the bundle: node features/matcha/impl/docs-engine/parity-check.mjs
+// Checks the bundled engine: replaying a history through applyAll leaves the same document as one apply per update, including
+// updates waiting for missing predecessors, and both stop at the same malformed update. Given an earlier bundle, it also replays
+// every case through both bundles, checks that they answer every call alike, and times the replays.
+// Run from the repository root after rebuilding the bundle:
+//   node features/matcha/impl/docs-engine/parity-check.mjs [earlier-engine.js]
 import { strict as assert } from "node:assert";
 import { readFileSync } from "node:fs";
+import { performance } from "node:perf_hooks";
 import vm from "node:vm";
 
-const source = readFileSync(new URL("../src/main/assets/matcha-docs/engine.js", import.meta.url), "utf8");
+const bundles = { new: readFileSync(new URL("../src/main/assets/matcha-docs/engine.js", import.meta.url), "utf8") };
+if (process.argv[2]) bundles.old = readFileSync(process.argv[2], "utf8");
 
 /** A fresh engine page; calls go through the same request/respond bridge as the WebView. */
-function startEngine() {
+function startEngine(source) {
     const requests = new Map();
     let answer;
+    // Yjs draws client ids from crypto. Each open draws from a seed named after the document, so a document gets the same client
+    // id in every bundle and run, and concurrent edits order the same way.
+    let state = 0;
+    const getRandomValues = (array) => {
+        for (let i = 0; i < array.length; i++) array[i] = state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+        return array;
+    };
     const page = {
         MatchaDocsBridge: { ready() {}, request: (id) => requests.get(id), respond: (id, json) => (answer = JSON.parse(json)) },
         document: {},
-        crypto: globalThis.crypto,
+        crypto: { getRandomValues },
         TextEncoder,
         TextDecoder,
         btoa,
@@ -32,6 +43,7 @@ function startEngine() {
     vm.runInContext(source, page);
     let nextId = 0;
     return (op, args = {}) => {
+        if (op === "open") state = [...args.doc].reduce((hash, char) => Math.imul(hash, 31) + char.charCodeAt(0), 7) >>> 0;
         const id = ++nextId;
         requests.set(id, JSON.stringify({ op, ...args }));
         page.matchaDocs.handle(id);
@@ -40,7 +52,8 @@ function startEngine() {
     };
 }
 
-// Seeded edits; Yjs picks random client ids, so concurrent inserts may order differently from run to run.
+const engines = Object.fromEntries(Object.entries(bundles).map(([name, source]) => [name, startEngine(source)]));
+
 let seed = 42;
 const random = (n) => (seed = (seed * 1103515245 + 12345) % 2147483648) % n;
 
@@ -64,38 +77,144 @@ function history(call, count) {
     return updates;
 }
 
-function replayOneByOne(call, doc, updates) {
-    call("open", { doc });
-    let applied = 0;
-    while (applied < updates.length && call("apply", { doc, update: updates[applied] }).valid) applied++;
-    return { applied, snapshot: call("snapshot", { doc }) };
+/** Two writers of a catalog setting the same few entries at once. */
+function catalogHistory(call, count) {
+    call("open", { doc: "catalog-a" });
+    call("open", { doc: "catalog-b" });
+    const updates = [];
+    for (let i = 0; i < count; i++) {
+        const writer = random(2) ? "catalog-a" : "catalog-b";
+        const key = `00000000-0000-4000-8000-00000000000${random(8)}`;
+        updates.push(call("setEntry", { doc: writer, key, value: { title: `${writer} ${i}`, createdAt: i } }).update);
+        if (random(3) === 0) call("apply", { doc: writer === "catalog-a" ? "catalog-b" : "catalog-a", update: updates.at(-1) });
+    }
+    return updates;
 }
 
+/** One writer typing a long note anywhere in it: 2,000 updates of 30 characters each. */
+function longNote(call) {
+    call("open", { doc: "long" });
+    return Array.from({ length: 2000 }, (_, i) => {
+        const insert = `line ${i} `.padEnd(29, "-") + "\n";
+        return call("edit", { doc: "long", changes: [{ index: random(i * 30 + 1), remove: 0, insert }] }).update;
+    });
+}
+
+// Local changes made on the text as it is when they run, so the same text gives the same change in every bundle.
+const localEdit = (n) => (call, doc) => {
+    const { text } = call("snapshot", { doc });
+    const index = (n * 7919) % (text.length + 1);
+    return call("edit", { doc, changes: [{ index, remove: Math.min(n % 3, text.length - index), insert: `local${n} ` }] });
+};
+const localEntry = (n) => (call, doc) =>
+    call("setEntry", { doc, key: "22222222-2222-4222-8222-222222222222", value: { title: `Local ${n}`, createdAt: n } });
+
+/** The client and clock of an update's first struct. */
+function firstStruct(update) {
+    const bytes = Buffer.from(update, "base64");
+    let at = 0;
+    const varUint = () => {
+        let value = 0;
+        for (let shift = 1; ; shift *= 128) {
+            const byte = bytes[at++];
+            value += (byte & 127) * shift;
+            if (byte < 128) return value;
+        }
+    };
+    varUint(); // clients
+    varUint(); // structs of the first one
+    return [varUint(), varUint()];
+}
+
+// A forged update: the client's struct at clock 0 again, but said to follow the client's struct at `clock`. Yjs skips it as a
+// copy when the document checking it holds that clock, and throws otherwise, so it shows what the check runs against.
+function forged([client, clock]) {
+    const varUint = (value) => {
+        const out = [];
+        for (; value > 127; value = Math.floor(value / 128)) out.push((value % 128) | 128);
+        return [...out, value];
+    };
+    // One client with one struct: a string (4) with a left origin (128), "x", and no deletions.
+    return Buffer.from([1, 1, ...varUint(client), 0, 128 | 4, ...varUint(client), ...varUint(clock), 1, 120, 0]).toString("base64");
+}
+
+// A local edit, then a forged update following it: valid only if updates are checked against the local edits too.
+const forgedAfterEdit = (n) => (call, doc) => {
+    const edit = localEdit(n)(call, doc);
+    return [edit, call("apply", { doc, update: forged(firstStruct(edit.update)) })];
+};
+
+/** Runs the steps one at a time, past malformed updates; a step is an update or a local change. */
+function replay(call, doc, steps) {
+    call("open", { doc });
+    const answers = steps.map((step) => (typeof step === "string" ? call("apply", { doc, update: step }) : step(call, doc)));
+    return { answers, snapshot: call("snapshot", { doc }) };
+}
+
+/** Applies the updates in batches of a hundred like the Kotlin side, stopping at the first malformed one. */
 function replayAll(call, doc, updates) {
     call("open", { doc });
-    const { applied } = call("applyAll", { doc, updates });
+    let applied = 0;
+    for (let start = 0; start < updates.length && applied === start; start += 100) {
+        applied += call("applyAll", { doc, updates: updates.slice(start, start + 100) }).applied;
+    }
     return { applied, snapshot: call("snapshot", { doc }) };
 }
 
-const call = startEngine();
+/** Replays a case through every bundle, checks applyAll against apply in each, and checks that the bundles agree. */
+function check(name, steps) {
+    const updates = steps.every((step) => typeof step === "string") ? steps : null;
+    const traces = {};
+    const times = [];
+    for (const [bundle, call] of Object.entries(engines)) {
+        const one = replay(call, `${name}-one`, steps);
+        const started = performance.now();
+        const all = updates && replayAll(call, `${name}-all`, updates);
+        times.push(`${bundle} ${Math.round(performance.now() - started)} ms`);
+        if (all) {
+            const firstInvalid = one.answers.findIndex((answer) => !answer.valid);
+            assert.equal(all.applied, firstInvalid < 0 ? updates.length : firstInvalid, `${name} on ${bundle}`);
+            const prefix = all.applied === updates.length ? one : replay(call, `${name}-prefix`, updates.slice(0, all.applied));
+            assert.deepEqual(all.snapshot, prefix.snapshot, `${name} on ${bundle}`);
+        }
+        traces[bundle] = { one, all };
+    }
+    if (traces.old) assert.deepEqual(traces.new, traces.old, `${name}: the bundles disagree`);
+    const { one, all } = traces.new;
+    const valid = one.answers.filter((answer) => answer.valid !== false).length;
+    const applyAll = all ? `, applyAll ${all.applied}/${updates.length} in ${times.join(", ")}` : "";
+    console.log(`${name}: ${valid}/${steps.length} valid${applyAll}, missing=${one.snapshot.missing}, ${one.snapshot.text.length} chars`);
+    return traces.new;
+}
+
+const call = engines.new;
 const updates = history(call, 400);
 const malformed = Buffer.from("garbage").toString("base64");
-// In order; shuffled, so updates wait for predecessors; with the newest one held back, so something is missing at the end; and
-// with a malformed update in the middle.
+// A real update cut short in its delete set, which comes last: its insertions integrate before it throws.
+const cutAt = updates.findIndex((update, i) => i >= 250 && Buffer.from(update, "base64").at(-1) !== 0);
+const cut = Buffer.from(updates[cutAt], "base64").subarray(0, -1).toString("base64");
 const shuffled = [...updates].sort(() => random(3) - 1);
-const cases = {
-    ordered: updates,
-    shuffled,
-    missing: shuffled.filter((update) => update !== updates[0]),
-    malformed: [...updates.slice(0, 150), malformed, ...updates.slice(150)],
-};
-for (const [name, list] of Object.entries(cases)) {
-    const one = replayOneByOne(call, `${name}-one`, list);
-    const all = replayAll(call, `${name}-all`, list);
-    assert.deepEqual(all, one, name);
-    console.log(`${name}: ${all.applied}/${list.length} applied, missing=${all.snapshot.missing}, ${all.snapshot.text.length} chars`);
-}
-assert.equal(replayAll(call, "check-malformed", cases.malformed).applied, 150);
-assert.equal(replayAll(call, "check-missing", cases.missing).snapshot.missing, true);
-assert.equal(replayAll(call, "check-ordered", updates).snapshot.missing, false);
-console.log("applyAll matches apply");
+const long = longNote(call);
+
+check("ordered", updates);
+check("shuffled", shuffled);
+// Updates 20 to 59 come last, so the ones built on them wait until then.
+const gap = check("gap", [...updates.slice(0, 20), ...updates.slice(60), ...updates.slice(20, 60)]);
+assert(gap.one.answers.some((answer) => answer.missing) && !gap.one.snapshot.missing);
+// After the cut update, a forged one following its first struct, which the cut update integrated before it threw: valid only
+// where that struct was left behind.
+const afterCut = forged(firstStruct(updates[cutAt]));
+const broken = check("malformed", [...updates.slice(0, 150), malformed, ...updates.slice(150, cutAt), cut, afterCut, ...updates.slice(cutAt)]);
+assert.equal(broken.all.applied, 150);
+assert.equal(broken.one.answers.filter((answer) => !answer.valid).length, 3);
+const local = check("local", shuffled.flatMap((update, i) => [
+    update,
+    ...(i % 5 ? [] : [(i % 50 === 25 ? forgedAfterEdit : localEdit)(i)]),
+    ...(i % 50 ? [] : [localEntry(i)]),
+]));
+assert(local.one.answers.flat().every((answer) => answer.valid !== false));
+check("catalog", [...catalogHistory(call, 300)].sort(() => random(3) - 1));
+const longNoteTrace = check("long note", long);
+assert.equal(longNoteTrace.one.snapshot.text.length, 60000);
+console.log(`long note: ${Buffer.from(call("merge", { updates: long }).update, "base64").length} bytes once merged`);
+console.log(bundles.old ? "applyAll matches apply, and the bundles agree" : "applyAll matches apply");
