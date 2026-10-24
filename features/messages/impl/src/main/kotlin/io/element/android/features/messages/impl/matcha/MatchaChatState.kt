@@ -17,8 +17,10 @@ import kotlinx.collections.immutable.persistentMapOf
  * What the chat screen shows of the Matcha workspace features; the chat has none of it while the feature is off.
  */
 data class MatchaChatState(
-    /** The chat uses named threads or a board, so the chip bar is drawn; otherwise its entries live in the top bar's menu. */
+    /** The chat has named threads, so the chip bar is drawn; otherwise its entries live in the top bar's menu. */
     val hasChatBar: Boolean,
+    /** To do and In progress tasks on the chat's board, counted on the top bar's board button; 0 shows no count. */
+    val openTaskCount: Int,
     /** The Matcha names and archive flags of the chat's threads. */
     val threads: ImmutableMap<ThreadId, MatchaThreadInfo>,
     /** What the open "Remind me" sheet is about, or null while it is closed. */
@@ -29,11 +31,13 @@ data class MatchaChatState(
 
 fun aMatchaChatState(
     hasChatBar: Boolean = true,
+    openTaskCount: Int = 0,
     threads: ImmutableMap<ThreadId, MatchaThreadInfo> = persistentMapOf(),
     reminderTarget: MatchaReminderTarget? = null,
     canRemind: Boolean = true,
 ) = MatchaChatState(
     hasChatBar = hasChatBar,
+    openTaskCount = openTaskCount,
     threads = threads,
     reminderTarget = reminderTarget,
     canRemind = canRemind,

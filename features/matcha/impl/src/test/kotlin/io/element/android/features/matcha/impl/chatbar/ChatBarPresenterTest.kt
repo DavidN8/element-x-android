@@ -16,9 +16,6 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.api.MatchaChatBarActions
 import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.impl.R
-import io.element.android.features.matcha.impl.protocol.CardRevision
-import io.element.android.features.matcha.impl.protocol.KanbanProtocol
-import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
@@ -70,15 +67,13 @@ class ChatBarPresenterTest {
         aPresenter(store).test {
             val state = awaitUntil { it.isVisible }
             assertThat(state.threads).isEmpty()
-            assertThat(state.openTaskCount).isEqualTo(0)
         }
     }
 
     @Test
-    fun `up to four active threads are shown, newest activity first, with the open task count`() = runTest {
+    fun `up to four active threads are shown, newest activity first`() = runTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
-            boardRoot = boardRoot,
             threads = listOf(
                 aThreadListItem("\$t1", timestamp = 1),
                 aThreadListItem("\$t2", timestamp = 2),
@@ -87,20 +82,12 @@ class ChatBarPresenterTest {
                 aThreadListItem("\$t5", timestamp = 5),
                 aThreadListItem("\$t6", timestamp = 6),
             ),
-            items = listOf(
-                archivePatch(1, "\$t6"),
-                card(2, "c-todo", TaskStatus.Todo),
-                card(3, "c-doing", TaskStatus.Doing),
-                card(4, "c-done", TaskStatus.Done),
-                card(5, "c-archived", TaskStatus.Todo, archived = true),
-            ),
+            items = listOf(archivePatch(1, "\$t6")),
         )
         aPresenter(store).test {
-            val state = awaitUntil { it.threads.isNotEmpty() && it.openTaskCount > 0 }
+            val state = awaitUntil { it.threads.isNotEmpty() }
             assertThat(state.threads.map { it.id.value }).containsExactly("\$t5", "\$t4", "\$t3", "\$t2").inOrder()
             assertThat(state.threads.first().name).isEqualTo("Root of \$t5")
-            // Every thread is a task on the board: the five active threads (To do) plus the To do and Doing cards.
-            assertThat(state.openTaskCount).isEqualTo(7)
             assertThat(state.canCreateThread).isTrue()
             assertThat(state.showMore).isTrue()
         }
@@ -141,9 +128,8 @@ class ChatBarPresenterTest {
             state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.General))
             state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Tasks))
             state.eventSink(ChatBarEvent.Select(MatchaChatBarSelection.Thread(ThreadId("\$t1"))))
-            state.eventSink(ChatBarEvent.OpenAllThreads)
             state.eventSink(ChatBarEvent.OpenSpaceDocs)
-            assertThat(actions.calls).containsExactly("tasks", "thread \$t1", "all", "docs").inOrder()
+            assertThat(actions.calls).containsExactly("tasks", "thread \$t1", "docs").inOrder()
         }
     }
 
@@ -322,7 +308,7 @@ class ChatBarPresenterTest {
     }
 
     @Test
-    fun `the bar shows once the chat has a named thread or a board, and always on the board`() = runTest {
+    fun `the bar shows once the chat has a named thread, and always on the board`() = runTest {
         val named = aMatchaRoomStore(
             scope = backgroundScope,
             threads = listOf(aThreadListItem("\$t1")),
@@ -340,8 +326,12 @@ class ChatBarPresenterTest {
         aPresenter(unnamed, selection = MatchaChatBarSelection.Tasks).test {
             assertThat(awaitUntil { it.isVisible }.showBar).isTrue()
         }
-        aPresenter(aMatchaRoomStore(scope = backgroundScope, boardRoot = boardRoot)).test {
-            assertThat(awaitUntil { it.showBar }.threads).isEmpty()
+        // The top bar opens the board, so a board alone would only give a bar with General.
+        val boardOnly = aMatchaRoomStore(scope = backgroundScope, boardRoot = boardRoot)
+        aPresenter(boardOnly).test {
+            val visible = awaitUntil { it.isVisible }
+            boardOnly.snapshot.first { it.isLoaded && it.board != null }
+            assertThat(latest(visible).showBar).isFalse()
         }
     }
 
@@ -363,7 +353,8 @@ class ChatBarPresenterTest {
         val withBoard = aMatchaRoomStore(backgroundScope, boardRoot = boardRoot)
         val controller = DefaultMatchaRoomController(withBoard, backgroundScope)
         aPresenter(withBoard, controller = controller).test {
-            awaitUntil { it.showBar }
+            awaitUntil { it.canCreateThread }
+            withBoard.snapshot.first { it.isLoaded && it.board != null }
             controller.openNewTask()
             val editor = awaitUntil { it.editor != null }.editor!!
             assertThat(editor.isNew).isTrue()
@@ -445,25 +436,6 @@ class ChatBarPresenterTest {
         index,
         MatchaConfig.EVENT_THREAD_METADATA,
         """{"version": 1, "archived": true, "m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
-    )
-
-    private fun card(index: Int, id: String, status: TaskStatus, archived: Boolean = false) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_KANBAN_CARD,
-        KanbanProtocol.cardContent(
-            CardRevision(
-                cardId = id,
-                title = "Task $id",
-                description = "",
-                status = status,
-                archived = archived,
-                threadId = null,
-                dueAt = null,
-                reminderRequested = null,
-                showToRoom = true,
-            ),
-            boardRoot,
-        ),
     )
 
     private fun TestScope.aPresenter(

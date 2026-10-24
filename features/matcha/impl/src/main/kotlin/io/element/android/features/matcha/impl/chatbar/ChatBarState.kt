@@ -21,8 +21,6 @@ data class ChatBarState(
     /** Draw the bar itself; when false only the sheets are hosted. */
     val showBar: Boolean,
     val selection: MatchaChatBarSelection,
-    /** To do and In progress tasks on the chat's board; 0 hides the count. */
-    val openTaskCount: Int,
     /** Up to four active threads, newest root first, then the open thread when it is not one of them. Empty until loaded. */
     val threads: ImmutableList<ChatBarThread>,
     val canCreateThread: Boolean,

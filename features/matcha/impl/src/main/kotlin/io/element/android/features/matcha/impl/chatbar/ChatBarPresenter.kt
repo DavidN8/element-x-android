@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * The chat chip bar: General, Tasks, the active named threads, New thread, All threads and More.
+ * The chat chip bar: General, the active threads, New thread and More. The chat's top bar has All threads and the task board.
  *
  * Writes run in the room's scope, so they finish (and their snackbars still show) when the screen under the bar is
  * replaced, for example after archiving the open thread; navigation only happens while this bar is still shown.
@@ -156,7 +156,6 @@ class ChatBarPresenter(
         fun handleEvent(event: ChatBarEvent) {
             when (event) {
                 is ChatBarEvent.Select -> if (event.target != currentSelection) currentActions.open(event.target)
-                ChatBarEvent.OpenAllThreads -> currentActions.openAllThreads()
                 ChatBarEvent.OpenSpaceDocs -> currentActions.openSpaceDocs?.invoke()
                 is ChatBarEvent.RemindMe -> {
                     sheet = null
@@ -201,7 +200,6 @@ class ChatBarPresenter(
             // The board always draws the bar; elsewhere it waits for the data, and appears only once the chat uses the features.
             showBar = isEnabled && (selection == MatchaChatBarSelection.Tasks || snapshot.isLoaded && snapshot.hasChatBar()),
             selection = selection,
-            openTaskCount = if (snapshot.isLoaded) snapshot.board?.cards?.count { !it.archived && it.status != TaskStatus.Done } ?: 0 else 0,
             threads = threads.toImmutableList(),
             canCreateThread = canCreate,
             canManageThreads = canManage,

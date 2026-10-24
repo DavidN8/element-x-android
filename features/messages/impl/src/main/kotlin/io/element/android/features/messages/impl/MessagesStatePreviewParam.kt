@@ -109,6 +109,8 @@ open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
                     threads = persistentMapOf(ThreadId("\$a-thread-id") to MatchaThreadInfo(name = "Release planning", isArchived = false)),
                 ),
             ),
+            // A chat with open tasks and no named thread: no chip bar, and the board button shows the count.
+            aMessagesState(matcha = aMatchaChatState(hasChatBar = false, openTaskCount = 3)),
         )
 }
 

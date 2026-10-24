@@ -33,6 +33,10 @@
     <string name="common_matcha_no_space_selected">No space selected</string>
     <string name="common_matcha_select_space">Select a space to see its rooms</string>
     <string name="common_matcha_tasks">Tasks</string>
+    <plurals name="a11y_matcha_open_tasks">
+        <item quantity="one">%1$d open task</item>
+        <item quantity="other">%1$d open tasks</item>
+    </plurals>
     <string name="common_matcha_more">More</string>
     <string name="common_matcha_error_name_empty">Enter a name</string>
     <string name="common_matcha_error_max_chars">Use up to %1$s characters</string>

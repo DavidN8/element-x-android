@@ -14,8 +14,11 @@ import kotlinx.coroutines.flow.StateFlow
 
 /** How the chat screens reach a room's Matcha state without depending on the implementation. Room scoped. */
 interface MatchaRoomController {
-    /** True when this room has something for the chip bar: a named active thread or a board. */
+    /** True when this room has something for the chip bar: an active thread someone named. */
     val hasChatBar: StateFlow<Boolean>
+
+    /** To do and In progress tasks on the room's board; 0 without a board and until the board has loaded. */
+    val openTaskCount: StateFlow<Int>
 
     /** Matcha names and archive flags of the room's threads. */
     val threads: StateFlow<ImmutableMap<ThreadId, MatchaThreadInfo>>

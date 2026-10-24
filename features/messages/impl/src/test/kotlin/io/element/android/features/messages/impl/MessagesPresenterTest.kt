@@ -190,8 +190,12 @@ class MessagesPresenterTest {
             val state = consumeItemsUntilTimeout().last()
             assertThat(state.matcha?.hasChatBar).isFalse()
             assertThat(state.matcha?.threads).isEqualTo(threads)
+            assertThat(state.matcha?.openTaskCount).isEqualTo(0)
             controller.hasChatBar.value = true
-            assertThat(consumeItemsUntilTimeout().last().matcha?.hasChatBar).isTrue()
+            controller.openTaskCount.value = 4
+            val updated = consumeItemsUntilTimeout().last()
+            assertThat(updated.matcha?.hasChatBar).isTrue()
+            assertThat(updated.matcha?.openTaskCount).isEqualTo(4)
         }
     }
 
