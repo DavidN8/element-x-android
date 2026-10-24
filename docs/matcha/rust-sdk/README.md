@@ -46,5 +46,17 @@ uniffi reads the symbol table to generate the Kotlin bindings. The unstripped li
 `matrix-rust-sdk/target/aarch64-linux-android/small-release-stripped/libmatrix_sdk_ffi.so` for `ndk-stack`.
 
 With `libraries/rustsdk/matrix-rust-sdk.aar` present, debug builds use it automatically (see
-`libraries/matrix/impl/build.gradle.kts`). The AAR only contains arm64-v8a, so install the arm64 APK. Release builds keep
-the published SDK until the method is upstream or the AAR is published for every ABI.
+`libraries/matrix/impl/build.gradle.kts`). The AAR only contains arm64-v8a, so build and install the arm64 APK only:
+
+```bash
+rm -f app/build/intermediates/apk/gplay/debug/*.apk
+./gradlew :app:assembleGplayDebug -Pandroid.injected.build.abi=arm64-v8a
+adb install -r app/build/intermediates/apk/gplay/debug/app-gplay-arm64-v8a-debug.apk
+```
+
+`-Pandroid.injected.build.abi` skips the universal APK and the armeabi-v7a, x86 and x86_64 APKs (those three have no
+`libmatrix_sdk_ffi.so` and cannot start). As in Android Studio, it writes the APK to `app/build/intermediates/apk/`, not
+`app/build/outputs/apk/`. Deleting the old APK first makes Gradle package it from scratch: packaging in place appends a
+changed library and leaves the old copy behind as dead space, which made the APK 97 MB bigger after one AAR swap.
+
+Release builds keep the published SDK until the method is upstream or the AAR is published for every ABI.
