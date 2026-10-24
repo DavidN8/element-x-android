@@ -122,7 +122,7 @@ append yours in a block commented with your track name so the merge stays simple
    Presenter tests with an injectable clock.
 2. **Space Docs** (`docs/`) per spec §4e and plan §2.4, implementing `MatchaSpaceDocsEntryPoint`. The Yjs engine runs in
    a headless or embedded WebView from an asset bundle built from the web fork's `yjs` package
-   (`~/Code/mozart-dm-group/element-web`, read-only: never modify that repo; build the bundle into this repo's
+   (`~/Code/element-group/element-web`, read-only: never modify that repo; build the bundle into this repo's
    `features/matcha/impl/src/main/assets/matcha-docs/` and commit the built file plus the tiny entry source and the exact
    build command). The Kotlin side owns the Matrix transport exactly like the web `RoomDocumentSession`: anchor = the
    space's `m.room.create` event, full replay of `com.matchahoneylatte.docs.update` frames from the store's `events`,

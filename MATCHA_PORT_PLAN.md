@@ -8,12 +8,12 @@ everything marked "assumed" was not and must be checked before relying on it.
 
 | What | Where |
 |---|---|
-| Web fork (source of truth for behaviour and wire protocol) | `~/Code/mozart-dm-group/element-web`, branch `matcha-beta` = `dcc137bcb1`, 30 commits past upstream `v1.12.32`, remote `bouyant-dev/element-web` |
-| Web handoff notes (read first; deployment, protocol summary, design decisions) | `~/Code/mozart-dm-group/element-web/bot.md`, `docs/matcha-beta.md`, `tools/matcha-reminder-bot/README.md` |
+| Web fork (source of truth for behaviour and wire protocol) | `~/Code/element-group/element-web`, branch `matcha-beta` = `dcc137bcb1`, 30 commits past upstream `v1.12.32`, remote `bouyant-dev/element-web` |
+| Web handoff notes (read first; deployment, protocol summary, design decisions) | `~/Code/element-group/element-web/bot.md`, `docs/matcha-beta.md`, `tools/matcha-reminder-bot/README.md` |
 | Web protocol code | `apps/web/src/utils/matcha/{threads,reminders,documents,documentCatalog,spaceDocuments,encryption,markdownCommands}.ts` |
 | Web view models (behaviour to mirror) | `apps/web/src/viewmodels/room/{RoomThreadTabs,KanbanBoard,RoomDocs,SpaceDocs,RoomReminder}ViewModel.ts` (+ `.test.ts` next to each: port these cases) |
 | Web shared UI (for copy and layout, not code) | `packages/shared-components/src/room/{RoomThreadTabs,KanbanBoard,RoomDocs,RoomReminder,SpaceDocsSetup}/` and the `matcha_*` blocks in `packages/shared-components/src/i18n/strings/en_EN.json` |
-| This Android fork | `~/Code/element-x-android`, `develop` = `8bfafba4a2` = upstream `v26.10.0` + 5 local two-pane commits (see `TWO_PANE_NOTES.md`), remote `DavidN8/element-x-android` |
+| This Android fork | `~/Code/element-group/element-x-android`, `develop` = `8bfafba4a2` = upstream `v26.10.0` + 5 local two-pane commits (see `TWO_PANE_NOTES.md`), remote `DavidN8/element-x-android` |
 | Rust SDK binding in use | `org.matrix.rustcomponents:sdk-android` **26.10.20** (`gradle/libs.versions.toml`, pinned `strictly`) |
 | Deployed homeserver / bot | `matchahoneylatte.com`; bot `@matcha-reminder:matchahoneylatte.com` (from `bot.md`) |
 

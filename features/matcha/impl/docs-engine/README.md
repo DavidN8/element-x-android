@@ -15,7 +15,7 @@ both clients run the same CRDT code. Rebuild it from this repository's root afte
 `yjs` (the web repository is only read):
 
 ```sh
-WEB=~/Code/mozart-dm-group/element-web/node_modules/.pnpm && NODE_PATH=$WEB/yjs@13.6.33/node_modules $WEB/@esbuild+darwin-arm64@0.27.4/node_modules/@esbuild/darwin-arm64/bin/esbuild features/matcha/impl/docs-engine/entry.js --bundle --minify --format=iife --platform=browser --target=es2017 --legal-comments=none --banner:js="/* Matcha docs engine. Bundles yjs 13.6.33 and lib0 0.2.119, MIT licensed, (c) Kevin Jahns. Source: features/matcha/impl/docs-engine. */" --outfile=features/matcha/impl/src/main/assets/matcha-docs/engine.js
+WEB=~/Code/element-group/element-web/node_modules/.pnpm && NODE_PATH=$WEB/yjs@13.6.33/node_modules $WEB/@esbuild+darwin-arm64@0.27.4/node_modules/@esbuild/darwin-arm64/bin/esbuild features/matcha/impl/docs-engine/entry.js --bundle --minify --format=iife --platform=browser --target=es2017 --legal-comments=none --banner:js="/* Matcha docs engine. Bundles yjs 13.6.33 and lib0 0.2.119, MIT licensed, (c) Kevin Jahns. Source: features/matcha/impl/docs-engine. */" --outfile=features/matcha/impl/src/main/assets/matcha-docs/engine.js
 ```
 
 Then check the bundle: `applyAll`, which replays a history in one bridge call, must leave the same document as one `apply` per

@@ -1,7 +1,7 @@
 # WhatsApp re-skin track — engineering brief
 
 Read with `WHATSAPP_DESIGN.md` (the spec; it wins on look and behaviour) and AGENTS.md. Work in
-`/Users/david/Code/element-x-android` on branch `matcha`. The feature track works in a separate worktree on
+`/Users/david/Code/element-group/element-x-android` on branch `matcha`. The feature track works in a separate worktree on
 `features/matcha/**` only; never edit that directory.
 
 ## Already done (commit `0c4c71bebd`)
