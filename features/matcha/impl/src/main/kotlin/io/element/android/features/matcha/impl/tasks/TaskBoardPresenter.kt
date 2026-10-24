@@ -25,6 +25,7 @@ import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.chatbar.rememberCanRemind
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.protocol.isShownOnBoard
 import io.element.android.features.matcha.impl.store.MatchaPermissions
 import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
@@ -98,7 +99,12 @@ class TaskBoardPresenter(
 
         val permissions = snapshot.permissions
         val canRemind = rememberCanRemind(room, permissions.canSendMessages)
-        val tasks = remember(snapshot) { snapshot.toTaskItems(deadlineFormatter, clock.now().toEpochMilliseconds()) }
+        // A task that isn't shared with the chat is only shown to the people it involves, and left out of every count.
+        val tasks = remember(snapshot) {
+            snapshot.toTaskItems(deadlineFormatter, clock.now().toEpochMilliseconds()) { it.isShownOnBoard(room.sessionId.value) }
+        }
+        // Asked for by its id or from its thread, which everyone in the chat can read, a task the board leaves out still opens.
+        val allTasks = remember(snapshot) { snapshot.toTaskItems(deadlineFormatter, clock.now().toEpochMilliseconds()) { true } }
         val content = boardContent(snapshot, tasks, canRemind, isCreatingBoard, createFailed, searchFailed)
 
         // A board made elsewhere may lie further back than the history read so far: offering to create one could orphan its cards.
@@ -110,7 +116,7 @@ class TaskBoardPresenter(
 
         LaunchedEffect(snapshot) {
             val threadId = pendingThreadId ?: return@LaunchedEffect
-            val task = tasks.firstOrNull { it.threadId == threadId }
+            val task = allTasks.firstOrNull { it.threadId == threadId }
             when {
                 task != null && permissions.canWriteCards -> editorTarget = TaskEditorTarget.Edit(task.id)
                 task != null -> actionsTaskId = task.id
@@ -155,7 +161,7 @@ class TaskBoardPresenter(
                     store.retryLoad()
                 }
                 is TaskBoardEvent.OpenTask -> {
-                    val task = tasks.firstOrNull { it.id == event.taskId } ?: return
+                    val task = allTasks.firstOrNull { it.id == event.taskId } ?: return
                     when {
                         task.threadId != null -> openThread(task.threadId)
                         board?.canEdit == true -> editorTarget = TaskEditorTarget.Edit(task.id)
@@ -170,12 +176,12 @@ class TaskBoardPresenter(
                 }
                 is TaskBoardEvent.SetArchived -> {
                     actionsTaskId = null
-                    val task = tasks.firstOrNull { it.id == event.taskId } ?: return
+                    val task = allTasks.firstOrNull { it.id == event.taskId } ?: return
                     if (board?.canArchive(task) == true) listActions.setArchived(event.taskId, event.archived)
                 }
                 is TaskBoardEvent.RemindMe -> {
                     actionsTaskId = null
-                    val task = tasks.firstOrNull { it.id == event.taskId }
+                    val task = allTasks.firstOrNull { it.id == event.taskId }
                     if (task != null && !task.isArchived && canRemind) {
                         reminderTarget = MatchaReminderTarget(message = task.title.orEmpty(), threadId = task.threadId, dueAt = task.dueAt, cardId = task.id)
                     }
@@ -186,7 +192,7 @@ class TaskBoardPresenter(
                     actionsTaskId = null
                     if (board?.canEdit == true) editorTarget = TaskEditorTarget.Edit(event.taskId)
                 }
-                is TaskBoardEvent.EditThreadTask -> tasks.firstOrNull { it.threadId == event.threadId }?.let { task ->
+                is TaskBoardEvent.EditThreadTask -> allTasks.firstOrNull { it.threadId == event.threadId }?.let { task ->
                     if (board?.canEdit == true) editorTarget = TaskEditorTarget.Edit(task.id) else actionsTaskId = task.id
                 }
                 TaskBoardEvent.ShowArchived -> showArchived = true
@@ -202,7 +208,7 @@ class TaskBoardPresenter(
             hasSpaceDocs = hasSpaceDocs,
             content = content,
             showArchived = showArchived,
-            actionsSheet = actionsTaskId?.let { id -> tasks.firstOrNull { it.id == id } },
+            actionsSheet = actionsTaskId?.let { id -> allTasks.firstOrNull { it.id == id } },
             editor = editor,
             reminderTarget = reminderTarget,
             snackbarMessage = snackbarMessage,

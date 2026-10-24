@@ -7,10 +7,12 @@
 
 package io.element.android.features.matcha.impl.taskstab
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,12 +26,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -61,11 +68,14 @@ import io.element.android.features.matcha.impl.tasks.TaskRow
 import io.element.android.libraries.designsystem.components.BigIcon
 import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.components.avatar.Avatar
+import io.element.android.libraries.designsystem.components.avatar.AvatarData
+import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.FloatingActionButton
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
 import io.element.android.libraries.designsystem.theme.components.SearchField
 import io.element.android.libraries.designsystem.theme.components.Text
@@ -91,12 +101,16 @@ fun TasksTabView(
 ) {
     val eventSink = state.eventSink
     val layoutDirection = LocalLayoutDirection.current
+    val startPadding = contentPadding.calculateStartPadding(layoutDirection)
     val endPadding = contentPadding.calculateEndPadding(layoutDirection)
-    Box(modifier = modifier.fillMaxSize()) {
+    // The table's header and rows scroll sideways together.
+    val tableScroll = rememberScrollState()
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isWideTable = maxWidth - startPadding - endPadding >= WIDE_TABLE_MIN_WIDTH
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = contentPadding.calculateStartPadding(layoutDirection),
+                start = startPadding,
                 top = contentPadding.calculateTopPadding(),
                 end = endPadding,
                 bottom = contentPadding.calculateBottomPadding() + FAB_CLEARANCE,
@@ -108,6 +122,7 @@ fun TasksTabView(
                 TasksTabContent.Loading -> item(key = "loading") { TaskPlaceholders() }
                 TasksTabContent.Empty -> item(key = "empty") { EmptyTasksTab(modifier = Modifier.fillParentMaxWidth()) }
                 is TasksTabContent.Tasks -> taskGroups(content, state.filter, eventSink)
+                is TasksTabContent.Table -> taskTable(content, state.filter, isWideTable, tableScroll, eventSink)
             }
             footer(state)
         }
@@ -124,6 +139,11 @@ fun TasksTabView(
         is TasksTabSheet.ChooseChat -> ChooseChatSheet(
             sheet = sheet,
             onChoose = { eventSink(TasksTabEvent.ChooseChat(it)) },
+            onDismiss = { eventSink(TasksTabEvent.DismissSheet) },
+        )
+        is TasksTabSheet.ChoosePerson -> ChoosePersonSheet(
+            sheet = sheet,
+            onChoose = { eventSink(TasksTabEvent.ChoosePerson(it)) },
             onDismiss = { eventSink(TasksTabEvent.DismissSheet) },
         )
         is TasksTabSheet.Actions -> {
@@ -151,15 +171,25 @@ fun TasksTabView(
     state.editor?.let { TaskEditorSheet(it) }
 }
 
-/** All · To do · In progress · Done · Archived, then Chat ▾. */
+/** All · To do · In progress · Done · Archived, then Chat ▾ and People ▾, and the list or table switch at the end. */
 @Composable
 private fun TasksTabChips(state: TasksTabState) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        FilterChips(state, modifier = Modifier.weight(1f))
+        val description = stringResource(if (state.isTable) R.string.a11y_matcha_tasks_show_list else R.string.a11y_matcha_tasks_show_table)
+        IconButton(onClick = { state.eventSink(TasksTabEvent.ToggleTable) }, modifier = Modifier.padding(end = 4.dp)) {
+            Icon(imageVector = if (state.isTable) CompoundIcons.ListView() else CompoundIcons.Grid(), contentDescription = description)
+        }
+    }
+}
+
+@Composable
+private fun FilterChips(state: TasksTabState, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .horizontalScroll(rememberScrollState())
             .selectableGroup()
-            .padding(horizontal = 16.dp),
+            .padding(start = 16.dp, end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -181,6 +211,19 @@ private fun TasksTabChips(state: TasksTabState) {
             trailingIcon = CompoundIcons.ChevronDown(),
             onClick = { state.eventSink(TasksTabEvent.ToggleChatFilter) },
         )
+        val person = state.personFilter
+        if (state.hasPeople || person != null) {
+            PillFilterChip(
+                label = person?.name ?: stringResource(R.string.screen_matcha_tasks_filter_people),
+                selected = person != null,
+                // Tapping the chosen person shows everyone's tasks again, like the chat chip.
+                contentDescription = person?.let { stringResource(CommonStrings.action_clear) },
+                maxLabelWidth = CHAT_CHIP_MAX_WIDTH,
+                role = Role.Button,
+                trailingIcon = CompoundIcons.ChevronDown(),
+                onClick = { state.eventSink(TasksTabEvent.TogglePersonFilter) },
+            )
+        }
     }
 }
 
@@ -234,7 +277,22 @@ private fun TabTaskRow(task: TabTask, eventSink: (TasksTabEvent) -> Unit) {
         chatName = task.chat.displayName(),
         chatAvatar = task.chat.avatar,
         isSelected = task.isSelected,
+        people = task.peopleLine(),
     )
+}
+
+/** "With Bob, Carol", or "Just you". */
+@Composable
+private fun TabTask.peopleLine(): String = when {
+    people.isEmpty() -> stringResource(R.string.screen_matcha_tasks_just_you)
+    else -> stringResource(R.string.screen_matcha_tasks_with_people, people.joinToString())
+}
+
+/** The task's other people in a table cell: "Bob, Carol", or "Just you". */
+@Composable
+internal fun TabTask.peopleCell(): String = when {
+    people.isEmpty() -> stringResource(R.string.screen_matcha_tasks_just_you)
+    else -> people.joinToString()
 }
 
 @Composable
@@ -384,6 +442,75 @@ private fun ChooseChatSheet(sheet: TasksTabSheet.ChooseChat, onChoose: (RoomId) 
     }
 }
 
+/** People ▾: everyone the user works with, then each of them. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChoosePersonSheet(sheet: TasksTabSheet.ChoosePerson, onChoose: (String?) -> Unit, onDismiss: () -> Unit) {
+    val title = stringResource(R.string.screen_matcha_tasks_filter_people_title)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        scrollable = false,
+        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+        modifier = Modifier.semantics { paneTitle = title },
+    ) {
+        SheetHeader(title = title, onClose = onDismiss)
+        LazyColumn(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+            item(key = "everyone") {
+                PersonRow(
+                    name = stringResource(R.string.screen_matcha_tasks_all_people),
+                    avatar = null,
+                    isSelected = sheet.selectedUserId == null,
+                    onClick = { onChoose(null) },
+                )
+            }
+            items(sheet.people, key = { it.userId }) { person ->
+                PersonRow(
+                    name = person.name,
+                    avatar = AvatarData(id = person.userId, name = person.name, size = AvatarSize.RoomListItem),
+                    isSelected = sheet.selectedUserId == person.userId,
+                    onClick = { onChoose(person.userId) },
+                )
+            }
+        }
+    }
+}
+
+/** A person to filter by, or everyone when [avatar] is null; the chosen one is ticked. */
+@Composable
+private fun PersonRow(name: String, avatar: AvatarData?, isSelected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 76.dp)
+            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (avatar != null) {
+            Avatar(avatarData = avatar, avatarType = AvatarType.User)
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(AvatarSize.RoomListItem.dp)
+                    .background(color = ElementTheme.colors.bgSubtleSecondary, shape = CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(imageVector = CompoundIcons.Group(), contentDescription = null, tint = ElementTheme.colors.iconSecondary)
+            }
+        }
+        Text(
+            text = name,
+            style = ElementTheme.typography.fontBodyLgMedium,
+            color = ElementTheme.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (isSelected) Icon(imageVector = CompoundIcons.Check(), contentDescription = null, tint = ElementTheme.colors.iconAccentPrimary)
+    }
+}
+
 @Composable
 private fun SheetNote(text: String) {
     Text(
@@ -448,4 +575,18 @@ private fun TaskSection.label(): String = when (this) {
 @Composable
 internal fun TasksTabViewPreview(@PreviewParameter(TasksTabStatePreviewParam::class) state: TasksTabState) = ElementPreview {
     TasksTabView(state = state, contentPadding = PaddingValues())
+}
+
+/** The Tasks tab on a screen wide enough for the table to fit. */
+@Composable
+private fun WideTasksTabView(state: TasksTabState) {
+    Box(modifier = Modifier.width(720.dp)) {
+        TasksTabView(state = state, contentPadding = PaddingValues())
+    }
+}
+
+@PreviewsDayNight
+@Composable
+internal fun WideTasksTabViewPreview() = ElementPreview {
+    WideTasksTabView(aTasksTabState(isTable = true, content = aTableContent()))
 }

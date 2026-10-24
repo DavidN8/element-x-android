@@ -34,13 +34,21 @@ data class TaskItem(
     val replyCount: Int?,
     /** A reminder was requested; only the bot's reply confirms it, so this never says "scheduled". */
     val hasReminder: Boolean,
+    /** Shown to everyone in the chat (`show_to_room`). Never set in a direct chat, whose members are involved in every task anyway. */
+    val isSharedWithChat: Boolean,
+    /** Who the task involves, the current user included when they are. */
+    val participants: Set<String>,
 )
 
 /**
- * The board's tasks, active and archived, ordered by deadline (soonest first, none last), then newest thread first.
+ * The board's tasks that [isShown] keeps, active and archived, ordered by deadline (soonest first, none last), then newest thread first.
  */
-internal fun MatchaRoomSnapshot.toTaskItems(deadlineFormatter: DeadlineFormatter, nowMillis: Long): List<TaskItem> {
-    val cards = board?.cards ?: return emptyList()
+internal fun MatchaRoomSnapshot.toTaskItems(
+    deadlineFormatter: DeadlineFormatter,
+    nowMillis: Long,
+    isShown: (ProjectedCard) -> Boolean,
+): List<TaskItem> {
+    val cards = board?.cards?.filter(isShown) ?: return emptyList()
     val threadsById = threads.associateBy { it.id.value }
     return cards
         .sortedWith(
@@ -62,6 +70,8 @@ internal fun MatchaRoomSnapshot.toTaskItems(deadlineFormatter: DeadlineFormatter
                 isOverdue = card.dueAt != null && card.dueAt < nowMillis && card.status != TaskStatus.Done,
                 replyCount = threadId?.let { threadsById[it]?.visibleReplies() ?: 0 },
                 hasReminder = card.reminderRequested != null,
+                isSharedWithChat = card.showToRoom && !isDirect,
+                participants = card.participants,
             )
         }
 }

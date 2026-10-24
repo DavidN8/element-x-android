@@ -88,6 +88,36 @@ class KanbanProtocolTest {
     }
 
     @Test
+    fun `show_to_room is read when a boolean, absent means shown to everyone, and anything else makes the card invalid`() {
+        assertThat(KanbanProtocol.parseCard(cardEvent(valid), root)!!.showToRoom).isTrue()
+        assertThat(KanbanProtocol.parseCard(cardEvent("""$valid, "show_to_room": true"""), root)!!.showToRoom).isTrue()
+        assertThat(KanbanProtocol.parseCard(cardEvent("""$valid, "show_to_room": false"""), root)!!.showToRoom).isFalse()
+        listOf("\"true\"", "1", "null", "{}").forEach { value ->
+            assertThat(KanbanProtocol.parseCard(cardEvent("""$valid, "show_to_room": $value"""), root)).isNull()
+        }
+    }
+
+    @Test
+    fun `every written card says whether it is shown to everyone`() {
+        val shown = CardRevision("c-1", "Title", "", TaskStatus.Todo, false, null, null, null, showToRoom = true)
+        assertThat(KanbanProtocol.cardContent(shown, root)).contains(""""show_to_room":true""")
+        assertThat(KanbanProtocol.cardContent(shown.copy(showToRoom = false), root)).contains(""""show_to_room":false""")
+    }
+
+    @Test
+    fun `a thread's card without a revision is shown to everyone, and one with a revision keeps its value`() {
+        val hidden = CardRevision("thread-x", "t", "", TaskStatus.Todo, false, "\$t1", null, null, showToRoom = false)
+        val cards = KanbanProtocol.project(
+            latestCards = listOf(hidden),
+            threads = mapOf(
+                "\$t1" to ThreadMetadata("One", archived = false, archiveExplicit = false),
+                "\$t2" to ThreadMetadata("Two", archived = false, archiveExplicit = false),
+            ),
+        )
+        assertThat(cards.map { it.showToRoom }).containsExactly(false, true).inOrder()
+    }
+
+    @Test
     fun `the board pointer must be version 1 with an event id`() {
         fun parse(json: String) = KanbanProtocol.parseBoardPointer(Json.parseToJsonElement(json).jsonObject)
         assertThat(parse("""{"version": 1, "event_id": "${'$'}root"}""")).isEqualTo("\$root")

@@ -28,10 +28,14 @@ import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
+import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.MessageEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
+import io.element.android.libraries.matrix.api.user.MatrixUser
+import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+import io.element.android.libraries.matrix.test.room.aRoomInfo
 import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
@@ -631,6 +635,115 @@ class TaskBoardPresenterTest {
         }
     }
 
+    @Test
+    fun `a task that isn't shared with the chat is only on the boards of the people it involves`() = runTest {
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(
+                aThreadListItem("\$bobs", body = "Bob's"),
+                aThreadListItem("\$shared", body = "Shared"),
+                aThreadListItem("\$mine", body = "Mine", senderId = A_SESSION_ID),
+            ),
+            items = listOf(
+                card(1, KanbanProtocol.threadCardId("\$bobs"), "Bob's", TaskStatus.Todo, threadId = "\$bobs", showToRoom = false),
+                card(2, KanbanProtocol.threadCardId("\$shared"), "Shared", TaskStatus.Todo, threadId = "\$shared"),
+                card(3, KanbanProtocol.threadCardId("\$mine"), "Mine", TaskStatus.Doing, threadId = "\$mine", showToRoom = false),
+                card(4, "c-bobs", "Bob's older card", TaskStatus.Todo, showToRoom = false),
+                card(5, "c-mine", "My older card", TaskStatus.Todo, showToRoom = false, sender = A_SESSION_ID.value),
+            ),
+        )
+        aPresenter(store).test {
+            val board = awaitUntil { it.board()?.doing?.isNotEmpty() == true }.board()!!
+            // Hidden tasks are left out of the counts too.
+            assertThat(board.todo.map { it.title }).containsExactly("Shared", "My older card")
+            assertThat(board.doing.map { it.title }).containsExactly("Mine")
+            assertThat(board.todo.single { it.title == "Shared" }.isSharedWithChat).isTrue()
+            assertThat(board.doing.single().isSharedWithChat).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a new task is only for the people it involves until shared, and an edit keeps what the card says`() = runTest {
+        val sent = mutableListOf<Pair<String, String>>()
+        val store = aLinkedTaskStore { type, content ->
+            sent += type to content
+            Result.success(EventId(if (sent.size == 1) "\$root" else "\$e${sent.size + 10}"))
+        }
+        aPresenter(store).test {
+            awaitUntil { it.board()?.canAdd == true }.eventSink(TaskBoardEvent.NewTask(TaskStatus.Todo))
+            val editor = awaitUntil { it.editor != null }.editor!!
+            assertThat(editor.showToRoom).isFalse()
+            editor.eventSink(TaskEditorEvent.SetTitle("Book the venue"))
+            awaitUntil { it.editor?.title == "Book the venue" }.editor!!.eventSink(TaskEditorEvent.Save)
+            awaitUntil { it.editor == null }
+            assertThat(Json.parseToJsonElement(sent.last().second).jsonObject["show_to_room"]?.jsonPrimitive?.content).isEqualTo("false")
+            // The user's new task stays on their board: they started its thread.
+            val withTask = awaitUntil { it.board()?.todo?.any { task -> task.title == "Book the venue" } == true }
+            assertThat(withTask.board()!!.todo).hasSize(2)
+
+            sent.clear()
+            withTask.eventSink(TaskBoardEvent.EditTask(threadCardId))
+            val editing = awaitUntil { it.editor != null }.editor!!
+            assertThat(editing.showToRoom).isTrue()
+            editing.eventSink(TaskEditorEvent.SetShowToRoom(false))
+            val changed = awaitUntil { it.editor?.showToRoom == false }.editor!!
+            assertThat(changed.hasChanges).isTrue()
+            changed.eventSink(TaskEditorEvent.Save)
+            awaitUntil { it.editor == null }
+            val written = Json.parseToJsonElement(sent.single().second).jsonObject
+            assertThat(written["show_to_room"]?.jsonPrimitive?.content).isEqualTo("false")
+            assertThat(written["description"]?.jsonPrimitive?.content).isEqualTo("Steps")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a task left off the board still opens from its thread, and its edit keeps what the card says`() = runTest {
+        val sent = mutableListOf<String>()
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(aThreadListItem(thread, body = "Plan")),
+            items = listOf(card(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, description = "Steps", showToRoom = false)),
+        ) { _, content ->
+            sent += content
+            Result.success(EventId("\$e${sent.size + 10}"))
+        }
+        aPresenter(store, initialThreadId = ThreadId(thread)).test {
+            val opened = awaitUntil { it.editor != null }
+            assertThat(opened.board()!!.todo).isEmpty()
+            opened.editor!!.eventSink(TaskEditorEvent.SetDescription("More steps"))
+            awaitUntil { it.editor?.description == "More steps" }.editor!!.eventSink(TaskEditorEvent.Save)
+            awaitUntil { it.editor == null }.eventSink(TaskBoardEvent.EditThreadTask(ThreadId(thread)))
+            assertThat(awaitUntil { it.editor != null }.editor!!.title).isEqualTo("Plan")
+            val written = Json.parseToJsonElement(sent.single()).jsonObject
+            assertThat(written["show_to_room"]?.jsonPrimitive?.content).isEqualTo("false")
+            assertThat(written["description"]?.jsonPrimitive?.content).isEqualTo("More steps")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `in a direct chat every task is shown and the switch isn't offered`() = runTest {
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(aThreadListItem(thread, body = "Plan")),
+            items = listOf(card(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, showToRoom = false)),
+            roomInfo = aRoomInfo(isDirect = true, heroes = listOf(MatrixUser(UserId("@bob:x")))),
+        )
+        aPresenter(store).test {
+            val state = awaitUntil { it.board()?.todo?.isNotEmpty() == true }
+            assertThat(state.board()!!.todo.single().isSharedWithChat).isFalse()
+            state.eventSink(TaskBoardEvent.EditTask(threadCardId))
+            val editor = awaitUntil { it.editor != null }.editor!!
+            assertThat(editor.showToRoom).isNull()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     /** A board with one thread, "Plan", whose task has a description and a deadline. */
     private fun TestScope.aLinkedTaskStore(
         canSendMessage: (MessageEventType) -> Boolean = { true },
@@ -654,6 +767,8 @@ class TaskBoardPresenterTest {
         description: String = "",
         dueAt: Long? = null,
         archived: Boolean = false,
+        showToRoom: Boolean = true,
+        sender: String = "@bob:x",
     ) = aMatchaEventItem(
         index,
         MatchaConfig.EVENT_KANBAN_CARD,
@@ -667,10 +782,11 @@ class TaskBoardPresenterTest {
                 threadId = threadId,
                 dueAt = dueAt,
                 reminderRequested = null,
-                showToRoom = true,
+                showToRoom = showToRoom,
             ),
             boardRoot,
         ),
+        sender = sender,
     )
 
     private fun bootstrap(index: Int, threadId: String) = aMatchaEventItem(

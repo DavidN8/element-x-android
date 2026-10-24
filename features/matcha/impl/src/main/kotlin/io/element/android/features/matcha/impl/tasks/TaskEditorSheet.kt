@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -54,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.error
 import androidx.compose.ui.semantics.liveRegion
@@ -78,6 +80,7 @@ import io.element.android.libraries.designsystem.theme.components.HorizontalDivi
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
+import io.element.android.libraries.designsystem.theme.components.Switch
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -189,6 +192,10 @@ private fun ColumnScope.TaskEditorContent(state: TaskEditorState, title: String)
             StatusRow(state)
             DeadlineRow(state)
             if (state.canRemind) ReminderRow(state)
+            val showToRoom = state.showToRoom
+            if (showToRoom != null) {
+                ShowToRoomRow(checked = showToRoom, enabled = !state.isSaving, onChange = { eventSink(TaskEditorEvent.SetShowToRoom(it)) })
+            }
             ThreadRow(state)
             if (state.earlierCards.isNotEmpty()) EarlierCardsRow(state)
         }
@@ -430,6 +437,27 @@ private fun ReminderRow(state: TaskEditorState) {
                 color = ElementTheme.colors.textSecondary,
             )
         }
+    }
+}
+
+/** Show to everyone in channel, with what it changes; the whole row is the switch. */
+@Composable
+private fun ShowToRoomRow(checked: Boolean, enabled: Boolean, onChange: (Boolean) -> Unit) {
+    IconRow(
+        icon = CompoundIcons.Group(),
+        modifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange),
+        trailing = { Switch(checked = checked, onCheckedChange = null, enabled = enabled, modifier = Modifier.padding(end = 12.dp)) },
+    ) {
+        Text(
+            text = stringResource(R.string.screen_matcha_tasks_show_to_room),
+            style = ElementTheme.typography.fontBodyLgRegular,
+            color = ElementTheme.colors.textPrimary,
+        )
+        Text(
+            text = stringResource(R.string.screen_matcha_tasks_show_to_room_hint),
+            style = ElementTheme.typography.fontBodySmRegular,
+            color = ElementTheme.colors.textSecondary,
+        )
     }
 }
 

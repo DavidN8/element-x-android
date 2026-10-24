@@ -32,6 +32,7 @@ open class TaskBoardStatePreviewParam : PreviewParameterProvider<TaskBoardState>
             aTaskBoardState(actionsSheet = aTaskItemList().first()),
             aTaskBoardState(showArchived = true),
             aTaskBoardState(editor = aTaskEditorState()),
+            aTaskBoardState(content = aBoardContent(tasks = aTaskItemList().map { it.copy(isSharedWithChat = it.id in setOf("t1", "t4", "legacy")) })),
         )
 }
 
@@ -97,6 +98,8 @@ internal fun aTaskItem(
     isOverdue: Boolean = false,
     replyCount: Int? = threadId?.let { 1 },
     hasReminder: Boolean = false,
+    isSharedWithChat: Boolean = false,
+    participants: Set<String> = emptySet(),
 ) = TaskItem(
     id = id,
     title = title,
@@ -109,4 +112,6 @@ internal fun aTaskItem(
     isOverdue = isOverdue,
     replyCount = replyCount,
     hasReminder = hasReminder,
+    isSharedWithChat = isSharedWithChat,
+    participants = participants,
 )
