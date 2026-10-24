@@ -309,6 +309,29 @@ class NotesTabPresenterTest {
         }
     }
 
+    @Test
+    fun `leaving the tab while a dismissed note saves closes its catalog and opens nothing`() = runTest {
+        val space = aNotesSpace(design)
+        val engine = FakeYjsEngine()
+        aTab(aClient(listOf(space)), engine).test {
+            awaitUntil { it.canCreate }.eventSink(NotesTabEvent.NewNote)
+            val naming = awaitUntil { it.sheet is NotesTabSheet.Name }
+            // The sheet's catalog reads the space while the name is typed.
+            settle()
+            assertThat(engine.documents.single().isClosed).isFalse()
+            naming.eventSink(NotesTabEvent.UpdateName("Trip plans"))
+            naming.eventSink(NotesTabEvent.SubmitName)
+            naming.eventSink(NotesTabEvent.DismissSheet)
+            awaitUntil { it.sheet == null }
+            // The tab goes before the save has run.
+            cancelAndIgnoreRemainingEvents()
+        }
+        settle()
+        assertThat(opened).isEmpty()
+        assertThat(space.sent).isEmpty()
+        assertThat(engine.documents.single().isClosed).isTrue()
+    }
+
     private fun catalogItems(): List<MatrixTimelineItem> =
         frameItems("\$c1", aCatalogEntry("c1", plans, "Plans", createdAt = 5), "c1", DocsProtocol.CATALOG_DOCUMENT_ID) +
             frameItems("\$c2", aCatalogEntry("c2", guide, "Guide", createdAt = 6), "c2", DocsProtocol.CATALOG_DOCUMENT_ID)
