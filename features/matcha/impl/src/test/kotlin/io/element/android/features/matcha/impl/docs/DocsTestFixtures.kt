@@ -34,18 +34,11 @@ import io.element.android.libraries.matrix.test.timeline.aTimelineItemDebugInfo
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.TestScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 const val ANCHOR = "\$create"
 const val BOB = "@bob:x"
-
-/** The store and sessions run in the background scope, which advanceUntilIdle() does not drive. */
-fun TestScope.settle(millis: Long = 1_000) {
-    testScheduler.advanceTimeBy(millis)
-    testScheduler.runCurrent()
-}
 
 private var itemCounter = 0
 
@@ -99,7 +92,7 @@ class DocsRoomFixture(
     sendStateResult: (String, String, String) -> Result<EventId> = { _, _, _ -> Result.success(EventId("\$state")) },
     enableEncryptionResult: () -> Result<Unit> = { Result.success(Unit) },
     /** The id of the room's `m.room.create` event in the room state, if the SDK has it. */
-    createEventId: String? = ANCHOR,
+    var createEventId: String? = ANCHOR,
     fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?, Int) -> Result<RawEventsPage> = { _, _, _, _ ->
         Result.success(RawEventsPage(emptyList(), null))
     },
@@ -115,10 +108,14 @@ class DocsRoomFixture(
         timelineItems = timelineItems,
         backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = hasMoreHistory)),
     ).apply { paginateLambda = { paginateResult() } }
+    private val stateEventsJson = { type: StateEventType -> Result.success(this.stateEvents[type]?.let { mapOf("" to it) }.orEmpty()) }
+
+    /** The room without a timeline, as [io.element.android.libraries.matrix.api.MatrixClient.getRoom] gives it. */
     val baseRoom = FakeBaseRoom(
         roomId = roomId,
         initialRoomInfo = roomInfo,
         roomPermissions = FakeRoomPermissions(canSendMessage = { canSend }, canSendState = { canSendState }),
+        getStateEventsJsonResult = stateEventsJson,
     )
     val room = FakeJoinedRoom(
         baseRoom = baseRoom,
@@ -130,13 +127,15 @@ class DocsRoomFixture(
         sendRawStateEventResult = { type, key, content ->
             sendStateResult(type, key, content).onSuccess { sentState += Triple(type, key, content) }
         },
-        getStateEventsJsonResult = { type -> Result.success(this.stateEvents[type]?.let { mapOf("" to it) }.orEmpty()) },
-        getStateEventIdResult = { type, key -> Result.success(createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId)) },
+        getStateEventsJsonResult = stateEventsJson,
+        getStateEventIdResult = { type, key ->
+            Result.success(this.createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId))
+        },
         enableEncryptionResult = enableEncryptionResult,
         fetchRelatedEventsJsonResult = fetchRelatedEventsJsonResult,
     )
 
-    fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))
+    fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, readsDocumentAnchor = true)
 
     fun session(
         scope: CoroutineScope,

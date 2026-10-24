@@ -14,18 +14,15 @@ import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.UniqueId
-import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.RawEventsPage
 import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
-import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
-import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.TimelineItemDebugInfoProvider
 import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
 import io.element.android.libraries.matrix.api.timeline.item.event.UtdCause
@@ -41,19 +38,12 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import kotlin.coroutines.CoroutineContext
 
 class MatchaRoomStoreTest {
-    /** The store runs in the background scope, which advanceUntilIdle() does not drive. */
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
-
-    private val boardRoot = "\$board"
+    private val boardRoot = A_BOARD_ROOT
     private val thread = "\$thread-1"
 
     private fun item(index: Int, json: String) = MatrixTimelineItem.Event(
@@ -64,21 +54,8 @@ class MatchaRoomStoreTest {
         ),
     )
 
-    private fun event(index: Int, type: String, content: String) =
-        item(index, """{"type": "$type", "event_id": "${'$'}e$index", "sender": "@bob:x", "origin_server_ts": $index, "content": $content}""")
-
-    private fun threadItem(id: String, body: String, content: EventContent = aMessageContent(body = body)) = ThreadListItem(
-        rootEvent = ThreadListItemEvent(
-            eventId = EventId(id),
-            senderId = UserId("@bob:x"),
-            senderProfile = ProfileDetails.Unavailable,
-            isOwn = false,
-            content = content,
-            timestamp = 10,
-        ),
-        latestEvent = null,
-        numberOfReplies = 3,
-    )
+    private fun threadItem(id: String, body: String, content: EventContent = aMessageContent(body = body)) =
+        aThreadListItem(id, body, content = content, numberOfReplies = 3)
 
     private fun aStore(
         items: List<MatrixTimelineItem>,
@@ -226,17 +203,9 @@ class MatchaRoomStoreTest {
         val (store, _) = aStore(
             scope = backgroundScope,
             items = listOf(
-                event(1, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("c-standalone", "Standalone", null), boardRoot)),
-                event(
-                    2,
-                    MatchaConfig.EVENT_KANBAN_CARD,
-                    KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Old title", thread), boardRoot)
-                ),
-                event(
-                    3,
-                    MatchaConfig.EVENT_THREAD_METADATA,
-                    """{"version": 1, "name": "Renamed", "m.relates_to": {"rel_type": "m.reference", "event_id": "$thread"}}"""
-                ),
+                aCardItem(1, "c-standalone", "Standalone"),
+                aCardItem(2, KanbanProtocol.threadCardId(thread), "Old title", TaskStatus.Doing, threadId = thread),
+                aThreadPatchItem(3, thread, name = "Renamed"),
             ),
             threads = listOf(threadItem(thread, "Original body")),
         )
@@ -392,7 +361,7 @@ class MatchaRoomStoreTest {
         settle()
         assertThat(stray.snapshot.value.board).isNull()
 
-        val card = aMatchaEventItem(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("c-1", "Card", null), boardRoot))
+        val card = aCardItem(2, "c-1", "Card")
         val withCards = aMatchaRoomStore(backgroundScope, items = listOf(strayRoot, card))
         settle()
         assertThat(withCards.snapshot.value.board?.rootId).isEqualTo(boardRoot)
@@ -403,9 +372,9 @@ class MatchaRoomStoreTest {
         val (store, _) = aStore(
             scope = backgroundScope,
             items = listOf(
-                event(1, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard("archived", "Named like a row", null), boardRoot)),
+                aCardItem(1, "archived", "Named like a row"),
                 // The newest revision of the thread's card no longer links it.
-                event(2, MatchaConfig.EVENT_KANBAN_CARD, KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Unlinked", null), boardRoot)),
+                aCardItem(2, KanbanProtocol.threadCardId(thread), "Unlinked"),
             ),
             threads = listOf(threadItem(thread, "Thread")),
         )

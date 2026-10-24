@@ -22,7 +22,7 @@ import io.element.android.features.matcha.impl.docs.aCatalogEntry
 import io.element.android.features.matcha.impl.docs.aCreateItem
 import io.element.android.features.matcha.impl.docs.aFrameItem
 import io.element.android.features.matcha.impl.docs.frameItems
-import io.element.android.features.matcha.impl.docs.settle
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.features.networkmonitor.test.FakeNetworkMonitor
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.featureflag.api.FeatureFlags
@@ -93,6 +93,21 @@ class NotesTabPresenterTest {
             loaded.eventSink(NotesTabEvent.OpenNote(design, plans))
             loaded.eventSink(NotesTabEvent.OpenNote(company, null))
             assertThat(opened).containsExactly(design to plans, company to null).inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `whether a space has notes is read from a room without a timeline, which is then let go`() = runTest {
+        val space = aNotesSpace(design)
+        // Only the room without a timeline is there to read.
+        val client = aClient(listOf(space)).apply {
+            givenGetRoomResult(design, null)
+            givenGetBaseRoomResult(design, space.baseRoom)
+        }
+        aTab(client).test {
+            assertThat(awaitUntil { it.sections().isNotEmpty() }.sections().single().content).isEqualTo(NotesSectionContent.Loading)
+            space.baseRoom.assertDestroyed()
             cancelAndIgnoreRemainingEvents()
         }
     }

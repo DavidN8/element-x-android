@@ -20,8 +20,8 @@ import io.element.android.features.matcha.impl.docs.aFrameItem
 import io.element.android.features.matcha.impl.docs.anItem
 import io.element.android.features.matcha.impl.docs.engine.YjsEngineException
 import io.element.android.features.matcha.impl.docs.frameItems
-import io.element.android.features.matcha.impl.docs.settle
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
@@ -115,6 +115,24 @@ class RoomDocumentSessionTest {
                 assertThat(fromRelations.state.value.text).isEqualTo("Hello again")
             }
         }
+    }
+
+    @Test
+    fun `a document waits for the anchor's relations, even when the store loaded before the room state held the anchor`() = runTest {
+        val frame = frameJson("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single(), isEncrypted = false)
+        val fixture = DocsRoomFixture(
+            listOf(aCreateItem()),
+            createEventId = null,
+            fetchRelatedEventsJsonResult = { eventId, _, _, _ -> Result.success(RawEventsPage(listOfNotNull(frame.takeIf { eventId.value == ANCHOR }), null)) },
+        )
+        val store = fixture.store(backgroundScope)
+        settle()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        fixture.createEventId = ANCHOR
+        val session = fixture.session(backgroundScope, store)
+        settle()
+        assertThat(session.state.value.isReady).isTrue()
+        assertThat(session.state.value.text).isEqualTo("Hello")
     }
 
     @Test

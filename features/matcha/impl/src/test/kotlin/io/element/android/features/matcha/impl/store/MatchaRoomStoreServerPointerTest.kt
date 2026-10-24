@@ -22,12 +22,6 @@ class MatchaRoomStoreServerPointerTest {
     /** More history than the store reads up front, so only the homeserver can settle whether the room has a board. */
     private val longHistory = List(MatchaRoomStore.INITIAL_HISTORY_PAGES + 5) { emptyList<MatrixTimelineItem>() }
 
-    /** The store runs in the background scope, which advanceUntilIdle() does not drive. */
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
-
     private fun TestScope.aStore(serverPointerResult: () -> Result<String?>): MatchaRoomStore {
         val room = aMatchaJoinedRoom(roomCoroutineScope = backgroundScope, olderPages = longHistory, serverPointerResult = serverPointerResult)
         return MatchaRoomStore(room, backgroundScope)

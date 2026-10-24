@@ -264,14 +264,16 @@ class RoomDocumentSession(
     }
 
     /**
-     * Waits until the store holds every frame it can read. Frames relate to the anchor, whose relations the store reads in full when
-     * it opens; this SDK's timelines drop custom events, so older history would only add undecryptable copies of frames the relations
-     * hold too. Without the SDK's relations, or after a failed read, the store shows a warning and the whole history is read instead.
+     * Waits until the store holds every frame it can read. Frames relate to the anchor, whose relations the store reads in full; this
+     * SDK's timelines drop custom events, so older history would only add undecryptable copies of frames the relations hold too.
+     * Without the SDK's relations, or when the store warns that some events are unreadable or a read failed, the whole history is read
+     * instead.
      */
     private suspend fun awaitFrames() {
         // Bounded: a failed read cleared by a later one leaves the store unloaded without a warning.
-        withTimeoutOrNull(STORE_READ_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed || it.warning != null } }
-        store.loadHistoryUntil { it.isLoaded && it.warning == null }.getOrElse { throw DocumentException(DocumentError.LoadError, it) }
+        withTimeoutOrNull(STORE_READ_TIMEOUT) { store.awaitRelations() }
+        store.loadHistoryUntil { !store.relationsUnavailable.value && it.isLoaded && it.warning == null }
+            .getOrElse { throw DocumentException(DocumentError.LoadError, it) }
     }
 
     private suspend fun onEvents(events: List<RawEvent>) {

@@ -17,8 +17,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.SingleIn
+import io.element.android.features.matcha.impl.protocol.toJsonObjectOrNull
 import io.element.android.libraries.core.coroutine.CoroutineDispatchers
-import io.element.android.libraries.core.data.tryOrNull
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.di.annotations.ApplicationContext
@@ -29,7 +29,6 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -38,7 +37,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
 import java.io.ByteArrayInputStream
@@ -226,7 +224,7 @@ class DefaultYjsEngine(
                 responses.remove(id)
                 requests.remove(id)
             }
-            val json = tryOrNull { Json.parseToJsonElement(raw).jsonObject } ?: throw YjsEngineException("Malformed answer to $operation")
+            val json = raw.toJsonObjectOrNull() ?: throw YjsEngineException("Malformed answer to $operation")
             // The page's error message may quote its input, which can be document text: it is never logged.
             if (json.containsKey("error")) throw YjsEngineException("$operation failed")
             return json["result"] as? JsonObject ?: throw YjsEngineException("No result for $operation")

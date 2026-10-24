@@ -18,9 +18,10 @@ import io.element.android.features.matcha.api.MatchaChatBarSelection
 import io.element.android.features.matcha.impl.R
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.MatchaWarning
-import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
+import io.element.android.features.matcha.impl.store.aThreadPatchItem
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.features.matcha.impl.tasks.TaskEditorEvent
 import io.element.android.features.matcha.impl.tasks.aTaskEditorPresenterFactory
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
@@ -42,12 +43,6 @@ import org.junit.Test
 
 class ChatBarPresenterTest {
     private val boardRoot = "\$board"
-
-    /** Runs work launched in the room scope, which is the test's background scope. */
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
 
     @Test
     fun `nothing is shown when the feature is off`() = runTest {
@@ -82,7 +77,7 @@ class ChatBarPresenterTest {
                 aThreadListItem("\$t5", timestamp = 5),
                 aThreadListItem("\$t6", timestamp = 6),
             ),
-            items = listOf(archivePatch(1, "\$t6")),
+            items = listOf(aThreadPatchItem(1, "\$t6", archived = true)),
         )
         aPresenter(store).test {
             val state = awaitUntil { it.threads.isNotEmpty() }
@@ -98,7 +93,7 @@ class ChatBarPresenterTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
             threads = listOf(aThreadListItem("\$t1"), aThreadListItem("\$old", timestamp = 1)),
-            items = listOf(archivePatch(1, "\$old")),
+            items = listOf(aThreadPatchItem(1, "\$old", archived = true)),
         )
         aPresenter(store, selection = MatchaChatBarSelection.Thread(ThreadId("\$old"))).test {
             val state = awaitUntil { it.threads.size == 2 }
@@ -312,7 +307,7 @@ class ChatBarPresenterTest {
         val named = aMatchaRoomStore(
             scope = backgroundScope,
             threads = listOf(aThreadListItem("\$t1")),
-            items = listOf(namePatch(1, "\$t1", "Launch plan")),
+            items = listOf(aThreadPatchItem(1, "\$t1", name = "Launch plan")),
         )
         aPresenter(named).test {
             assertThat(awaitUntil { it.threads.isNotEmpty() }.showBar).isTrue()
@@ -425,18 +420,6 @@ class ChatBarPresenterTest {
             assertThat(actions.calls).containsExactly("task \$t2")
         }
     }
-
-    private fun namePatch(index: Int, threadId: String, name: String) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_THREAD_METADATA,
-        """{"version": 1, "name": "$name", "m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
-    )
-
-    private fun archivePatch(index: Int, threadId: String) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_THREAD_METADATA,
-        """{"version": 1, "archived": true, "m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
-    )
 
     private fun TestScope.aPresenter(
         store: MatchaRoomStore,
