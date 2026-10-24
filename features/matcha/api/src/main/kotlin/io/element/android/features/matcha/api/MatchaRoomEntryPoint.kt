@@ -27,9 +27,6 @@ interface MatchaRoomEntryPoint : FeatureEntryPoint {
         /** The board's chip bar asked for the main chat. */
         fun openGeneral()
 
-        /** The board's chip bar asked for the list of all threads. */
-        fun openAllThreads()
-
         /** The board's chip bar asked for the space documents, when the chat has a space. */
         fun openSpaceDocs()
 

@@ -345,12 +345,6 @@ interface JoinedRoom : BaseRoom {
     suspend fun sendRawStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId>
 
     /**
-     * Returns the locally stored state events of a type as raw JSON content, keyed by state key.
-     * Custom state types are only stored when the sync requested them, so an empty result does not prove there is none.
-     */
-    suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>>
-
-    /**
      * Returns the id of the locally stored state event of a type and state key, or null when none is stored.
      * The room's `m.room.create` event is always stored for a joined room.
      */
@@ -363,13 +357,6 @@ interface JoinedRoom : BaseRoom {
      * Fails when the Rust SDK in use doesn't offer it (it needs the Matcha SDK patch).
      */
     suspend fun fetchRelatedEventsJson(eventId: EventId, relation: RawRelationType, from: String?, limit: Int): Result<RawEventsPage>
-
-    /**
-     * Fetches the content of one state event from the homeserver as raw JSON, or null when the room has no such state. Unlike
-     * [getStateEventsJson], this reads custom state types that the sync doesn't store. Fails with [UnsupportedOperationException]
-     * when the Rust SDK in use doesn't offer it (it needs the Matcha SDK patch).
-     */
-    suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?>
 
     /**
      * New message-like events of the given types as they arrive in this room, decrypted, as raw event JSON with `type`,

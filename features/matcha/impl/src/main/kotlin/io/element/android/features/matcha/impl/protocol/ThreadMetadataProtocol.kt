@@ -44,6 +44,8 @@ data class ThreadMetadata(
  * Patches are encrypted timeline events related to the thread root; room state and redactions are never used.
  */
 object ThreadMetadataProtocol {
+    private val WHITESPACE = Regex("\\s+")
+
     fun isValidName(value: String?): Boolean = value != null && value.trim().length in 1..MatchaConfig.THREAD_NAME_MAX_LENGTH
 
     /** Reads a patch for [rootId], or null when [event] is not a valid patch for that thread. */
@@ -87,7 +89,7 @@ object ThreadMetadataProtocol {
     }
 
     fun fallbackName(rootBody: String?, rootId: String): String {
-        val collapsed = rootBody?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+        val collapsed = rootBody?.replace(WHITESPACE, " ")?.trim().orEmpty()
         return if (collapsed.isEmpty()) rootId else collapsed.take(MatchaConfig.THREAD_NAME_MAX_LENGTH)
     }
 

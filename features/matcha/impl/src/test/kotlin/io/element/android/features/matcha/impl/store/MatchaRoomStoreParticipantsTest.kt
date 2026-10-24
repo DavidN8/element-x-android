@@ -99,17 +99,21 @@ class MatchaRoomStoreParticipantsTest {
     }
 
     @Test
-    fun `a thread's replies are read again when it gets more, without holding up the board`() = runTest {
+    fun `a thread's replies are read again when it gets more, only the new ones, without holding up the board`() = runTest {
         val threads = MutableStateFlow(listOf(aThreadListItem(thread)))
         var replies = listOf(reply(1, "@erin:x"))
         var reads = 0
+        val limits = mutableListOf<Int>()
         val store = MatchaRoomStore(
             FakeJoinedRoom(
                 baseRoom = FakeBaseRoom(),
                 threadsListService = FakeThreadsListService(items = threads, paginationStatus = MutableStateFlow(ThreadListPaginationStatus.Idle(false))),
                 createTimelineResult = { Result.success(aMatchaTimeline()) },
-                fetchRelatedEventsJsonResult = { _, relation, _ ->
-                    if (relation == RawRelationType.Thread) reads++
+                fetchRelatedEventsJsonResult = { _, relation, _, limit ->
+                    if (relation == RawRelationType.Thread) {
+                        reads++
+                        limits += limit
+                    }
                     Result.success(RawEventsPage(if (relation == RawRelationType.Thread) replies else emptyList(), null))
                 },
             ),
@@ -126,11 +130,19 @@ class MatchaRoomStoreParticipantsTest {
         assertThat(reads).isEqualTo(2)
         assertThat(store.snapshot.value.isLoaded).isTrue()
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@gina:x", "@erin:x", me)
+        // The first read takes a full page; the next only the two replies counted since, added to what was read.
+        assertThat(limits).containsExactly(100, 2).inOrder()
 
         // The same count isn't read again.
         threads.value = listOf(aThreadListItem(thread, timestamp = 11).withLatestReply(sender = "@gina:x", count = 3))
         settle()
         assertThat(reads).isEqualTo(2)
+
+        // A redaction lowers the count; the newest reply is still read.
+        threads.value = listOf(aThreadListItem(thread, timestamp = 12).withLatestReply(sender = "@gina:x", count = 2))
+        settle()
+        assertThat(limits).containsExactly(100, 2, 1).inOrder()
+        assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@gina:x", "@erin:x", me)
     }
 
     @Test

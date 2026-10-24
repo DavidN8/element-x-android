@@ -600,12 +600,6 @@ class JoinedRustRoom(
         }
     }
 
-    override suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>> = withContext(roomDispatcher) {
-        runCatchingExceptions {
-            innerRoom.stateEvents(eventType.map()).associate { it.stateKey to it.contentJson }
-        }
-    }
-
     override suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?> = withContext(roomDispatcher) {
         runCatchingExceptions {
             innerRoom.stateEvents(eventType.map()).firstOrNull { it.stateKey == stateKey }?.eventId?.let(::EventId)
@@ -620,12 +614,6 @@ class JoinedRustRoom(
     ): Result<RawEventsPage> = withContext(roomDispatcher) {
         runCatchingExceptions {
             innerRoom.fetchRelatedEventsJson(eventId.value, relation, from, limit)
-        }
-    }
-
-    override suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?> = withContext(roomDispatcher) {
-        runCatchingExceptions {
-            innerRoom.fetchServerStateContentJson(eventType, stateKey)
         }
     }
 

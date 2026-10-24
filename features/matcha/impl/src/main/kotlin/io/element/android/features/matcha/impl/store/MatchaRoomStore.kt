@@ -8,7 +8,6 @@
 package io.element.android.features.matcha.impl.store
 
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
 import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
@@ -19,10 +18,9 @@ import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.protocol.booleanOrNull
-import io.element.android.features.matcha.impl.protocol.objectOrNull
 import io.element.android.features.matcha.impl.protocol.referenceTarget
-import io.element.android.features.matcha.impl.protocol.stringOrNull
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.features.matcha.impl.protocol.relationTarget
+import io.element.android.features.matcha.impl.protocol.toJsonObjectOrNull
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UniqueId
@@ -41,15 +39,18 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EventTimeline
 import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
 import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
 import io.element.android.libraries.matrix.api.timeline.item.event.UtdCause
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -60,10 +61,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -108,7 +109,16 @@ data class MatchaPermissions(
     val canWriteCards: Boolean = false,
     val canCreateBoard: Boolean = false,
     val canInvite: Boolean = false,
-)
+) {
+    /** A new thread is a message and its name. */
+    val canCreateThreads: Boolean get() = canManageThreads && canSendMessages
+
+    /** Adding a task also creates its thread. */
+    val canAddTasks: Boolean get() = canWriteCards && canCreateThreads
+
+    /** Archiving and restoring a thread's task also changes the thread. */
+    fun canArchive(threadId: ThreadId?): Boolean = canWriteCards && (threadId == null || canManageThreads)
+}
 
 /** Why some of a room's Matcha data may be missing or out of date: one line for the user, the plan's merged warning. */
 enum class MatchaWarning {
@@ -170,8 +180,12 @@ class MatchaRoomStore(
     private val extraEventTypes: Set<String> = emptySet(),
     /** The board pointer the homeserver already returned to the caller, so the store starts from it instead of asking again. */
     knownServerPointer: String? = null,
+    /**
+     * Where related events are parsed and snapshots are built, off the scope's (main) thread; null does it all on [coroutineScope]'s
+     * dispatcher.
+     */
+    private val computation: CoroutineDispatcher? = null,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
     private val scanEvents = MutableStateFlow<List<RawEvent>>(emptyList())
 
@@ -187,6 +201,9 @@ class MatchaRoomStore(
 
     /** The reply count each thread had when its replies were last requested, by thread root id. */
     private val repliesRequestedAt = HashMap<String, Long>()
+
+    /** The highest reply count each thread had when a read of its replies succeeded, by thread root id; guarded like [repliesRequestedAt]. */
+    private val repliesReadAt = HashMap<String, Long>()
     private val relationsUnavailable = MutableStateFlow(false)
     private val requestedAnchors = HashSet<String>()
     private val anchorPermits = Semaphore(MAX_CONCURRENT_ANCHORS)
@@ -335,6 +352,8 @@ class MatchaRoomStore(
         ) { events, threadData, state, perms, status ->
             buildSnapshot(events, threadData, state, perms, status)
         }
+            // Only the latest snapshot matters, so a burst of changes is built once.
+            .let { snapshots -> computation?.let { snapshots.conflate().flowOn(it) } ?: snapshots }
             .distinctUntilChanged()
             .onEach { snapshot ->
                 _snapshot.value = snapshot
@@ -367,7 +386,8 @@ class MatchaRoomStore(
     /**
      * Reads the newest page of each thread's replies: their senders are the thread's participants, and the hidden bootstrap reply
      * among them makes [MatchaThread.hasHiddenFirstReply]. A thread is read again whenever its reply count changes, so new repliers
-     * are seen; only its first read holds up [MatchaRoomSnapshot.isLoaded].
+     * are seen; only its first read holds up [MatchaRoomSnapshot.isLoaded]. What is read is added to what was read before, so once a
+     * read has succeeded, the next one only asks for the replies counted since.
      *
      * ponytail: one request per thread and per change of its reply count, of the newest [RELATIONS_PAGE_SIZE] replies; a longer
      * thread may count its hidden reply as a visible one, and misses repliers further back.
@@ -380,17 +400,21 @@ class MatchaRoomStore(
                 // A listed thread without replies has none to read; a card's thread that isn't listed yet may have some.
                 .filter { it.numberOfReplies > 0 || it.rootSenderId == null }
                 .mapNotNull { thread ->
-                    val previous = repliesRequestedAt.put(thread.id.value, thread.numberOfReplies)
-                    (thread.id.value to (previous == null)).takeIf { previous != thread.numberOfReplies }
+                    val count = thread.numberOfReplies
+                    val previous = repliesRequestedAt.put(thread.id.value, count)
+                    // A count that went down (a redaction) still reads the newest reply.
+                    val limit = repliesReadAt[thread.id.value]?.let { (count - it).coerceIn(1, RELATIONS_PAGE_SIZE.toLong()).toInt() } ?: RELATIONS_PAGE_SIZE
+                    ThreadRepliesRead(thread.id.value, count, limit, isFirstRead = previous == null).takeIf { previous != count }
                 }
         }
-        for ((threadId, isFirstRead) in fresh) {
+        for ((threadId, count, limit, isFirstRead) in fresh) {
             val read = suspend {
-                room.fetchRelatedEventsJson(EventId(threadId), RawRelationType.Thread, null, RELATIONS_PAGE_SIZE)
+                room.fetchRelatedEventsJson(EventId(threadId), RawRelationType.Thread, null, limit)
                     .map { page -> page.events.mapNotNull { RawEvent.parse(it) } }
             }
             val key = "$threadId$THREAD_KEY_SUFFIX"
             launchRelationsRead(key, isFirstRead, read) { replies ->
+                synchronized(repliesRequestedAt) { repliesReadAt.merge(threadId, count, ::maxOf) }
                 val repliers = TaskParticipants.repliers(replies)[threadId].orEmpty()
                 threadRepliers.update { it + (threadId to it[threadId].orEmpty() + repliers) }
                 // Only the hidden bootstrap replies are kept with the Matcha events. A later read adds to the earlier ones: once a thread
@@ -406,7 +430,7 @@ class MatchaRoomStore(
         if (isFirstRead) anchorsLoading.update { it + key }
         coroutineScope.launch {
             try {
-                anchorPermits.withPermit { read() }
+                anchorPermits.withPermit { withContext(computation ?: EmptyCoroutineContext) { read() } }
                     .onSuccess(onRead)
                     .onFailure { error ->
                         if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
@@ -436,6 +460,8 @@ class MatchaRoomStore(
         Timber.w("Stopped reading the events related to a Matcha anchor after %d pages", MAX_RELATION_PAGES)
         return Result.success(events)
     }
+
+    private data class ThreadRepliesRead(val threadId: String, val count: Long, val limit: Int, val isFirstRead: Boolean)
 
     /** The thread list, the repliers read from each thread, and the members of a direct chat. */
     private data class ThreadData(
@@ -492,15 +518,11 @@ class MatchaRoomStore(
     private suspend fun readStoredState(): Result<String?> {
         val pointerRead = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_KANBAN))
             .onFailure { Timber.w(it, "Could not read the board pointer") }
-            .map { states ->
-                states[""]
-                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-                    ?.let(KanbanProtocol::parseBoardPointer)
-            }
+            .map { states -> KanbanProtocol.parseBoardPointerJson(states[""]) }
         val legacy = room.getStateEventsJson(StateEventType.Custom(MatchaConfig.STATE_THREAD_ARCHIVE)).getOrNull()
             .orEmpty()
             .mapNotNull { (key, content) ->
-                val archived = runCatchingExceptions { json.parseToJsonElement(content).jsonObject }.getOrNull()?.booleanOrNull("archived")
+                val archived = content.toJsonObjectOrNull()?.booleanOrNull("archived")
                 archived?.let { key to it }
             }
             .toMap()
@@ -542,11 +564,7 @@ class MatchaRoomStore(
         if (read.exceptionOrNull() is UnsupportedOperationException) return null
         return read
             .onFailure { Timber.w(it, "Could not fetch the board pointer from the homeserver") }
-            .map { content ->
-                content
-                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
-                    ?.let(KanbanProtocol::parseBoardPointer)
-            }
+            .map(KanbanProtocol::parseBoardPointerJson)
     }
 
     private fun merge(scan: List<RawEvent>, optimistic: List<RawEvent>): List<RawEvent> {
@@ -721,7 +739,7 @@ class MatchaRoomStore(
         room.sendRawEvent(eventType, contentJson).onSuccess { eventId ->
             // Only the Matcha types come back through the filtered timeline, so an echo of any other type would never be replaced.
             if (eventType !in MatchaConfig.MESSAGE_LIKE_EVENT_TYPES) return@onSuccess
-            val content = runCatchingExceptions { json.parseToJsonElement(contentJson).jsonObject }.getOrNull() ?: return@onSuccess
+            val content = contentJson.toJsonObjectOrNull() ?: return@onSuccess
             val echo = RawEvent(
                 type = eventType,
                 content = content,
@@ -739,7 +757,7 @@ class MatchaRoomStore(
     suspend fun sendState(eventType: String, stateKey: String, contentJson: String): Result<EventId> = writeMutex.withLock {
         room.sendRawStateEvent(eventType, stateKey, contentJson).onSuccess {
             // The Tasks tab may remember that this chat had no board; it has one now.
-            if (eventType == MatchaConfig.STATE_KANBAN) NoBoardAnswers.forget(room.sessionId, room.roomId)
+            if (eventType == MatchaConfig.STATE_KANBAN) NoBoardAnswers.pointed(room.sessionId, room.roomId)
             readStoredState()
         }
     }
@@ -747,12 +765,6 @@ class MatchaRoomStore(
     /** Shows the board this client created until its pointer is read back from the room. */
     fun rememberCreatedBoard(rootId: String) {
         storedState.update { it.copy(createdBoardRoot = rootId) }
-    }
-
-    /** The newest card revision currently known for [cardId], for read-modify-write edits. */
-    fun latestRevision(cardId: String): CardRevision? {
-        val root = _snapshot.value.board?.rootId ?: return null
-        return _snapshot.value.events.firstNotNullOfOrNull { event -> KanbanProtocol.parseCard(event, root)?.takeIf { it.cardId == cardId } }
     }
 
     companion object {
@@ -783,8 +795,4 @@ private fun warningFor(cause: UtdCause?): MatchaWarning = when (cause) {
 }
 
 /** The thread root of a hidden first reply sent when a named thread is created, or null for any other event. */
-private fun RawEvent.bootstrapRootId(): String? {
-    if (type != MatchaConfig.EVENT_THREAD_METADATA) return null
-    val relation = content.objectOrNull("m.relates_to") ?: return null
-    return relation.stringOrNull("event_id")?.takeIf { relation.stringOrNull("rel_type") == REL_TYPE_THREAD }
-}
+private fun RawEvent.bootstrapRootId(): String? = content.takeIf { type == MatchaConfig.EVENT_THREAD_METADATA }?.relationTarget(REL_TYPE_THREAD)

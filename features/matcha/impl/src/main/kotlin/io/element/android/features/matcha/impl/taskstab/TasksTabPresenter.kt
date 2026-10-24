@@ -54,11 +54,12 @@ import kotlin.time.Clock
  * The Tasks tab: the user's tasks from every joined chat with a board, narrowed by status, chat and person, grouped by deadline or in
  * a table, and the sheets that act on them. Like the web client's personal board, it only holds the tasks that involve the user:
  * their threads and the tasks of their direct chats. A task is changed through its chat's own store, which the tab holds while it
- * is shown, so no chat has to be opened.
+ * is shown (see [TasksTabRooms]), so no chat has to be opened.
  */
 @Inject
-class TasksTabPresenter(
+class TasksTabPresenter internal constructor(
     private val client: MatrixClient,
+    private val rooms: TasksTabRooms,
     private val featureFlagService: FeatureFlagService,
     private val appNavigationStateService: AppNavigationStateService,
     private val snackbarDispatcher: SnackbarDispatcher,
@@ -83,9 +84,8 @@ class TasksTabPresenter(
     @Composable
     fun present(onOpenRoom: (RoomId) -> Unit, onOpenThread: (RoomId, ThreadId) -> Unit): TasksTabState {
         val isEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
-        val rooms = remember { TasksTabRooms(client) }
         if (isEnabled) {
-            // Leaving the tab cancels this, which destroys every room the tab opened.
+            // Leaving the tab cancels this; the rooms the tab opened stay open for a while, in case it comes back.
             LaunchedEffect(Unit) { rooms.run() }
         }
         val chats by rooms.chats.collectAsState(initial = TabChats())
@@ -106,7 +106,8 @@ class TasksTabPresenter(
         val openThreadId = navigation.navigationState.currentThreadId()
         val me = client.sessionId.value
         val names = rememberPeopleNames(chats, me).toMap()
-        val tasks = remember(chats, names, openRoomId, openThreadId) { chats.toTabTasks(me, names, openRoomId, openThreadId) }
+        // Keyed on the boards alone: the counts of chats still being checked change far more often.
+        val tasks = remember(chats.boards, names, openRoomId, openThreadId) { chats.boards.toTabTasks(me, names, openRoomId, openThreadId) }
         val people = remember(tasks) { tasks.people(me, names) }
         val boards = chats.boards.associateBy { it.roomId }
         // A chosen chat that the user has left, or a person no task involves any more, no longer narrows the list.
@@ -187,7 +188,7 @@ class TasksTabPresenter(
                 is TasksTabEvent.SetArchived -> {
                     sheetTarget = null
                     val task = find(event.roomId, event.taskId)?.task ?: return
-                    val board = boards[event.roomId]?.takeIf { it.snapshot.permissions.canArchive(task) } ?: return
+                    val board = boards[event.roomId]?.takeIf { it.snapshot.permissions.canArchive(task.threadId) } ?: return
                     board.listActions().setArchived(event.taskId, event.archived)
                 }
                 is TasksTabEvent.EditTask -> {
@@ -227,7 +228,7 @@ class TasksTabPresenter(
             SheetTarget.ChoosePerson -> TasksTabSheet.ChoosePerson(people.toImmutableList(), selectedUserId = personFilter?.userId)
             is SheetTarget.Actions -> find(target.roomId, target.taskId)?.let { task ->
                 val permissions = boards[target.roomId]?.snapshot?.permissions ?: MatchaPermissions()
-                TasksTabSheet.Actions(task = task, canEdit = permissions.canWriteCards, canArchive = permissions.canArchive(task.task))
+                TasksTabSheet.Actions(task = task, canEdit = permissions.canWriteCards, canArchive = permissions.canArchive(task.task.threadId))
             }
         }
 
@@ -253,23 +254,21 @@ class TasksTabPresenter(
     private fun TabChat.listActions() = TaskListActions(room.store, snackbarDispatcher, room.writeScope)
 
     /** Every task of every chat that involves the user [me], soonest deadline first (none last), then newest. */
-    private fun TabChats.toTabTasks(me: String, names: Map<String, String>, openRoomId: RoomId?, openThreadId: ThreadId?): List<TabTask> {
+    private fun List<TabChat>.toTabTasks(me: String, names: Map<String, String>, openRoomId: RoomId?, openThreadId: ThreadId?): List<TabTask> {
         val nowMillis = clock.now().toEpochMilliseconds()
-        return boards
-            .flatMap { board ->
-                val chat = board.toTasksTabChat()
-                val rootTimestamps = board.snapshot.threads.associate { it.id to it.rootTimestamp }
-                board.snapshot.toTaskItems(deadlineFormatter, nowMillis) { me in it.participants }.map { task ->
-                    TabTask(
-                        chat = chat,
-                        task = task,
-                        createdAt = task.threadId?.let(rootTimestamps::get) ?: 0,
-                        isSelected = board.roomId == openRoomId && task.threadId != null && task.threadId == openThreadId,
-                        people = (task.participants - me).map { names[it] ?: it }.toImmutableList(),
-                    )
-                }
+        return flatMap { board ->
+            val chat = board.toTasksTabChat()
+            val rootTimestamps = board.snapshot.threads.associate { it.id to it.rootTimestamp }
+            board.snapshot.toTaskItems(deadlineFormatter, nowMillis) { me in it.participants }.map { task ->
+                TabTask(
+                    chat = chat,
+                    task = task,
+                    createdAt = task.threadId?.let(rootTimestamps::get) ?: 0,
+                    isSelected = board.roomId == openRoomId && task.threadId != null && task.threadId == openThreadId,
+                    people = (task.participants - me).map { names[it] ?: it }.toImmutableList(),
+                )
             }
-            .sortedWith(compareBy<TabTask> { it.task.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.createdAt })
+        }.sortedWith(compareBy<TabTask> { it.task.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.createdAt })
     }
 
     /** The table's rows: the active tasks of the chosen status (any with All), or the archived ones. */
@@ -385,14 +384,7 @@ private fun TasksTabFilter.newTaskStatus() = when (this) {
 /** The chat's store is still reading; one whose read failed offers "Load older tasks" instead of checking forever. */
 private fun TabChat.isLoading() = !snapshot.isLoaded && !snapshot.loadFailed && snapshot.warning != MatchaWarning.Network
 
-/** Adding a task also creates its thread. */
-private fun TabChat.canAddTasks(): Boolean {
-    val permissions = snapshot.permissions
-    return snapshot.board != null && permissions.canWriteCards && permissions.canManageThreads && permissions.canSendMessages
-}
-
-/** Archiving and restoring a thread's task also changes the thread. */
-private fun MatchaPermissions.canArchive(task: TaskItem) = canWriteCards && (task.threadId == null || canManageThreads)
+private fun TabChat.canAddTasks(): Boolean = snapshot.board != null && snapshot.permissions.canAddTasks
 
 private fun TabChat.toTasksTabChat() = TasksTabChat(
     roomId = roomId,

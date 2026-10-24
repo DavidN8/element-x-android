@@ -100,7 +100,7 @@ class FakeJoinedRoom(
     private val sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> lambdaError() },
     private val getStateEventsJsonResult: (StateEventType) -> Result<Map<String, String>> = { Result.success(emptyMap()) },
     private val getStateEventIdResult: (StateEventType, String) -> Result<EventId?> = { _, _ -> Result.success(null) },
-    private val fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?) -> Result<RawEventsPage> = { _, _, _ ->
+    private val fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?, Int) -> Result<RawEventsPage> = { _, _, _, _ ->
         Result.success(RawEventsPage(emptyList(), null))
     },
     private val rawMessageLikeEvents: Flow<String> = MutableSharedFlow(),
@@ -292,7 +292,7 @@ class FakeJoinedRoom(
     }
 
     override suspend fun fetchRelatedEventsJson(eventId: EventId, relation: RawRelationType, from: String?, limit: Int): Result<RawEventsPage> {
-        return fetchRelatedEventsJsonResult(eventId, relation, from)
+        return fetchRelatedEventsJsonResult(eventId, relation, from, limit)
     }
 
     override suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?> {

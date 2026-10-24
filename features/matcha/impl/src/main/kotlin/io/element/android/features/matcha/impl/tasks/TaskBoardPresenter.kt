@@ -236,8 +236,7 @@ class TaskBoardPresenter(
                     isLoading = !snapshot.isLoaded && tasks.isEmpty(),
                     canEdit = permissions.canWriteCards,
                     canManageThreads = permissions.canManageThreads,
-                    // Adding a task also creates its thread.
-                    canAdd = permissions.canWriteCards && permissions.canManageThreads && permissions.canSendMessages,
+                    canAdd = permissions.canAddTasks,
                     canRemind = canRemind,
                     isUnreadable = snapshot.unreadable,
                     hasMore = snapshot.hasMoreHistory,

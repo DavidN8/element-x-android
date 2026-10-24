@@ -84,12 +84,12 @@ class ChatBarPresenter(
 
         val permissions = snapshot.permissions
         val canManage = permissions.canManageThreads
-        val canCreate = canManage && permissions.canSendMessages
+        val canCreate = permissions.canCreateThreads
         val canRemind = rememberCanRemind(room, permissions.canSendMessages)
         val threads = chipThreads(snapshot, selection, createdNames)
         val request by controller.requests.collectAsState()
 
-        val canAddTask = permissions.canWriteCards && canCreate
+        val canAddTask = permissions.canAddTasks
         LaunchedEffect(request, isEnabled) {
             val current = request ?: return@LaunchedEffect
             if (!isEnabled) return@LaunchedEffect

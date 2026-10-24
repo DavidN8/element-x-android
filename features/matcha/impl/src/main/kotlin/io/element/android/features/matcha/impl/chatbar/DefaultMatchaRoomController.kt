@@ -55,7 +55,7 @@ class DefaultMatchaRoomController(
 
     // The chip bar's New thread rule, so ⋮ never offers a sheet that wouldn't open.
     override val canCreateThread: StateFlow<Boolean> = store.snapshot
-        .map { it.permissions.canManageThreads && it.permissions.canSendMessages }
+        .map { it.permissions.canCreateThreads }
         .distinctUntilChanged()
         .stateIn(coroutineScope, SharingStarted.Eagerly, false)
 

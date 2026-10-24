@@ -10,6 +10,7 @@ package io.element.android.features.matcha.impl.tasks
 import androidx.compose.runtime.Immutable
 import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.store.MatchaPermissions
 import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import kotlinx.collections.immutable.ImmutableList
@@ -74,7 +75,6 @@ sealed interface TaskBoardContent {
             TaskStatus.Done -> done
         }
 
-        /** Archive and Unarchive also change a linked task's thread. */
-        fun canArchive(task: TaskItem) = canEdit && (task.threadId == null || canManageThreads)
+        fun canArchive(task: TaskItem) = MatchaPermissions(canWriteCards = canEdit, canManageThreads = canManageThreads).canArchive(task.threadId)
     }
 }

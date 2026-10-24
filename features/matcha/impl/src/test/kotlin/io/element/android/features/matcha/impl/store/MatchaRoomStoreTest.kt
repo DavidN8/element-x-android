@@ -37,10 +37,14 @@ import io.element.android.libraries.matrix.test.timeline.FakeTimeline
 import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import io.element.android.libraries.matrix.test.timeline.aTimelineItemDebugInfo
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
+import kotlin.coroutines.CoroutineContext
 
 class MatchaRoomStoreTest {
     /** The store runs in the background scope, which advanceUntilIdle() does not drive. */
@@ -86,6 +90,7 @@ class MatchaRoomStoreTest {
         threadReplies: Map<String, List<String>> = emptyMap(),
         liveEvents: kotlinx.coroutines.flow.Flow<String> = kotlinx.coroutines.flow.MutableSharedFlow(),
         scope: kotlinx.coroutines.CoroutineScope,
+        computation: CoroutineDispatcher? = null,
     ): Pair<MatchaRoomStore, MutableStateFlow<List<MatrixTimelineItem>>> {
         val timelineItems = MutableStateFlow(items)
         val timeline = FakeTimeline(
@@ -104,7 +109,7 @@ class MatchaRoomStoreTest {
                 createTimelineResult?.invoke() ?: Result.success(timeline)
             },
             sendRawEventResult = sendRawEventResult,
-            fetchRelatedEventsJsonResult = { eventId, relation, _ ->
+            fetchRelatedEventsJsonResult = { eventId, relation, _, _ ->
                 val related = if (relation == RawRelationType.Reference) references else threadReplies
                 Result.success(RawEventsPage(related[eventId.value].orEmpty(), null))
             },
@@ -113,7 +118,7 @@ class MatchaRoomStoreTest {
                 if (type == StateEventType.Custom(MatchaConfig.STATE_KANBAN)) boardPointerResult() else Result.success(emptyMap())
             },
         )
-        val store = MatchaRoomStore(room, scope)
+        val store = MatchaRoomStore(room, scope, computation = computation)
         return store to timelineItems
     }
 
@@ -149,6 +154,41 @@ class MatchaRoomStoreTest {
         live.emit(rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(thread, archived = true)))
         settle()
         assertThat(store.snapshot.value.threads.single().metadata.archived).isTrue()
+    }
+
+    @Test
+    fun `with a computation dispatcher, related events are read and snapshots built there, with the same result`() = runTest {
+        var dispatches = 0
+        val inner = StandardTestDispatcher(testScheduler)
+        val computation = object : CoroutineDispatcher() {
+            override fun dispatch(context: CoroutineContext, block: Runnable) {
+                dispatches++
+                inner.dispatch(context, block)
+            }
+        }
+        val (store, _) = aStore(
+            scope = backgroundScope,
+            computation = computation,
+            items = emptyList(),
+            threads = listOf(threadItem(thread, "Original body")),
+            references = mapOf(
+                boardRoot to listOf(
+                    rawJson(
+                        2,
+                        MatchaConfig.EVENT_KANBAN_CARD,
+                        KanbanProtocol.cardContent(aCard(KanbanProtocol.threadCardId(thread), "Card", thread), boardRoot)
+                    ),
+                ),
+                thread to listOf(
+                    rawJson(1, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(thread, name = "Renamed")),
+                ),
+            ),
+        )
+        settle()
+        assertThat(dispatches).isGreaterThan(0)
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        assertThat(store.snapshot.value.threads.single().metadata.name).isEqualTo("Renamed")
+        assertThat(store.snapshot.value.board?.cards?.single()?.status).isEqualTo(TaskStatus.Doing)
     }
 
     @Test
