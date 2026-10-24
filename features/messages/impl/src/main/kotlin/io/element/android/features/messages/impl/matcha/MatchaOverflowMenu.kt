@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -44,6 +45,7 @@ import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
  * The chat's top bar actions with the Matcha workspaces (WHATSAPP_DESIGN.md §3.3): All threads, the task board with its open count, and
@@ -85,7 +87,7 @@ internal fun RowScope.MatchaMenuActions(
             onClick = onTasksClick,
             modifier = Modifier.semantics { contentDescription = tasksDescription },
         ) {
-            Icon(imageVector = CompoundIcons.CheckCircle(), contentDescription = null)
+            Icon(imageVector = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_board), contentDescription = null)
         }
         // The Chats tab's green count badge, drawn outside the button: its round clip would cut a count of 10 or more.
         if (openTaskCount > 0) {
@@ -177,7 +179,9 @@ fun MatchaOverflowMenu(
                 MatchaMenuItem(CommonStrings.action_matcha_remind_me, CompoundIcons.Notifications()) { select(onRemindMeClick) }
             }
             if (canOpenSpaceDocs) {
-                MatchaMenuItem(CommonStrings.common_matcha_space_docs, CompoundIcons.Document()) { select(onSpaceDocsClick) }
+                MatchaMenuItem(CommonStrings.common_matcha_space_docs, ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes)) {
+                    select(onSpaceDocsClick)
+                }
             }
         }
     }

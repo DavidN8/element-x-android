@@ -41,7 +41,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -79,6 +81,7 @@ import io.element.android.libraries.designsystem.utils.snackbar.rememberSnackbar
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.launch
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /** Boards at least this wide show the three statuses side by side. */
 private val WIDE_BOARD_MIN_WIDTH = 600.dp
@@ -174,7 +177,7 @@ private fun TaskBoardView(
                         onAction = { eventSink(TaskBoardEvent.RetryLoad) },
                     )
                     is TaskBoardContent.Setup -> BoardMessage(
-                        icon = BigIcon.Style.Default(CompoundIcons.CheckCircle()),
+                        icon = BigIcon.Style.Default(ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_board)),
                         title = stringResource(R.string.screen_matcha_tasks_setup_title),
                         body = stringResource(
                             if (content.canCreate) R.string.screen_matcha_tasks_setup_body else R.string.screen_matcha_tasks_setup_no_permission

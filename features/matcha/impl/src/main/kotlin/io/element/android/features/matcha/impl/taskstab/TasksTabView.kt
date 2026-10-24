@@ -41,9 +41,11 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.collapse
 import androidx.compose.ui.semantics.expand
@@ -82,6 +84,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /** Keeps the last row clear of the New task button. */
 private val FAB_CLEARANCE = 88.dp
@@ -394,7 +397,7 @@ private fun EmptyTasksTab(isSpace: Boolean, modifier: Modifier = Modifier) {
         modifier = modifier.padding(horizontal = 24.dp, vertical = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        BigIcon(style = BigIcon.Style.Default(CompoundIcons.CheckCircle()))
+        BigIcon(style = BigIcon.Style.Default(ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_board)))
         Spacer(Modifier.height(16.dp))
         CenteredMessage(
             title = stringResource(R.string.screen_matcha_tasks_tab_empty_title),

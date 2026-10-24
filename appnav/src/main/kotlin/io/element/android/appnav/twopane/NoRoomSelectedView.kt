@@ -18,7 +18,9 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
@@ -30,6 +32,7 @@ import io.element.android.libraries.designsystem.modifiers.backgroundVerticalGra
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
  * Shown in the detail pane of the two-pane layout when nothing is open, with a message that depends on the selected Home [tab].
@@ -67,9 +70,9 @@ fun NoRoomSelectedView(
             iconStyle = BigIcon.Style.Default(
                 when (tab) {
                     HomeTab.Chats -> CompoundIcons.Chat()
-                    HomeTab.Tasks -> CompoundIcons.CheckCircle()
+                    HomeTab.Tasks -> ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_board)
                     HomeTab.Spaces -> CompoundIcons.Space()
-                    HomeTab.Notes -> CompoundIcons.Document()
+                    HomeTab.Notes -> ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes)
                     HomeTab.Channels -> CompoundIcons.Room()
                 }
             ),
