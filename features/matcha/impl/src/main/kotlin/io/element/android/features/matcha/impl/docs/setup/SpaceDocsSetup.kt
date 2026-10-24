@@ -12,7 +12,7 @@ import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.protocol.longOrNull
 import io.element.android.features.matcha.impl.protocol.objectOrNull
 import io.element.android.features.matcha.impl.protocol.stringOrNull
-import io.element.android.libraries.core.data.tryOrNull
+import io.element.android.features.matcha.impl.protocol.toJsonObjectOrNull
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
@@ -26,10 +26,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.withTimeout
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -108,4 +106,4 @@ suspend fun readSpaceDocsStatus(room: BaseRoom): SpaceDocsSetupStatus {
 }
 
 private suspend fun BaseRoom.stateContent(type: StateEventType): JsonObject? =
-    getStateEventsJson(type).getOrNull()?.get("")?.let { tryOrNull { Json.parseToJsonElement(it).jsonObject } }
+    getStateEventsJson(type).getOrNull()?.get("")?.toJsonObjectOrNull()
