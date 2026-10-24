@@ -106,7 +106,8 @@ class TasksTabPresenter(
         val openThreadId = navigation.navigationState.currentThreadId()
         val me = client.sessionId.value
         val names = rememberPeopleNames(chats, me).toMap()
-        val tasks = remember(chats, names, openRoomId, openThreadId) { chats.toTabTasks(me, names, openRoomId, openThreadId) }
+        // Keyed on the boards alone: the counts of chats still being checked change far more often.
+        val tasks = remember(chats.boards, names, openRoomId, openThreadId) { chats.boards.toTabTasks(me, names, openRoomId, openThreadId) }
         val people = remember(tasks) { tasks.people(me, names) }
         val boards = chats.boards.associateBy { it.roomId }
         // A chosen chat that the user has left, or a person no task involves any more, no longer narrows the list.
@@ -253,23 +254,21 @@ class TasksTabPresenter(
     private fun TabChat.listActions() = TaskListActions(room.store, snackbarDispatcher, room.writeScope)
 
     /** Every task of every chat that involves the user [me], soonest deadline first (none last), then newest. */
-    private fun TabChats.toTabTasks(me: String, names: Map<String, String>, openRoomId: RoomId?, openThreadId: ThreadId?): List<TabTask> {
+    private fun List<TabChat>.toTabTasks(me: String, names: Map<String, String>, openRoomId: RoomId?, openThreadId: ThreadId?): List<TabTask> {
         val nowMillis = clock.now().toEpochMilliseconds()
-        return boards
-            .flatMap { board ->
-                val chat = board.toTasksTabChat()
-                val rootTimestamps = board.snapshot.threads.associate { it.id to it.rootTimestamp }
-                board.snapshot.toTaskItems(deadlineFormatter, nowMillis) { me in it.participants }.map { task ->
-                    TabTask(
-                        chat = chat,
-                        task = task,
-                        createdAt = task.threadId?.let(rootTimestamps::get) ?: 0,
-                        isSelected = board.roomId == openRoomId && task.threadId != null && task.threadId == openThreadId,
-                        people = (task.participants - me).map { names[it] ?: it }.toImmutableList(),
-                    )
-                }
+        return flatMap { board ->
+            val chat = board.toTasksTabChat()
+            val rootTimestamps = board.snapshot.threads.associate { it.id to it.rootTimestamp }
+            board.snapshot.toTaskItems(deadlineFormatter, nowMillis) { me in it.participants }.map { task ->
+                TabTask(
+                    chat = chat,
+                    task = task,
+                    createdAt = task.threadId?.let(rootTimestamps::get) ?: 0,
+                    isSelected = board.roomId == openRoomId && task.threadId != null && task.threadId == openThreadId,
+                    people = (task.participants - me).map { names[it] ?: it }.toImmutableList(),
+                )
             }
-            .sortedWith(compareBy<TabTask> { it.task.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.createdAt })
+        }.sortedWith(compareBy<TabTask> { it.task.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.createdAt })
     }
 
     /** The table's rows: the active tasks of the chosen status (any with All), or the archived ones. */

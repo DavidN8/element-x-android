@@ -21,6 +21,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.Locale
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Clock
 
 /** Formats a task deadline or a reminder time for display. */
@@ -40,6 +41,9 @@ class DefaultDeadlineFormatter(
     private val dateFormatter: DateFormatter,
     private val clock: Clock,
 ) : DeadlineFormatter {
+    /** Looking up a skeleton's best pattern is costly and every card with a deadline asks, so each formatter is kept per locale. */
+    private val formatters = ConcurrentHashMap<Pair<Locale, String>, DateTimeFormatter>()
+
     override fun format(epochMillis: Long): String {
         val nowMillis = clock.now().toEpochMilliseconds()
         if (epochMillis < nowMillis) return dateFormatter.format(epochMillis, DateFormatterMode.TimeOrDate, useRelative = true)
@@ -48,7 +52,9 @@ class DefaultDeadlineFormatter(
         val date = Instant.ofEpochMilli(epochMillis).atZone(zone)
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone)
         val hours = if (DateFormat.is24HourFormat(context)) "HHmm" else "hmma"
-        fun pattern(skeleton: String) = DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, skeleton), locale).format(date)
+        fun pattern(skeleton: String) = formatters.getOrPut(locale to skeleton) {
+            DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, skeleton), locale)
+        }.format(date)
         return when (ChronoUnit.DAYS.between(today.toLocalDate(), date.toLocalDate())) {
             0L, 1L -> context.getString(
                 R.string.common_matcha_day_and_time,
