@@ -25,6 +25,7 @@ import io.element.android.features.matcha.impl.protocol.ReminderRequestRef
 import io.element.android.features.matcha.impl.protocol.ReminderTime
 import io.element.android.features.matcha.impl.protocol.ReminderUnit
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.tasks.DeadlineFormatter
 import io.element.android.features.matcha.impl.tasks.TaskWriter
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
@@ -36,6 +37,7 @@ import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.MessageEventType
 import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
@@ -59,6 +61,7 @@ class RoomReminderPresenter(
     private val store: MatchaRoomStore,
     private val clock: ReminderClock,
     private val snackbarDispatcher: SnackbarDispatcher,
+    private val deadlineFormatter: DeadlineFormatter,
 ) : Presenter<RoomReminderState> {
     @AssistedFactory
     fun interface Factory {
@@ -101,6 +104,16 @@ class RoomReminderPresenter(
                 QUICK_OPTION_HOURS.forEach { add(RoomReminderOption.InHours(it)) }
                 target.dueAt?.takeIf { isWithinBounds(it, nowMillis) }?.let { add(RoomReminderOption.AtDeadline(it)) }
             }.toImmutableList()
+        }
+        val optionLabels = remember(nowMillis, customDate, customTime) {
+            (quickOptions + RoomReminderOption.Custom).mapNotNull { option ->
+                val at = when (option) {
+                    is RoomReminderOption.InHours -> now.plusHours(option.hours.toLong()).toInstant().toEpochMilli()
+                    is RoomReminderOption.AtDeadline -> option.at
+                    RoomReminderOption.Custom -> localInstant(customDate, customTime, now.zone)
+                }
+                at?.let { option to deadlineFormatter.format(it) }
+            }.toMap().toImmutableMap()
         }
         // The deadline drops out of the options once it has passed.
         val selectedOption = selected?.takeIf { it in quickOptions }
@@ -210,6 +223,7 @@ class RoomReminderPresenter(
             step = step,
             now = now,
             quickOptions = quickOptions,
+            optionLabels = optionLabels,
             selected = selectedOption,
             sending = sending,
             hasSendFailed = hasSendFailed,

@@ -140,8 +140,6 @@
     <string name="screen_matcha_reminder_date">Date</string>
     <string name="screen_matcha_reminder_time">Time</string>
     <string name="screen_matcha_reminder_timezone">Time zone: %1$s (%2$s)</string>
-    <string name="screen_matcha_reminder_today_at">Today %1$s</string>
-    <string name="screen_matcha_reminder_tomorrow_at">Tomorrow %1$s</string>
     <string name="screen_matcha_reminder_confirm">Set reminder · %1$s</string>
     <string name="screen_matcha_reminder_set">Set reminder</string>
     <string name="screen_matcha_reminder_requested">Reminder requested</string>
