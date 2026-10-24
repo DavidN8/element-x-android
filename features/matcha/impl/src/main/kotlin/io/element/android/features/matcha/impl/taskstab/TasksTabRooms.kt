@@ -69,7 +69,6 @@ internal data class TabChat(
     val roomId: RoomId,
     val name: String?,
     val avatarUrl: String?,
-    val isDm: Boolean,
     val room: TabRoom,
     val snapshot: MatchaRoomSnapshot,
 )
@@ -82,6 +81,8 @@ internal data class TabChats(
     val checking: Set<RoomId> = emptySet(),
     /** Chats that could not be checked. */
     val failed: Set<RoomId> = emptySet(),
+    /** The joined direct chats, known from the room list before any check. */
+    val dms: Set<RoomId> = emptySet(),
     /** False until the room list has loaded, so a chat that isn't listed isn't known to be absent yet. */
     val isRoomListLoaded: Boolean = false,
 ) {
@@ -144,12 +145,13 @@ internal class TasksTabRooms(
     val chats: Flow<TabChats> = combine(checks, joinedChats, ::Pair).flatMapLatest { (checks, joined) ->
         val boards = joined.orEmpty().mapNotNull { (roomId, info) ->
             val room = (checks[roomId] as? Check.Board)?.room ?: return@mapNotNull null
-            room.store.snapshot.map { TabChat(roomId, info.name, info.avatarUrl, info.isDm, room, it) }
+            room.store.snapshot.map { TabChat(roomId, info.name, info.avatarUrl, room, it) }
         }
         val checking = checks.filterValues { it == Check.Pending }.keys
         val failed = checks.filterValues { it == Check.Failed }.keys
+        val dms = joined.orEmpty().filterValues { it.isDm }.keys
         val snapshots = if (boards.isEmpty()) flowOf(emptyList()) else combine(boards) { it.toList() }
-        snapshots.map { TabChats(boards = it, checking = checking, failed = failed, isRoomListLoaded = joined != null) }
+        snapshots.map { TabChats(boards = it, checking = checking, failed = failed, dms = dms, isRoomListLoaded = joined != null) }
     }
 
     /** Checks the chats again that could not be checked, and opens again the boards that failed to open. */

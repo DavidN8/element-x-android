@@ -123,10 +123,10 @@ class TasksTabPresenter internal constructor(
         val openRoomId = navigation.navigationState.currentRoomId()
         val openThreadId = navigation.navigationState.currentThreadId()
         val me = client.sessionId.value
-        fun isInScope(roomId: RoomId) = spaceId == null || scope?.chatIds?.contains(roomId) == true
-        // As on the Channels tab, a direct chat of the space is left out.
-        val shown = remember(chats.boards, scope) {
-            (if (spaceId == null) chats.boards else chats.boards.filter { isInScope(it.roomId) && !it.isDm }).toImmutableList()
+        // As on the Channels tab, a direct chat of the space is left out, so it is neither listed nor waited for.
+        fun isInScope(roomId: RoomId) = spaceId == null || (scope?.chatIds?.contains(roomId) == true && roomId !in chats.dms)
+        val shown = remember(chats.boards, chats.dms, scope) {
+            (if (spaceId == null) chats.boards else chats.boards.filter { isInScope(it.roomId) }).toImmutableList()
         }
         // The Tasks tab holds the user's own tasks; a space's boards hold what each chat's own board shows.
         val isShown: (ProjectedCard) -> Boolean = if (spaceId == null) { card -> me in card.participants } else { card -> card.isShownOnBoard(me) }

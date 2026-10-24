@@ -596,15 +596,37 @@ class TasksTabPresenterTest {
     fun `with a space, Loading and Checking only wait for the space's chats`() = runTest {
         val spaceService = FakeSpaceService()
         val chatRoom = aMatchaJoinedRoom(chat, backgroundScope)
-        val client = aClient(listOf(design to aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue")), chat to chatRoom), spaceService = spaceService)
-        // The chat outside the space is never done being checked.
+        // The space's only chat has no board, and the chat outside the space is never done being checked.
+        val client = aClient(listOf(design to aMatchaJoinedRoom(design, backgroundScope), chat to chatRoom), spaceService = spaceService)
         client.givenGetBaseRoomResult(chat, SilentPointerRoom(chatRoom))
         aPresenter(client, spaceId = acme).test {
             awaitItem()
             settle()
             spaceService.emitSpaceFilters(acmeFilters(listOf(design)))
-            val state = awaitUntil { it.content is TasksTabContent.Tasks && it.checkingCount == 0 }
-            assertThat(state.titles()).containsExactly("Book the venue")
+            assertThat(awaitUntil { it.content == TasksTabContent.Empty }.checkingCount).isEqualTo(0)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `with a space, a direct chat in it is neither waited for nor counted as failed`() = runTest {
+        val spaceService = FakeSpaceService()
+        val slowDm = RoomId("!slow-dm:matrix.org")
+        val slowDmRoom = aMatchaJoinedRoom(slowDm, backgroundScope, roomInfo = aDmInfo(slowDm))
+        // One direct chat can't be opened, the other is never done being checked.
+        val client = aClient(
+            listOf(design to aMatchaJoinedRoom(design, backgroundScope), slowDm to slowDmRoom),
+            summaries = MutableStateFlow(listOf(aSummary(design), aRoomSummary(aDmInfo(dm)), aRoomSummary(aDmInfo(slowDm)))),
+            spaceService = spaceService,
+        )
+        client.givenGetBaseRoomResult(slowDm, SilentPointerRoom(slowDmRoom))
+        aPresenter(client, spaceId = acme).test {
+            awaitItem()
+            settle()
+            spaceService.emitSpaceFilters(acmeFilters(listOf(design, dm, slowDm)))
+            val state = awaitUntil { it.content == TasksTabContent.Empty }
+            assertThat(state.checkingCount).isEqualTo(0)
+            assertThat(state.failedCount).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -612,12 +634,15 @@ class TasksTabPresenterTest {
     @Test
     fun `with a space, the list loads until the space's filters arrive`() = runTest {
         val spaceService = FakeSpaceService()
-        val client = aClient(listOf(design to aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue"))), spaceService = spaceService)
+        var timelines = 0
+        val room = aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue"), onCreateTimeline = { timelines++ })
+        val client = aClient(listOf(design to room), spaceService = spaceService)
         aPresenter(client, spaceId = acme).test {
             val first = awaitItem()
             settle()
-            // The boards wait for the space's chats, so no other chat's board shows meanwhile.
+            // The boards wait for the space's chats, so no other chat's board shows meanwhile, and no chat is read yet.
             assertThat((listOf(first) + consumeItemsUntilTimeout()).map { it.content }.toSet()).containsExactly(TasksTabContent.Loading)
+            assertThat(timelines).isEqualTo(0)
             spaceService.emitSpaceFilters(acmeFilters(listOf(design)))
             assertThat(awaitUntil { it.content is TasksTabContent.Tasks }.titles()).containsExactly("Book the venue")
             cancelAndIgnoreRemainingEvents()
@@ -689,6 +714,7 @@ class TasksTabPresenterTest {
         isPointerStored: Boolean = true,
         roomInfo: RoomInfo = aRoomInfo(id = roomId),
         threadReplies: Map<String, List<String>> = emptyMap(),
+        onCreateTimeline: () -> Unit = {},
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
     ) = aMatchaJoinedRoom(
         roomId = roomId,
@@ -703,6 +729,7 @@ class TasksTabPresenterTest {
         roomInfo = roomInfo,
         threadReplies = threadReplies,
         userDisplayNameResult = { userId -> Result.success(names[userId.value]) },
+        onCreateTimeline = onCreateTimeline,
     )
 
     private fun linkedCard(
