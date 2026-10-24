@@ -22,7 +22,6 @@ import io.element.android.features.matcha.impl.protocol.ReminderProtocol
 import io.element.android.features.matcha.impl.protocol.ReminderRequestRef
 import io.element.android.features.matcha.impl.protocol.ReminderTime
 import io.element.android.features.matcha.impl.protocol.ReminderUnit
-import io.element.android.features.matcha.impl.protocol.TaskParticipants
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.protocol.ThreadMetadata
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataPatch
@@ -31,12 +30,20 @@ import io.element.android.features.matcha.impl.protocol.booleanOrNull
 import io.element.android.features.matcha.impl.protocol.isShownOnBoard
 import io.element.android.features.matcha.impl.protocol.longOrNull
 import io.element.android.features.matcha.impl.protocol.objectOrNull
-import io.element.android.features.matcha.impl.protocol.referenceTarget
 import io.element.android.features.matcha.impl.protocol.stringOrNull
 import io.element.android.features.matcha.impl.reminders.localInstant
 import io.element.android.features.matcha.impl.reminders.validateReminder
+import io.element.android.features.matcha.impl.store.MatchaThread
+import io.element.android.features.matcha.impl.store.projectThreadsAndBoard
 import io.element.android.features.matcha.impl.tasks.LocalDeadline
 import io.element.android.features.matcha.impl.tasks.toDeadline
+import io.element.android.libraries.matrix.api.core.EventId
+import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.room.threads.ThreadListItem
+import io.element.android.libraries.matrix.api.room.threads.ThreadListItemEvent
+import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
+import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
+import io.element.android.libraries.matrix.test.timeline.aMessageContent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -217,66 +224,51 @@ private val OPS: Map<String, (JsonObject) -> JsonElement> = mapOf(
 )
 
 /**
- * A room's threads and board as `MatchaRoomStore.buildSnapshot` builds them from the Matcha events (newest first), the SDK's thread
- * list and the legacy archive state. Thread replies among the events stand in for the replies the store reads per thread.
+ * A room's threads and board as `MatchaRoomStore.buildSnapshot` builds them, through the store's own [projectThreadsAndBoard], from
+ * the Matcha events (newest first), the SDK's thread list and the legacy archive state. Thread replies among the events stand in for
+ * the replies the store reads per thread.
  */
 private fun board(input: JsonObject): JsonElement {
-    val rootId = input.string("rootId")
-    val events = input.events()
-    val listed = input.getValue("threads").jsonArray.map { it.jsonObject }.associateBy { it.string("id") }
+    val threadList = input.getValue("threads").jsonArray.map { it.jsonObject.toThreadListItem() }
     val legacyArchive = input.objectOrNull("legacyArchive").orEmpty().mapValues { it.value.jsonPrimitive.content.toBooleanStrict() }
-    val latestCards = KanbanProtocol.latestRevisions(events.mapNotNull { KanbanProtocol.parseCard(it, rootId) })
-    val patchesByRoot = events.mapNotNull { event ->
-        event.content.referenceTarget()?.let { root -> ThreadMetadataProtocol.parsePatch(event, root)?.let { root to it } }
-    }.groupBy({ it.first }, { it.second })
-    val bootstrapped = events.mapNotNullTo(HashSet(), ThreadMetadataProtocol::bootstrapRootId)
-    val repliers = TaskParticipants.repliers(events)
-    val threadIds = LinkedHashSet<String>().apply {
-        addAll(listed.keys)
-        latestCards.mapNotNullTo(this) { it.threadId }
-        addAll(legacyArchive.filterValues { it }.keys)
-    }
-    val threads = threadIds.map { id ->
-        val item = listed[id]
-        val rootBody = item?.stringOrNull("rootBody") ?: latestCards.firstOrNull { it.threadId == id }?.title
-        FixtureThread(
-            id = id,
-            metadata = ThreadMetadataProtocol.resolve(id, rootBody, patchesByRoot[id].orEmpty(), legacyArchive[id]),
-            lastActivity = item?.longOrNull("lastActivity") ?: 0,
-            hasHiddenFirstReply = id in bootstrapped,
-            participants = buildSet {
-                item?.stringOrNull("rootSender")?.let(::add)
-                item?.stringOrNull("latestSender")?.let(::add)
-                addAll(repliers[id].orEmpty())
-            },
-        )
-    }.sortedByDescending { it.lastActivity }
-    val threadParticipants = threads.associate { it.id to it.participants }
-    val standaloneAuthors = TaskParticipants.standaloneAuthors(events, rootId)
-    val directMembers = input.strings("directMembers").toSet()
-    val cards = KanbanProtocol.project(latestCards, threads.associate { it.id to it.metadata }).map { card ->
-        card.copy(participants = TaskParticipants.of(card, threadParticipants, standaloneAuthors, directMembers))
-    }
+    val (threads, board) = projectThreadsAndBoard(
+        events = input.events(),
+        boardRootId = input.string("rootId"),
+        threadList = threadList,
+        threadRepliers = emptyMap(),
+        legacyArchive = legacyArchive,
+        directMembers = input.strings("directMembers").toSet(),
+    )
     val viewer = input.string("viewer")
     return buildJsonObject {
         put("threads", JsonArray(threads.map { it.toJson() }))
-        put("cards", JsonArray(cards.map { it.toJson(viewer) }))
+        put("cards", JsonArray(board?.cards.orEmpty().map { it.toJson(viewer) }))
     }
 }
 
-private data class FixtureThread(
-    val id: String,
-    val metadata: ThreadMetadata,
-    val lastActivity: Long,
-    val hasHiddenFirstReply: Boolean,
-    val participants: Set<String>,
-) {
-    fun toJson() = buildJsonObject {
-        put("id", id)
-        metadata.toJson().forEach { (key, value) -> put(key, value) }
-        put("hasHiddenFirstReply", hasHiddenFirstReply)
-        put("participants", participants.sorted().toJsonArray())
-    }
+/** A thread of the SDK's thread list; its latest activity is the latest reply's time, or the root's without a reply. */
+private fun JsonObject.toThreadListItem(): ThreadListItem {
+    fun event(id: String, sender: String, content: EventContent?) = ThreadListItemEvent(
+        eventId = EventId(id),
+        senderId = UserId(sender),
+        senderProfile = ProfileDetails.Unavailable,
+        isOwn = false,
+        content = content,
+        timestamp = long("lastActivity"),
+    )
+    val id = string("id")
+    return ThreadListItem(
+        rootEvent = event(id, string("rootSender"), stringOrNull("rootBody")?.let { aMessageContent(body = it) }),
+        latestEvent = stringOrNull("latestSender")?.let { event("$id-latest", it, aMessageContent()) },
+        numberOfReplies = 0,
+    )
+}
+
+private fun MatchaThread.toJson() = buildJsonObject {
+    put("id", id.value)
+    metadata.toJson().forEach { (key, value) -> put(key, value) }
+    put("hasHiddenFirstReply", hasHiddenFirstReply)
+    put("participants", participants.sorted().toJsonArray())
 }
 
 /** Reassembles the updates the frames among the events (oldest first) complete, the way `RoomDocumentSession` ingests them. */

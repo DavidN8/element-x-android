@@ -661,58 +661,11 @@ class MatchaRoomStore(
             ?: state.serverPointer
             ?: state.createdBoardRoot
             ?: events.firstOrNull { it.type == MatchaConfig.EVENT_KANBAN_CARD }?.content?.referenceTarget()
-        val revisions = boardRootId?.let { root -> events.mapNotNull { KanbanProtocol.parseCard(it, root) } }.orEmpty()
-        val latestCards = KanbanProtocol.latestRevisions(revisions)
-
-        val patchesByRoot = HashMap<String, MutableList<ThreadMetadataPatch>>()
-        for (event in events.filter { it.type == MatchaConfig.EVENT_THREAD_METADATA }) {
-            val root = event.content.referenceTarget() ?: continue
-            ThreadMetadataProtocol.parsePatch(event, root)?.let { patchesByRoot.getOrPut(root) { mutableListOf() } += it }
-        }
-        val listed = threadList.associateBy { it.threadId.value }
-        val bootstrapped = events.mapNotNullTo(HashSet(), ThreadMetadataProtocol::bootstrapRootId)
-        // The hidden replies this client sent are among the Matcha events before the thread's replies are read again.
-        val eventRepliers = TaskParticipants.repliers(events)
-        val threadIds = LinkedHashSet<String>().apply {
-            addAll(listed.keys)
-            latestCards.mapNotNullTo(this) { it.threadId }
-            addAll(state.legacyArchive.filterValues { it }.keys)
-        }
-        val threads = threadIds.map { id ->
-            val item = listed[id]
-            val rootBody = (item?.rootEvent?.content as? MessageContent)?.body
-                ?: latestCards.firstOrNull { it.threadId == id }?.title
-            MatchaThread(
-                id = ThreadId(id),
-                metadata = ThreadMetadataProtocol.resolve(id, rootBody, patchesByRoot[id].orEmpty(), state.legacyArchive[id]),
-                rootBody = rootBody,
-                numberOfReplies = item?.numberOfReplies ?: 0,
-                lastActivityTimestamp = item?.let { it.latestEvent?.timestamp ?: it.rootEvent.timestamp } ?: 0,
-                rootTimestamp = item?.rootEvent?.timestamp ?: 0,
-                isRootUnreadable = item?.rootEvent?.content is UnableToDecryptContent,
-                hasHiddenFirstReply = id in bootstrapped,
-                rootSenderId = item?.rootEvent?.senderId?.value,
-                participants = buildSet {
-                    item?.rootEvent?.senderId?.let { add(it.value) }
-                    item?.latestEvent?.senderId?.let { add(it.value) }
-                    addAll(threadData.repliers[id].orEmpty())
-                    addAll(eventRepliers[id].orEmpty())
-                },
-            )
-        }.sortedByDescending { it.lastActivityTimestamp }
-
-        val board = boardRootId?.let { root ->
-            val threadParticipants = threads.associate { it.id.value to it.participants }
-            val standaloneAuthors = TaskParticipants.standaloneAuthors(events, root)
-            val cards = KanbanProtocol.project(latestCards, threads.associate { it.id.value to it.metadata }).map { card ->
-                card.copy(participants = TaskParticipants.of(card, threadParticipants, standaloneAuthors, threadData.directMembers))
-            }
-            MatchaBoard(rootId = root, cards = cards)
-        }
+        val (threads, board) = projectThreadsAndBoard(events, boardRootId, threadList, threadData.repliers, state.legacyArchive, threadData.directMembers)
         val historyRead = !status.pagination.hasMoreToLoad || status.pagesRead >= INITIAL_HISTORY_PAGES
         val threadsRead = status.threads is ThreadListPaginationStatus.Idle
         // An undecryptable event's relation stays readable: one referring to the board or a thread is Matcha data.
-        val matchaTargets = threadIds + listOfNotNull(boardRootId)
+        val matchaTargets = threads.mapTo(HashSet()) { it.id.value } + listOfNotNull(boardRootId)
         val unreadableCauses = events
             .filter { it.type == DocsProtocol.EVENT_ROOM_ENCRYPTED && it.content.referenceTarget() in matchaTargets }
             .map { event -> event.eventId?.let(health.utdCauses::get) }
@@ -844,6 +797,73 @@ class MatchaRoomStore(
         private const val THREAD_KEY_SUFFIX = "#thread"
         private val ANCHORS_TIMEOUT = 30.seconds
     }
+}
+
+/** A room's threads, most recently active first, and its board, if it has one. */
+internal data class ThreadsAndBoard(val threads: List<MatchaThread>, val board: MatchaBoard?)
+
+/**
+ * The threads and board of a room's snapshot, from its Matcha events (newest first), the board it has, the thread list, the repliers
+ * read from each thread and the legacy archive state. The protocol conformance fixtures (`docs/matcha/fixtures/kanban/board.json`)
+ * run this function, so the other clients can project boards exactly like this one.
+ */
+internal fun projectThreadsAndBoard(
+    events: List<RawEvent>,
+    boardRootId: String?,
+    threadList: List<ThreadListItem>,
+    threadRepliers: Map<String, Set<String>>,
+    legacyArchive: Map<String, Boolean>,
+    directMembers: Set<String>,
+): ThreadsAndBoard {
+    val revisions = boardRootId?.let { root -> events.mapNotNull { KanbanProtocol.parseCard(it, root) } }.orEmpty()
+    val latestCards = KanbanProtocol.latestRevisions(revisions)
+
+    val patchesByRoot = HashMap<String, MutableList<ThreadMetadataPatch>>()
+    for (event in events.filter { it.type == MatchaConfig.EVENT_THREAD_METADATA }) {
+        val root = event.content.referenceTarget() ?: continue
+        ThreadMetadataProtocol.parsePatch(event, root)?.let { patchesByRoot.getOrPut(root) { mutableListOf() } += it }
+    }
+    val listed = threadList.associateBy { it.threadId.value }
+    val bootstrapped = events.mapNotNullTo(HashSet(), ThreadMetadataProtocol::bootstrapRootId)
+    // The hidden replies this client sent are among the Matcha events before the thread's replies are read again.
+    val eventRepliers = TaskParticipants.repliers(events)
+    val threadIds = LinkedHashSet<String>().apply {
+        addAll(listed.keys)
+        latestCards.mapNotNullTo(this) { it.threadId }
+        addAll(legacyArchive.filterValues { it }.keys)
+    }
+    val threads = threadIds.map { id ->
+        val item = listed[id]
+        val rootBody = (item?.rootEvent?.content as? MessageContent)?.body
+            ?: latestCards.firstOrNull { it.threadId == id }?.title
+        MatchaThread(
+            id = ThreadId(id),
+            metadata = ThreadMetadataProtocol.resolve(id, rootBody, patchesByRoot[id].orEmpty(), legacyArchive[id]),
+            rootBody = rootBody,
+            numberOfReplies = item?.numberOfReplies ?: 0,
+            lastActivityTimestamp = item?.let { it.latestEvent?.timestamp ?: it.rootEvent.timestamp } ?: 0,
+            rootTimestamp = item?.rootEvent?.timestamp ?: 0,
+            isRootUnreadable = item?.rootEvent?.content is UnableToDecryptContent,
+            hasHiddenFirstReply = id in bootstrapped,
+            rootSenderId = item?.rootEvent?.senderId?.value,
+            participants = buildSet {
+                item?.rootEvent?.senderId?.let { add(it.value) }
+                item?.latestEvent?.senderId?.let { add(it.value) }
+                addAll(threadRepliers[id].orEmpty())
+                addAll(eventRepliers[id].orEmpty())
+            },
+        )
+    }.sortedByDescending { it.lastActivityTimestamp }
+
+    val board = boardRootId?.let { root ->
+        val threadParticipants = threads.associate { it.id.value to it.participants }
+        val standaloneAuthors = TaskParticipants.standaloneAuthors(events, root)
+        val cards = KanbanProtocol.project(latestCards, threads.associate { it.id.value to it.metadata }).map { card ->
+            card.copy(participants = TaskParticipants.of(card, threadParticipants, standaloneAuthors, directMembers))
+        }
+        MatchaBoard(rootId = root, cards = cards)
+    }
+    return ThreadsAndBoard(threads, board)
 }
 
 /** Matrix only tells why an event can't be decrypted for Megolm events; anything else is plainly undecryptable. */
