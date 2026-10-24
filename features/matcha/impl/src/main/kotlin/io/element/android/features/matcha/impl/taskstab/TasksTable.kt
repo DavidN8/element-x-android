@@ -25,6 +25,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -167,6 +169,8 @@ private fun TableRow(task: TabTask, isWide: Boolean, scrollState: ScrollState, e
     val roomId = task.chat.roomId
     val taskId = task.task.id
     val showActions = { eventSink(TasksTabEvent.ShowActions(roomId, taskId)) }
+    // A recomposition during a tap on the Status cell keeps its tap detector, so the tap isn't dropped.
+    val currentShowActions by rememberUpdatedState(showActions)
     TableCells(
         isWide = isWide,
         scrollState = scrollState,
@@ -195,7 +199,7 @@ private fun TableRow(task: TabTask, isWide: Boolean, scrollState: ScrollState, e
             TaskTableColumn.Status -> Row(
                 modifier = modifier
                     .heightIn(min = 48.dp)
-                    .pointerInput(showActions) { detectTapGestures { showActions() } },
+                    .pointerInput(Unit) { detectTapGestures { currentShowActions() } },
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
