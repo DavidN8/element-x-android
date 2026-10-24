@@ -219,7 +219,8 @@ internal class TasksTabRooms(
                 ?.get("")
                 ?.let(KanbanProtocol::parseBoardPointerJson) != null
             // The sync doesn't store the pointer, so ask the homeserver; a chat without a board is then skipped unread.
-            isStored to (if (isStored) ServerPointer.Unknown else readServerPointer(pointerRoom) ?: return)
+            val answer = if (isStored) ServerPointer.Unknown else readServerPointer(pointerRoom) ?: return
+            isStored to answer
         } finally {
             pointerRoom.destroy()
         }
