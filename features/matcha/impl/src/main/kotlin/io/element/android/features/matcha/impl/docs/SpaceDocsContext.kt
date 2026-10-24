@@ -23,8 +23,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.job
 
 /**
- * What the docs screens of one space share while they are open: the space, its Matcha store (whose whole history the documents
- * read) and the catalog of names. For a chat's earlier document there is no catalog and everything is read-only.
+ * What the docs screens of one space share while they are open: the space, its Matcha store (whose frames the documents read)
+ * and the catalog of names. For a chat's earlier document there is no catalog and everything is read-only.
  */
 class SpaceDocsContext(
     val room: JoinedRoom,

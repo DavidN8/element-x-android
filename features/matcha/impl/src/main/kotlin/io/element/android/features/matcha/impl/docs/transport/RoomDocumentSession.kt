@@ -47,11 +47,13 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** Failures that must never be shown as an empty or saved document. Same codes as the web client. */
 enum class DocumentError {
@@ -84,7 +86,7 @@ private class DocumentException(val error: DocumentError, cause: Throwable? = nu
 
 /**
  * One shared document of a room, synced like the web client's `RoomDocumentSession`: every `com.matchahoneylatte.docs.update`
- * frame related to the room's `m.room.create` event is replayed from the store (whose whole history is read first) before
+ * frame related to the room's `m.room.create` event is replayed from the store (once it has read that event's relations) before
  * editing is allowed; complete updates are deduplicated by sender and update id and checked by the engine before they apply;
  * local edits are debounced for 500 ms, merged, split into frames and only count as saved once the server accepted every frame.
  * Unsent edits live in memory only.
@@ -238,12 +240,7 @@ class RoomDocumentSession(
 
     private suspend fun load() {
         try {
-            // Read all of the history, so no frame is missed. ponytail: cheap for a space, which has little history; a chat's
-            // earlier doc pages through the whole chat, which is what an SDK call listing the anchor's relations would avoid.
-            var hasMoreHistory = true
-            while (hasMoreHistory) hasMoreHistory = store.loadMore().getOrElse { throw DocumentException(DocumentError.LoadError, it) }
-            // The timeline delivers its items a little after a page is read: wait for the store to see the start of the room.
-            store.snapshot.first { !it.hasMoreHistory }
+            awaitFrames()
             val anchor = anchor ?: findAnchor() ?: throw DocumentException(DocumentError.AnchorError)
             lock.withLock {
                 val events = store.snapshot.value.events.asReversed()
@@ -264,6 +261,17 @@ class RoomDocumentSession(
         // Frames that arrived while loading, then the edits kept from before.
         onEvents(store.snapshot.value.events)
         if (isReady && hasPending()) startFlush()
+    }
+
+    /**
+     * Waits until the store holds every frame it can read. Frames relate to the anchor, whose relations the store reads in full when
+     * it opens; this SDK's timelines drop custom events, so older history would only add undecryptable copies of frames the relations
+     * hold too. Without the SDK's relations, or after a failed read, the store shows a warning and the whole history is read instead.
+     */
+    private suspend fun awaitFrames() {
+        // Bounded: a failed read cleared by a later one leaves the store unloaded without a warning.
+        withTimeoutOrNull(STORE_READ_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed || it.warning != null } }
+        store.loadHistoryUntil { it.isLoaded && it.warning == null }.getOrElse { throw DocumentException(DocumentError.LoadError, it) }
     }
 
     private suspend fun onEvents(events: List<RawEvent>) {
@@ -501,6 +509,7 @@ class RoomDocumentSession(
 
     private companion object {
         val DEBOUNCE = 500.milliseconds
+        val STORE_READ_TIMEOUT = 10.seconds
         val SEND_ERRORS = setOf(DocumentError.SendError, DocumentError.PermissionError, DocumentError.TooLargeError)
     }
 }
