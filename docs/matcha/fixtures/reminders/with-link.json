@@ -49,6 +49,14 @@
                 "link": "https://matrix.to/#/!r:example.org/$t"
             },
             "expect": "See https://matrix.to/#/!r:example.org/$t2"
+        },
+        {
+            "name": "containment counts code units, so a link followed by a combining mark is contained",
+            "input": {
+                "message": "See https://matrix.to/#/!r:example.org/$t́",
+                "link": "https://matrix.to/#/!r:example.org/$t"
+            },
+            "expect": "See https://matrix.to/#/!r:example.org/$t́"
         }
     ]
 }

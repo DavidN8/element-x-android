@@ -1607,6 +1607,100 @@
                     }
                 ]
             }
+        },
+        {
+            "name": "a user id is read by code point: a combining mark may follow its @",
+            "input": {
+                "rootId": "$board:example.org",
+                "events": [
+                    {
+                        "type": "com.matchahoneylatte.kanban.card",
+                        "event_id": "$e96:example.org",
+                        "sender": "@alice:example.org",
+                        "origin_server_ts": 1767225600000,
+                        "content": {
+                            "version": 1,
+                            "card_id": "c-1",
+                            "title": "Private",
+                            "description": "",
+                            "column": "todo",
+                            "archived": false,
+                            "thread_id": "$t1:example.org",
+                            "show_to_room": false,
+                            "m.relates_to": {
+                                "rel_type": "m.reference",
+                                "event_id": "$board:example.org"
+                            }
+                        }
+                    },
+                    {
+                        "type": "m.room.message",
+                        "event_id": "$e97:example.org",
+                        "sender": "@́bob:example.org",
+                        "origin_server_ts": 1767225600000,
+                        "content": {
+                            "msgtype": "m.text",
+                            "body": "reply",
+                            "m.relates_to": {
+                                "rel_type": "m.thread",
+                                "event_id": "$t1:example.org",
+                                "is_falling_back": true,
+                                "m.in_reply_to": {
+                                    "event_id": "$t1:example.org"
+                                }
+                            }
+                        }
+                    }
+                ],
+                "threads": [
+                    {
+                        "id": "$t1:example.org",
+                        "rootBody": "Root",
+                        "rootSender": "@alice:example.org",
+                        "latestSender": null,
+                        "lastActivity": 5
+                    }
+                ],
+                "legacyArchive": {},
+                "directMembers": [],
+                "viewer": "@́bob:example.org"
+            },
+            "expect": {
+                "threads": [
+                    {
+                        "id": "$t1:example.org",
+                        "name": "Root",
+                        "archived": false,
+                        "archiveExplicit": false,
+                        "nameSource": "root_body",
+                        "hasHiddenFirstReply": false,
+                        "participants": [
+                            "@alice:example.org",
+                            "@́bob:example.org"
+                        ]
+                    }
+                ],
+                "cards": [
+                    {
+                        "id": "c-1",
+                        "title": "Root",
+                        "description": "",
+                        "status": "todo",
+                        "archived": false,
+                        "threadId": "$t1:example.org",
+                        "dueAt": null,
+                        "reminderRequested": null,
+                        "showToRoom": false,
+                        "hasRevision": true,
+                        "earlierCardIds": [],
+                        "participants": [
+                            "@alice:example.org",
+                            "@́bob:example.org"
+                        ],
+                        "isShownToViewer": true
+                    }
+                ]
+            }
         }
     ]
 }

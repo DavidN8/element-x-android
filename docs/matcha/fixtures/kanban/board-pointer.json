@@ -92,6 +92,16 @@
                 "content": "$root"
             },
             "expect": null
+        },
+        {
+            "name": "a combining mark may follow the $ of the event id",
+            "input": {
+                "content": {
+                    "version": 1,
+                    "event_id": "$́root:example.org"
+                }
+            },
+            "expect": "$́root:example.org"
         }
     ]
 }

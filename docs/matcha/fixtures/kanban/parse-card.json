@@ -1328,6 +1328,51 @@
                 }
             },
             "expect": null
+        },
+        {
+            "name": "ids are checked by code point: a combining mark may follow $",
+            "input": {
+                "rootId": "$board:example.org",
+                "event": {
+                    "type": "com.matchahoneylatte.kanban.card",
+                    "event_id": "$e86:example.org",
+                    "sender": "@alice:example.org",
+                    "origin_server_ts": 1767225600000,
+                    "content": {
+                        "version": 1,
+                        "card_id": "c-1",
+                        "title": "Write spec",
+                        "description": "",
+                        "column": "doing",
+                        "archived": false,
+                        "thread_id": "$́t:example.org",
+                        "due_at": 1767225600000,
+                        "reminder_requested": {
+                            "event_id": "$́cmd:example.org",
+                            "at": 1767229200000
+                        },
+                        "show_to_room": false,
+                        "m.relates_to": {
+                            "rel_type": "m.reference",
+                            "event_id": "$board:example.org"
+                        }
+                    }
+                }
+            },
+            "expect": {
+                "cardId": "c-1",
+                "title": "Write spec",
+                "description": "",
+                "status": "doing",
+                "archived": false,
+                "threadId": "$́t:example.org",
+                "dueAt": 1767225600000,
+                "reminderRequested": {
+                    "eventId": "$́cmd:example.org",
+                    "at": 1767229200000
+                },
+                "showToRoom": false
+            }
         }
     ]
 }
