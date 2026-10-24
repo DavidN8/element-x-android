@@ -31,9 +31,9 @@ AAR=/path/to/element-x-android/libraries/rustsdk/matrix-rust-sdk.aar
 NDK=$ANDROID_HOME/ndk/26.3.11579264
 ANDROID_NDK_HOME=$NDK ./scripts/build.sh -r -p ../matrix-rust-sdk -m sdk -t aarch64-linux-android -o $AAR
 # Strip the symbol table (58 MB) from the library inside the AAR.
-cd "$(mktemp -d)" && unzip -q $AAR jni/arm64-v8a/libmatrix_sdk_ffi.so \
+(cd "$(mktemp -d)" && unzip -q $AAR jni/arm64-v8a/libmatrix_sdk_ffi.so \
   && $NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip --strip-unneeded jni/arm64-v8a/libmatrix_sdk_ffi.so \
-  && zip -q $AAR jni/arm64-v8a/libmatrix_sdk_ffi.so
+  && zip -q $AAR jni/arm64-v8a/libmatrix_sdk_ffi.so)
 ```
 
 `-r` builds with `small-release-stripped`, the profile the published SDK uses: no debug assertions or overflow checks,
@@ -56,7 +56,8 @@ adb install -r app/build/intermediates/apk/gplay/debug/app-gplay-arm64-v8a-debug
 
 `-Pandroid.injected.build.abi` skips the universal APK and the armeabi-v7a, x86 and x86_64 APKs (those three have no
 `libmatrix_sdk_ffi.so` and cannot start). As in Android Studio, it writes the APK to `app/build/intermediates/apk/`, not
-`app/build/outputs/apk/`. Deleting the old APK first makes Gradle package it from scratch: packaging in place appends a
-changed library and leaves the old copy behind as dead space, which made the APK 97 MB bigger after one AAR swap.
+`app/build/outputs/apk/`, and an APK left there by an earlier build stays stale, so don't install from it. Deleting
+the old APK first makes Gradle package it from scratch: packaging in place appends a changed library and leaves the old
+copy behind as dead space, which made the APK 97 MB bigger after one AAR swap.
 
 Release builds keep the published SDK until the method is upstream or the AAR is published for every ABI.
