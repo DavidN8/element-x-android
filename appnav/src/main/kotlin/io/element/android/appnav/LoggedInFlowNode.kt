@@ -64,6 +64,7 @@ import io.element.android.features.linknewdevice.api.LinkNewDeviceEntryPoint
 import io.element.android.features.location.api.LocalMapTilerConfig
 import io.element.android.features.location.api.LocationService
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
+import io.element.android.features.matcha.api.MatchaSpaceBoardsEntryPoint
 import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.networkmonitor.api.NetworkMonitor
 import io.element.android.features.networkmonitor.api.NetworkStatus
@@ -164,6 +165,7 @@ class LoggedInFlowNode(
     private val locationService: LocationService,
     private val loggedInEventProcessorFactory: LoggedInEventProcessor.Factory,
     private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
+    private val matchaSpaceBoardsEntryPoint: MatchaSpaceBoardsEntryPoint,
 ) : BaseFlowNode<LoggedInFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = NavTarget.Placeholder,
@@ -311,6 +313,10 @@ class LoggedInFlowNode(
         /** The notes of a space, opened from the Notes tab of Home. */
         @Parcelize
         data class SpaceNote(val spaceId: RoomId, val documentId: String?) : NavTarget
+
+        /** The boards of a space's channels, opened from the Channels tab of Home. */
+        @Parcelize
+        data class SpaceBoards(val spaceId: RoomId) : NavTarget
     }
 
     override fun resolve(navTarget: NavTarget, buildContext: BuildContext): Node {
@@ -397,17 +403,16 @@ class LoggedInFlowNode(
                         isTasksTableShown = isVisible
                     }
 
-                    override fun navigateToThread(roomId: RoomId, threadId: ThreadId) {
-                        lifecycleScope.launch {
-                            // The chat opens first, so back from the thread leads to the chat (spec §4.0).
-                            attachRoom(roomIdOrAlias = roomId.toRoomIdOrAlias(), clearBackstack = false)
-                                .attachThread(threadId, focusedEventId = null)
-                        }
-                    }
+                    override fun navigateToThread(roomId: RoomId, threadId: ThreadId) = openThread(roomId, threadId)
 
                     override fun navigateToSpaceNote(spaceId: RoomId, documentId: String?) {
                         // Single top: in the two-pane layout, opening another note replaces the one in the detail pane.
                         backstack.singleTop(NavTarget.SpaceNote(spaceId = spaceId, documentId = documentId))
+                    }
+
+                    override fun navigateToSpaceBoards(spaceId: RoomId) {
+                        // Single top, as for the notes.
+                        backstack.singleTop(NavTarget.SpaceBoards(spaceId))
                     }
                 }
                 homeEntryPoint.createNode(
@@ -634,6 +639,26 @@ class LoggedInFlowNode(
                     callback = callback,
                 )
             }
+            is NavTarget.SpaceBoards -> {
+                val callback = object : MatchaSpaceBoardsEntryPoint.Callback {
+                    override fun navigateToRoom(roomId: RoomId) {
+                        lifecycleScope.launch { attachRoom(roomIdOrAlias = roomId.toRoomIdOrAlias(), clearBackstack = false) }
+                    }
+
+                    override fun navigateToThread(roomId: RoomId, threadId: ThreadId) = openThread(roomId, threadId)
+
+                    override fun close() {
+                        // Its own element, as for the notes.
+                        backstack.removeLast(navTarget)
+                    }
+                }
+                matchaSpaceBoardsEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    spaceId = navTarget.spaceId,
+                    callback = callback,
+                )
+            }
             is NavTarget.IncomingVerificationRequest -> {
                 incomingVerificationEntryPoint.createNode(
                     parentNode = this,
@@ -646,6 +671,14 @@ class LoggedInFlowNode(
                     },
                 )
             }
+        }
+    }
+
+    private fun openThread(roomId: RoomId, threadId: ThreadId) {
+        lifecycleScope.launch {
+            // The chat opens first, so back from the thread leads to the chat (spec §4.0).
+            attachRoom(roomIdOrAlias = roomId.toRoomIdOrAlias(), clearBackstack = false)
+                .attachThread(threadId, focusedEventId = null)
         }
     }
 

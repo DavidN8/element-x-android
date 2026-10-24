@@ -392,9 +392,37 @@ class RoomListViewTest : RobolectricTest() {
             onNodeWithText("Acme").performClick()
         }
     }
+
+    @Test
+    fun `on the Channels tab, All notes opens the space's notes`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(RoomId("!acme:example.com")) { callback ->
+            setChannelsTab(onSpaceNotesClick = callback)
+            clickOn(R.string.screen_home_channels_all_notes)
+        }
+    }
+
+    @Test
+    fun `on the Channels tab, All boards opens the space's boards`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(RoomId("!acme:example.com")) { callback ->
+            setChannelsTab(onSpaceBoardsClick = callback)
+            clickOn(R.string.screen_home_channels_all_boards)
+        }
+    }
+
+    @Test
+    fun `on the Channels tab, All chats opens the space`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(RoomId("!acme:example.com")) { callback ->
+            setChannelsTab(onRoomClick = callback)
+            clickOn(R.string.screen_home_channels_all_chats)
+        }
+    }
 }
 
-private fun AndroidComposeUiTest<ComponentActivity>.setChannelsTab(onRoomClick: (RoomId) -> Unit) {
+private fun AndroidComposeUiTest<ComponentActivity>.setChannelsTab(
+    onRoomClick: (RoomId) -> Unit = EnsureNeverCalledWithParam(),
+    onSpaceNotesClick: (RoomId) -> Unit = EnsureNeverCalledWithParam(),
+    onSpaceBoardsClick: (RoomId) -> Unit = EnsureNeverCalledWithParam(),
+) {
     val spaceChannels = SpaceChannels(
         space = aSpaceRoom(displayName = "Acme", roomId = RoomId("!acme:example.com"), state = CurrentUserMembership.JOINED),
         channels = persistentListOf(aRoomListRoomSummary(id = "!general:example.com", name = "general")),
@@ -408,12 +436,16 @@ private fun AndroidComposeUiTest<ComponentActivity>.setChannelsTab(onRoomClick: 
             channels = HomeChannels(spaces = persistentListOf(spaceChannels), otherChannels = persistentListOf()),
         ),
         onRoomClick = onRoomClick,
+        onSpaceNotesClick = onSpaceNotesClick,
+        onSpaceBoardsClick = onSpaceBoardsClick,
     )
 }
 
 private fun AndroidComposeUiTest<ComponentActivity>.setRoomListView(
     state: RoomListState,
     onRoomClick: (RoomId) -> Unit = EnsureNeverCalledWithParam(),
+    onSpaceNotesClick: (RoomId) -> Unit = EnsureNeverCalledWithParam(),
+    onSpaceBoardsClick: (RoomId) -> Unit = EnsureNeverCalledWithParam(),
     onSettingsClick: () -> Unit = EnsureNeverCalled(),
     onSetUpRecoveryClick: () -> Unit = EnsureNeverCalled(),
     onConfirmRecoveryKeyClick: () -> Unit = EnsureNeverCalled(),
@@ -443,6 +475,8 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomListView(
                 homeSpacesState = homeSpacesState,
             ),
             onRoomClick = { roomId, _ -> onRoomClick(roomId) },
+            onSpaceNotesClick = onSpaceNotesClick,
+            onSpaceBoardsClick = onSpaceBoardsClick,
             onSettingsClick = onSettingsClick,
             onAddAccountClick = onAddAccountClick,
             onSwitchToAccount = EnsureNeverCalledWithParam(),
