@@ -16,6 +16,7 @@ import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.roomlist.RoomList
+import io.element.android.libraries.matrix.api.roomlist.RoomSummary
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
@@ -37,11 +38,14 @@ class TasksTabRoomsTest {
     /** Room ids are unique per test: the "no board" answers are remembered process-wide. */
     private fun aRoomId(name: String) = RoomId("!$name-${System.nanoTime()}:x")
 
-    private fun TestScope.aClient(rooms: List<Pair<RoomId, BaseRoom>>) = FakeMatrixClient(
+    private fun TestScope.aClient(
+        rooms: List<Pair<RoomId, BaseRoom>>,
+        summaries: MutableStateFlow<List<RoomSummary>> = MutableStateFlow(rooms.map { aRoomSummary(roomId = it.first) }),
+    ) = FakeMatrixClient(
         sessionCoroutineScope = backgroundScope,
         roomListService = FakeRoomListService(
             allRooms = FakeDynamicRoomList(
-                summaries = MutableStateFlow(rooms.map { aRoomSummary(roomId = it.first) }),
+                summaries = summaries,
                 loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(rooms.size)),
             ),
         ),
@@ -248,5 +252,72 @@ class TasksTabRoomsTest {
         write.complete(Unit)
         testScheduler.runCurrent()
         room.baseRoom.assertDestroyed()
+    }
+
+    @Test
+    fun `a chat screen reads through the store of a board the tab has open, which outlives the tab until the screen lets it go`() = runTest {
+        val roomId = aRoomId("held")
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope) { Result.success(pointer) }
+        val rooms = TasksTabRooms(aClient(listOf(roomId to room)))
+        val shown = backgroundScope.launch { rooms.run() }
+        val board = rooms.chats.first { it.boards.isNotEmpty() }.boards.single()
+        val held = rooms.acquire(roomId)!!
+        assertThat(held.store).isSameInstanceAs(board.room.store)
+        shown.cancel()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE + 1.seconds)
+        testScheduler.runCurrent()
+        // The tab has let the board go, so it isn't handed out again, but it keeps working for the screen holding it.
+        assertThat(rooms.acquire(roomId)).isNull()
+        assertThat(room.baseRoom.isDestroyed).isFalse()
+        held.store.send(MatchaConfig.EVENT_THREAD_METADATA, "{}")
+        held.store.snapshot.first { snapshot -> snapshot.events.any { it.eventId == "${'$'}sent" } }
+        rooms.release(held)
+        testScheduler.runCurrent()
+        room.baseRoom.assertDestroyed()
+    }
+
+    @Test
+    fun `a chat that leaves the list goes once the last screen holding it and the tab's writes are done`() = runTest {
+        val roomId = aRoomId("left")
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope) { Result.success(pointer) }
+        val summaries = MutableStateFlow(listOf(aRoomSummary(roomId = roomId)))
+        val rooms = TasksTabRooms(aClient(listOf(roomId to room), summaries))
+        backgroundScope.launch { rooms.run() }
+        val board = rooms.chats.first { it.boards.isNotEmpty() }.boards.single()
+        val first = rooms.acquire(roomId)!!
+        val second = rooms.acquire(roomId)!!
+        val write = CompletableDeferred<Unit>()
+        board.room.writeScope.launch { write.await() }
+        summaries.value = emptyList()
+        testScheduler.runCurrent()
+        assertThat(rooms.chats.first().boards).isEmpty()
+        rooms.release(first)
+        testScheduler.runCurrent()
+        assertThat(room.baseRoom.isDestroyed).isFalse()
+        rooms.release(second)
+        testScheduler.runCurrent()
+        assertThat(room.baseRoom.isDestroyed).isFalse()
+        write.complete(Unit)
+        testScheduler.runCurrent()
+        room.baseRoom.assertDestroyed()
+    }
+
+    @Test
+    fun `once the tab has let a board go, a chat screen opened later doesn't get the old store`() = runTest {
+        val roomId = aRoomId("fresh")
+        val room = aMatchaJoinedRoom(roomId = roomId, roomCoroutineScope = backgroundScope) { Result.success(pointer) }
+        val rooms = TasksTabRooms(aClient(listOf(roomId to room)))
+        val shown = backgroundScope.launch { rooms.run() }
+        rooms.chats.first { it.boards.isNotEmpty() }
+        val old = rooms.acquire(roomId)!!
+        rooms.release(old)
+        shown.cancel()
+        testScheduler.advanceTimeBy(TasksTabRooms.KEEP_ALIVE + 1.seconds)
+        testScheduler.runCurrent()
+        room.baseRoom.assertDestroyed()
+        assertThat(rooms.acquire(roomId)).isNull()
+
+        assertThat(check(rooms).boards.map { it.roomId }).containsExactly(roomId)
+        assertThat(rooms.acquire(roomId)!!.store).isNotSameInstanceAs(old.store)
     }
 }

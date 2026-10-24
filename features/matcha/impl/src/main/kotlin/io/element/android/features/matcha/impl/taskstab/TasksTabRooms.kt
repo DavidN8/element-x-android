@@ -59,7 +59,10 @@ internal data class TabRoom(
     val store: MatchaRoomStore,
     /** Writes started from the tab; the room is destroyed only once they are done. */
     val writeScope: CoroutineScope,
-)
+) {
+    /** The chat screens reading through [store], see [TasksTabRooms.acquire]; the room is destroyed only once they are gone. */
+    val holders = MutableStateFlow(0)
+}
 
 /** A chat with a board and what its store has read. */
 internal data class TabChat(
@@ -86,6 +89,7 @@ internal data class TabChats(
  * The chats the Tasks tab reads, one per session. [run] checks every joined chat that isn't a space for a task board, a few at a
  * time, keeps a [MatchaRoomStore] open for each chat that has one, and destroys every room it opened once the user leaves that chat,
  * or [KEEP_ALIVE] after [run] ends unless it runs again: coming back to the tab, or from a task's thread, finds every board read.
+ * A chat screen opened meanwhile reads through the same store (see [acquire]), and a room it holds is destroyed only once it is gone.
  * A chat has a board when its board pointer is set, as on the web client. A pointer in the stored room state proves it, but the
  * sync only stores the custom state it asked for, so a chat without one is read like the board does: it has a board when its
  * store finds one in the history it reads first.
@@ -146,6 +150,15 @@ internal class TasksTabRooms(
 
     /** Checks the chats again that could not be checked, and opens again the boards that failed to open. */
     fun retry() = retries.update { it + 1 }
+
+    /**
+     * Holds the board the tab has open for [roomId], so the chat's screens read through its store rather than opening a second one;
+     * null when the tab has none. The room isn't destroyed until each hold is let go with [release], even once the tab lets it go.
+     */
+    fun acquire(roomId: RoomId): TabRoom? = (checks.value[roomId] as? Check.Board)?.room?.also { room -> room.holders.update { it + 1 } }
+
+    /** Lets go of a hold taken by [acquire]; safe from any thread. */
+    fun release(room: TabRoom) = room.holders.update { it - 1 }
 
     /** Follows the user's joined chats until cancelled, then destroys every room it opened once [KEEP_ALIVE] passes without another run. */
     suspend fun run() = runLock.withLock {
@@ -315,8 +328,10 @@ internal class TasksTabRooms(
         val room = (check as? Check.Board)?.room ?: return
         val writes = room.writeScope.coroutineContext.job
         // A write the user started still finishes, and lasts while its snackbar shows; the room goes once nothing uses it, so an
-        // Undo or Retry tapped after the user left the tab still writes.
+        // Undo or Retry tapped after the user left the tab still writes. A chat still open on the store keeps it until it goes;
+        // nothing new can take a hold once the room is dropped from the checks.
         client.sessionCoroutineScope.launch {
+            room.holders.first { it == 0 }
             while (true) {
                 val running = writes.children.toList().takeIf { it.isNotEmpty() } ?: break
                 running.joinAll()
