@@ -187,6 +187,11 @@ class MatchaRoomStore(
      */
     private val computation: CoroutineDispatcher? = null,
 ) {
+    /**
+     * Builds snapshots on [computation], one at a time: on a pool the combined flows' collectors could run in parallel and pair a
+     * finished load with relation events one update old, so a board could show for a frame without its cards.
+     */
+    private val snapshotDispatcher = computation?.limitedParallelism(1)
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
     private val scanEvents = MutableStateFlow<List<RawEvent>>(emptyList())
 
@@ -358,7 +363,7 @@ class MatchaRoomStore(
             buildSnapshot(events, threadData, state, perms, status)
         }
             // Only the latest snapshot matters, so a burst of changes is built once.
-            .let { snapshots -> computation?.let { snapshots.conflate().flowOn(it) } ?: snapshots }
+            .let { snapshots -> snapshotDispatcher?.let { snapshots.conflate().flowOn(it) } ?: snapshots }
             .distinctUntilChanged()
             .onEach { snapshot ->
                 _snapshot.value = snapshot
