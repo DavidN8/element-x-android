@@ -186,6 +186,7 @@ class LoggedInFlowNode(
 
     // The tab selected in Home: in the two-pane layout, it picks the message of the empty detail pane.
     private var homeTab by mutableStateOf(HomeTab.Chats)
+    private var isTasksTableShown by mutableStateOf(false)
     private val loggedInFlowProcessor = loggedInEventProcessorFactory.create(snackbarDispatcher)
 
     /**
@@ -390,6 +391,10 @@ class LoggedInFlowNode(
 
                     override fun onTabSelected(tab: HomeTab) {
                         homeTab = tab
+                    }
+
+                    override fun onTasksTableVisibilityChange(isVisible: Boolean) {
+                        isTasksTableShown = isVisible
                     }
 
                     override fun navigateToThread(roomId: RoomId, threadId: ThreadId) {
@@ -729,7 +734,12 @@ class LoggedInFlowNode(
                                 element.key.navTarget == NavTarget.Home && element.targetState != DESTROYED
                             }
                             if (isTwoPane && homeElement != null) {
-                                LoggedInTwoPaneView(homeElement = homeElement, homeTab = homeTab)
+                                LoggedInTwoPaneView(
+                                    homeElement = homeElement,
+                                    homeTab = homeTab,
+                                    // The tasks table needs the room; it gets the whole width until a task is opened.
+                                    isHomeFullWidth = homeTab == HomeTab.Tasks && isTasksTableShown,
+                                )
                             } else {
                                 BackstackView(transitionHandler = rememberLoggedInFlowTransitionHandler(backstack))
                             }

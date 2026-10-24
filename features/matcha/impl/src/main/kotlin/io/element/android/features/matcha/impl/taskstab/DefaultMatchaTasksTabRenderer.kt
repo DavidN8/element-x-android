@@ -9,6 +9,10 @@ package io.element.android.features.matcha.impl.taskstab
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import dev.zacsweers.metro.ContributesBinding
 import io.element.android.features.matcha.api.MatchaTasksTabRenderer
@@ -25,9 +29,14 @@ class DefaultMatchaTasksTabRenderer(
         contentPadding: PaddingValues,
         onOpenRoom: (RoomId) -> Unit,
         onOpenThread: (RoomId, ThreadId) -> Unit,
+        onTableVisibilityChange: (Boolean) -> Unit,
         modifier: Modifier,
     ) {
         val state = presenter.present(onOpenRoom = onOpenRoom, onOpenThread = onOpenThread)
+        val isTableShown = state.isVisible && state.isTable
+        val latestOnTableVisibilityChange by rememberUpdatedState(onTableVisibilityChange)
+        LaunchedEffect(isTableShown) { latestOnTableVisibilityChange(isTableShown) }
+        DisposableEffect(Unit) { onDispose { latestOnTableVisibilityChange(false) } }
         if (!state.isVisible) return
         TasksTabView(state = state, contentPadding = contentPadding, modifier = modifier)
     }

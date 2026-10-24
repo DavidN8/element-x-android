@@ -55,6 +55,7 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
                         contentPadding: PaddingValues,
                         onOpenRoom: (RoomId) -> Unit,
                         onOpenThread: (RoomId, ThreadId) -> Unit,
+                        onTableVisibilityChange: (Boolean) -> Unit,
                         modifier: Modifier,
                     ) = lambdaError()
                 },

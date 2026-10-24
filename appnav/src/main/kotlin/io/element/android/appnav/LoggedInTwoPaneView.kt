@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import io.element.android.appnav.twopane.NoRoomSelectedView
@@ -38,14 +39,17 @@ private const val DETAIL_PANE_WEIGHT = 3f
  * The nav model is untouched: this only changes how the existing backstack is drawn, so phone
  * behaviour is unchanged. While another element is active the Home node is stashed (lifecycle CREATED),
  * so back presses go to the detail pane first and Home's own back handlers only resume once it is active again.
- * While nothing is open, the detail pane shows a message for the tab selected in Home, [homeTab].
+ * While nothing is open, the detail pane shows a message for the tab selected in Home, [homeTab], unless [isHomeFullWidth] asks for
+ * the whole width for Home, such as the Tasks tab's table.
  */
 @Composable
 internal fun LoggedInFlowNode.LoggedInTwoPaneView(
     homeElement: BackStackElement<LoggedInFlowNode.NavTarget>,
     homeTab: HomeTab,
     modifier: Modifier = Modifier,
+    isHomeFullWidth: Boolean = false,
 ) {
+    val isDetailPaneHidden = isHomeFullWidth && homeElement.targetState == BackStack.State.ACTIVE
     Row(modifier = modifier) {
         // The Home node is kept alive while stashed (ChildEntry.KeepMode.KEEP), so it can be drawn directly.
         // Wrapped in a Box like Appyx's ChildRendererImpl does: flow nodes don't apply the modifier they are given.
@@ -57,9 +61,10 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
         ) {
             homeNode.Compose()
         }
+        // Kept composed at zero width while hidden, so the backstack's children are never dropped mid-change.
         Box(
             modifier = Modifier
-                .weight(DETAIL_PANE_WEIGHT)
+                .then(if (isDetailPaneHidden) Modifier.width(0.dp) else Modifier.weight(DETAIL_PANE_WEIGHT))
                 .fillMaxHeight(),
         ) {
             // The screens of this pane continue the list pane's header band in their top bars.

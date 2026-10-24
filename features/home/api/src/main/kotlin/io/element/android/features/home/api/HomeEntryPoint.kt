@@ -45,5 +45,10 @@ interface HomeEntryPoint : FeatureEntryPoint {
 
         /** Opens a note of a space from the Notes tab, or the space's notes when [documentId] is null. */
         fun navigateToSpaceNote(spaceId: RoomId, documentId: String?)
+
+        /** Called with whether the Tasks tab shows its table, which a two-pane layout gives the whole width while nothing else is open. */
+        fun onTasksTableVisibilityChange(isVisible: Boolean) {
+            // Only a two-pane host needs it.
+        }
     }
 }

@@ -268,6 +268,7 @@ class HomeFlowNode(
                         contentPadding = padding,
                         onOpenRoom = { roomId -> navigateToRoom(roomId = roomId, eventId = null) },
                         onOpenThread = callback::navigateToThread,
+                        onTableVisibilityChange = callback::onTasksTableVisibilityChange,
                         modifier = Modifier,
                     )
                 },

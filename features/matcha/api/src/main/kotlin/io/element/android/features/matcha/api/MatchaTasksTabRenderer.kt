@@ -21,6 +21,8 @@ interface MatchaTasksTabRenderer {
         contentPadding: PaddingValues,
         onOpenRoom: (RoomId) -> Unit,
         onOpenThread: (RoomId, ThreadId) -> Unit,
+        /** Called with whether the tab shows its table, so a two-pane layout can give it the whole width while nothing else is open. */
+        onTableVisibilityChange: (Boolean) -> Unit,
         modifier: Modifier,
     )
 }
