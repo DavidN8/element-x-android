@@ -34,8 +34,10 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +66,7 @@ import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.parcelize.Parcelize
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /** Keeps the last row clear of the New note button. */
 private val FAB_CLEARANCE = 88.dp
@@ -90,7 +93,7 @@ fun NotesTabView(
         when (val content = state.content) {
             NotesTabContent.Loading -> Column(Modifier.padding(contentPadding)) { repeat(PLACEHOLDER_ROWS) { DocRowPlaceholder() } }
             is NotesTabContent.Empty -> DocsMessagePage(
-                icon = CompoundIcons.Document(),
+                icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes),
                 title = stringResource(R.string.screen_matcha_notes_tab_empty_title),
                 message = stringResource(if (content.hasSpaces) R.string.screen_matcha_notes_tab_none_on_body else R.string.screen_matcha_notes_tab_empty_body),
                 modifier = Modifier.padding(contentPadding),

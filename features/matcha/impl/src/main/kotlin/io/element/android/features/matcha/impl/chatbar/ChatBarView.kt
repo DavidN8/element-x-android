@@ -209,7 +209,7 @@ private fun MoreChip(state: ChatBarState) {
             if (state.canOpenSpaceDocs) {
                 MoreMenuItem(
                     text = stringResource(CommonStrings.common_matcha_space_docs),
-                    icon = CompoundIcons.Document(),
+                    icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes),
                     onClick = {
                         expanded = false
                         state.eventSink(ChatBarEvent.OpenSpaceDocs)

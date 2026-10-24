@@ -17,7 +17,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,7 @@ import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 @Composable
 fun SpaceDocsListView(
@@ -51,7 +54,7 @@ fun SpaceDocsListView(
         topBar = {
             TopAppBar(
                 navigationIcon = { BackButton(onClick = onBackClick) },
-                title = { DocsListTitle(spaceName = state.spaceName) },
+                title = { SpaceScreenTitle(title = stringResource(CommonStrings.common_matcha_docs), spaceName = state.spaceName) },
             )
         },
         floatingActionButton = {
@@ -76,7 +79,7 @@ fun SpaceDocsListView(
                     onAction = { state.eventSink(SpaceDocsListEvent.Retry) },
                 )
                 is SpaceDocsListContent.NotSetUp -> DocsMessagePage(
-                    icon = CompoundIcons.Document(),
+                    icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes),
                     title = null,
                     message = stringResource(if (content.canSetUp) R.string.screen_matcha_docs_tip else R.string.screen_matcha_docs_not_enabled),
                     actionText = if (content.canSetUp) stringResource(R.string.screen_matcha_docs_tip_action) else null,
@@ -96,11 +99,12 @@ fun SpaceDocsListView(
     }
 }
 
+/** A space's screen title: [title], with the space's name under it once known. */
 @Composable
-private fun DocsListTitle(spaceName: String?) {
+internal fun SpaceScreenTitle(title: String, spaceName: String?) {
     Column {
         Text(
-            text = stringResource(CommonStrings.common_matcha_docs),
+            text = title,
             style = ElementTheme.typography.aliasScreenTitle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

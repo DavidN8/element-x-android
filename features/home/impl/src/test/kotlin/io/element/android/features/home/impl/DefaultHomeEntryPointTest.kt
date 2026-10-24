@@ -83,6 +83,7 @@ class DefaultHomeEntryPointTest : RobolectricTest() {
             override fun onTabSelected(tab: HomeTab) = lambdaError()
             override fun navigateToThread(roomId: RoomId, threadId: ThreadId) = lambdaError()
             override fun navigateToSpaceNote(spaceId: RoomId, documentId: String?) = lambdaError()
+            override fun navigateToSpaceBoards(spaceId: RoomId) = lambdaError()
         }
         val result = entryPoint.createNode(
             parentNode = parentNode,

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn for Matcha: a note with a folded corner and two text lines, filled. 24 dp, 2 dp strokes drawn as fills, so it tints like the Compound icons. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:autoMirrored="true"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+  <path
+      android:fillType="evenOdd"
+      android:pathData="M5,3H19A2,2 0 0 1 21,5V13.5H14.5A1,1 0 0 0 13.5,14.5V21H5A2,2 0 0 1 3,19V5A2,2 0 0 1 5,3ZM8,8H16A1,1 0 0 1 17,9A1,1 0 0 1 16,10H8A1,1 0 0 1 7,9A1,1 0 0 1 8,8ZM8,12H11A1,1 0 0 1 12,13A1,1 0 0 1 11,14H8A1,1 0 0 1 7,13A1,1 0 0 1 8,12Z"
+      android:fillColor="#FF000000"/>
+  <path
+      android:pathData="M16,15H20.914L15,20.914V16A1,1 0 0 1 16,15Z"
+      android:fillColor="#FF000000"/>
+</vector>

@@ -22,3 +22,17 @@ data class SpaceServiceFilter(
     val level: Int,
     val descendants: List<RoomId>,
 )
+
+/**
+ * Each top level space's whole tree, by space id: a level 0 filter holds the direct children of a top level space, and the deeper
+ * filters that follow it hold the rest of its tree.
+ */
+fun List<SpaceServiceFilter>.topLevelSpaceTrees(): Map<RoomId, Set<RoomId>> {
+    val trees = mutableMapOf<RoomId, MutableSet<RoomId>>()
+    var topLevelSpaceId: RoomId? = null
+    for (filter in this) {
+        if (filter.level == 0) topLevelSpaceId = filter.spaceRoom.roomId
+        topLevelSpaceId?.let { trees.getOrPut(it) { mutableSetOf() } += filter.descendants }
+    }
+    return trees
+}

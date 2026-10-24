@@ -21,7 +21,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Inject
+import io.element.android.features.matcha.impl.protocol.ProjectedCard
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.protocol.isShownOnBoard
 import io.element.android.features.matcha.impl.store.MatchaPermissions
 import io.element.android.features.matcha.impl.store.MatchaWarning
 import io.element.android.features.matcha.impl.tasks.DeadlineFormatter
@@ -39,11 +41,16 @@ import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.spaces.topLevelSpaceTrees
 import io.element.android.services.appnavstate.api.AppNavigationStateService
 import io.element.android.services.appnavstate.api.currentRoomId
 import io.element.android.services.appnavstate.api.currentThreadId
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -55,6 +62,9 @@ import kotlin.time.Clock
  * a table, and the sheets that act on them. Like the web client's personal board, it only holds the tasks that involve the user:
  * their threads and the tasks of their direct chats. A task is changed through its chat's own store, which the tab holds while it
  * is shown (see [TasksTabRooms]), so no chat has to be opened.
+ *
+ * With a space, it is the space's All boards instead: the boards of the chats the Channels tab lists under the space, each holding
+ * what the chat's own board shows.
  */
 @Inject
 class TasksTabPresenter internal constructor(
@@ -77,16 +87,24 @@ class TasksTabPresenter internal constructor(
 
     private data class EditorTarget(val roomId: RoomId, val target: TaskEditorTarget)
 
+    /** All boards of a space: its name and the chats the Channels tab lists under it. */
+    private data class SpaceScope(val name: String?, val chatIds: Set<RoomId>)
+
     /**
      * @param onOpenRoom shows a chat, for Open chat and for an older standalone card.
      * @param onOpenThread shows a thread of a chat, for a task.
+     * @param spaceId the space whose boards are shown, or null for the Tasks tab.
      */
     @Composable
-    fun present(onOpenRoom: (RoomId) -> Unit, onOpenThread: (RoomId, ThreadId) -> Unit): TasksTabState {
+    fun present(onOpenRoom: (RoomId) -> Unit, onOpenThread: (RoomId, ThreadId) -> Unit, spaceId: RoomId? = null): TasksTabState {
         val isEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
-        if (isEnabled) {
+        // Null until the space's filters are known; always null on the Tasks tab.
+        val scope by remember(spaceId) { spaceScopeFlow(spaceId) }.collectAsState(initial = null)
+        val isScopeKnown = spaceId == null || scope != null
+        // A space's chats are checked first, so its boards wait until they are known; it shows Loading meanwhile anyway.
+        if (isEnabled && isScopeKnown) {
             // Leaving the tab cancels this; the rooms the tab opened stay open for a while, in case it comes back.
-            LaunchedEffect(Unit) { rooms.run() }
+            LaunchedEffect(Unit) { rooms.run(first = scope?.chatIds.orEmpty()) }
         }
         val chats by rooms.chats.collectAsState(initial = TabChats())
         val navigation by appNavigationStateService.appNavigationState.collectAsState()
@@ -105,21 +123,30 @@ class TasksTabPresenter internal constructor(
         val openRoomId = navigation.navigationState.currentRoomId()
         val openThreadId = navigation.navigationState.currentThreadId()
         val me = client.sessionId.value
-        val names = rememberPeopleNames(chats, me).toMap()
+
+        // As on the Channels tab, a direct chat of the space is left out, so it is neither listed nor waited for.
+        fun isInScope(roomId: RoomId) = spaceId == null || scope?.chatIds?.contains(roomId) == true && roomId !in chats.dms
+        val shown = remember(chats.boards, chats.dms, scope) {
+            (if (spaceId == null) chats.boards else chats.boards.filter { isInScope(it.roomId) }).toImmutableList()
+        }
+        // The Tasks tab holds the user's own tasks; a space's boards hold what each chat's own board shows.
+        val isShown: (ProjectedCard) -> Boolean = if (spaceId == null) { card -> me in card.participants } else { card -> card.isShownOnBoard(me) }
+        val names = rememberPeopleNames(shown, me, isShown).toMap()
         // Keyed on the boards alone: the counts of chats still being checked change far more often.
-        val tasks = remember(chats.boards, names, openRoomId, openThreadId) { chats.boards.toTabTasks(me, names, openRoomId, openThreadId) }
+        val tasks = remember(shown, names, openRoomId, openThreadId) { shown.toTabTasks(me, isShown, names, openRoomId, openThreadId) }
         val people = remember(tasks) { tasks.people(me, names) }
-        val boards = chats.boards.associateBy { it.roomId }
+        val boards = shown.associateBy { it.roomId }
         // A chosen chat that the user has left, or a person no task involves any more, no longer narrows the list.
         val chatFilter = chatFilterId?.let(boards::get)
         val personFilter = personFilterId?.let { id -> people.firstOrNull { it.userId == id } }
-        val visibleBoards = chatFilter?.let(::listOf) ?: chats.boards
+        val visibleBoards = chatFilter?.let(::listOf) ?: shown
         val visibleTasks = tasks.filter { task ->
             (chatFilter == null || task.chat.roomId == chatFilter.roomId) && (personFilter == null || personFilter.userId in task.task.participants)
         }
-        val loadingCount = chats.checkingCount + chats.boards.count { it.isLoading() }
+        // A space's boards only wait for its own chats.
+        val loadingCount = chats.checking.count(::isInScope) + shown.count { it.isLoading() }
         val content = when {
-            tasks.isEmpty() && (!chats.isRoomListLoaded || loadingCount > 0) -> TasksTabContent.Loading
+            tasks.isEmpty() && (!chats.isRoomListLoaded || !isScopeKnown || loadingCount > 0) -> TasksTabContent.Loading
             tasks.isEmpty() -> TasksTabContent.Empty
             isTable -> tableContent(visibleTasks, filter, tableSort)
             else -> tasksContent(visibleTasks, filter, isDoneExpanded)
@@ -222,7 +249,7 @@ class TasksTabPresenter internal constructor(
             null -> null
             is SheetTarget.ChooseChat -> key(target) {
                 val searchQuery = rememberTextFieldState()
-                val choices = if (target.purpose == ChooseChatPurpose.NewTask) chats.boards.filter { it.canAddTasks() } else chats.boards
+                val choices = if (target.purpose == ChooseChatPurpose.NewTask) shown.filter { it.canAddTasks() } else shown
                 TasksTabSheet.ChooseChat(target.purpose, choices.map { it.toTasksTabChat() }.toImmutableList(), searchQuery)
             }
             SheetTarget.ChoosePerson -> TasksTabSheet.ChoosePerson(people.toImmutableList(), selectedUserId = personFilter?.userId)
@@ -241,10 +268,11 @@ class TasksTabPresenter internal constructor(
             isTable = isTable,
             content = content,
             checkingCount = loadingCount,
-            failedCount = chats.failedCount + chats.boards.count { it.snapshot.loadFailed },
+            failedCount = chats.failed.count(::isInScope) + shown.count { it.snapshot.loadFailed },
             isUnreadable = visibleBoards.any { it.snapshot.unreadable },
             hasMore = visibleBoards.any { it.snapshot.hasMoreHistory },
             isLoadingMore = visibleBoards.any { it.snapshot.isLoadingMore },
+            spaceName = spaceId?.let { scope?.name.orEmpty() },
             sheet = sheet,
             editor = editor,
             eventSink = ::handleEvent,
@@ -253,13 +281,29 @@ class TasksTabPresenter internal constructor(
 
     private fun TabChat.listActions() = TaskListActions(room.store, snackbarDispatcher, room.writeScope)
 
-    /** Every task of every chat that involves the user [me], soonest deadline first (none last), then newest. */
-    private fun List<TabChat>.toTabTasks(me: String, names: Map<String, String>, openRoomId: RoomId?, openThreadId: ThreadId?): List<TabTask> {
+    private fun spaceScopeFlow(spaceId: RoomId?): Flow<SpaceScope?> {
+        spaceId ?: return flowOf(null)
+        return client.spaceService.spaceFiltersFlow.map { filters ->
+            SpaceScope(
+                name = filters.firstOrNull { it.level == 0 && it.spaceRoom.roomId == spaceId }?.spaceRoom?.displayName,
+                chatIds = filters.topLevelSpaceTrees()[spaceId].orEmpty(),
+            )
+        }
+    }
+
+    /** Every task of every chat that [isShown] keeps, soonest deadline first (none last), then newest. */
+    private fun List<TabChat>.toTabTasks(
+        me: String,
+        isShown: (ProjectedCard) -> Boolean,
+        names: Map<String, String>,
+        openRoomId: RoomId?,
+        openThreadId: ThreadId?,
+    ): List<TabTask> {
         val nowMillis = clock.now().toEpochMilliseconds()
         return flatMap { board ->
             val chat = board.toTasksTabChat()
             val rootTimestamps = board.snapshot.threads.associate { it.id to it.rootTimestamp }
-            board.snapshot.toTaskItems(deadlineFormatter, nowMillis) { me in it.participants }.map { task ->
+            board.snapshot.toTaskItems(deadlineFormatter, nowMillis, isShown).map { task ->
                 TabTask(
                     chat = chat,
                     task = task,
@@ -324,19 +368,19 @@ private fun TaskItem.section(today: LocalDate, zone: ZoneId): TaskSection {
 }
 
 /**
- * The display names of the people the user's tasks involve, by user id, each read once from a chat it appears in; until it is read,
- * the user id stands in.
+ * The display names of the people the listed tasks, those [isShown] keeps, involve, by user id, each read once from a chat it
+ * appears in; until it is read, the user id stands in.
  *
  * ponytail: a name is read once while the tab is shown, so a rename shows the next time it is opened.
  */
 @Composable
-private fun rememberPeopleNames(chats: TabChats, me: String): Map<String, String> {
+private fun rememberPeopleNames(boards: ImmutableList<TabChat>, me: String, isShown: (ProjectedCard) -> Boolean): Map<String, String> {
     val names = remember { mutableStateMapOf<String, String>() }
     val requested = remember { HashSet<String>() }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(chats) {
-        for (board in chats.boards) {
-            val cards = board.snapshot.board?.cards.orEmpty().filter { me in it.participants }
+    LaunchedEffect(boards) {
+        for (board in boards) {
+            val cards = board.snapshot.board?.cards.orEmpty().filter(isShown)
             for (userId in cards.flatMapTo(LinkedHashSet()) { it.participants } - me) {
                 if (!requested.add(userId)) continue
                 scope.launch { board.room.room.userDisplayName(UserId(userId)).getOrNull()?.let { names[userId] = it } }
