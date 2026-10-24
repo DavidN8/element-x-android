@@ -29,6 +29,8 @@ data class NotesTabState(
 data class NotesTabSpace(
     val spaceId: RoomId,
     val name: String?,
+    /** For a subspace, the name of the space it is listed under, shown below its own. */
+    val parentName: String?,
     val avatar: AvatarData,
 )
 
@@ -40,7 +42,7 @@ sealed interface NotesTabContent {
     /** No space to list: the user has none, or none has notes and the user can't turn them on in any. */
     data class Empty(val hasSpaces: Boolean) : NotesTabContent
 
-    /** A section per space, in the Spaces list's order. */
+    /** A section per space, in the Spaces list's order, each top-level space followed by its subspaces. */
     data class Spaces(val sections: ImmutableList<NotesSection>) : NotesTabContent
 }
 
