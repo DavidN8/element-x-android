@@ -227,5 +227,6 @@ private fun NotesSpace.canTakeNote(): Boolean {
 private fun NotesSpace.toNotesTabSpace() = NotesTabSpace(
     spaceId = spaceId,
     name = name,
+    parentName = parentName,
     avatar = AvatarData(id = spaceId.value, name = name, url = avatarUrl, size = AvatarSize.SpaceListItem),
 )

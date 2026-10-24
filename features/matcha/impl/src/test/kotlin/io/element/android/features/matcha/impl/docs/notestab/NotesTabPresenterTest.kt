@@ -30,7 +30,9 @@ import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.spaces.SpaceService
+import io.element.android.libraries.matrix.api.spaces.SpaceServiceFilter
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
@@ -52,6 +54,9 @@ class NotesTabPresenterTest {
     private val design = RoomId("!design:matrix.org")
     private val launch = RoomId("!launch:matrix.org")
     private val company = RoomId("!company:matrix.org")
+    private val research = RoomId("!research:matrix.org")
+    private val lab = RoomId("!lab:matrix.org")
+    private val drafts = RoomId("!drafts:matrix.org")
     private val plans = "11111111-1111-4111-8111-111111111111"
     private val guide = "22222222-2222-4222-8222-222222222222"
     private val opened = mutableListOf<Pair<RoomId, String?>>()
@@ -214,6 +219,36 @@ class NotesTabPresenterTest {
     }
 
     @Test
+    fun `each space is followed by its joined subspaces, a subspace of two spaces is listed once, and New note can target them`() = runTest {
+        val spaces = listOf(design, research, drafts, launch, lab).map { aNotesSpace(it) }
+        val filters = listOf(
+            aFilter(design),
+            aFilter(research, level = 1),
+            // A subspace the user was only invited to.
+            aFilter(drafts, level = 1, state = CurrentUserMembership.INVITED),
+            aFilter(launch),
+            // Research is also a subspace of Launch.
+            aFilter(research, level = 1),
+            aFilter(lab, level = 1),
+        )
+        val tab = aTab(aClient(spaces, filters))
+        tab.test {
+            val listed = awaitUntil { it.sections().size == 4 }
+            assertThat(listed.sections().map { it.space.spaceId }).containsExactly(design, research, launch, lab).inOrder()
+            assertThat(listed.sections().map { it.space.parentName }).containsExactly(null, "design", null, "launch").inOrder()
+            assertThat(tab.reader.spaces.first()?.map { it.spaceId }).containsExactly(design, research, launch, lab).inOrder()
+
+            listed.eventSink(NotesTabEvent.NewNote)
+            val choosing = awaitUntil { it.sheet is NotesTabSheet.ChooseSpace }
+            val choices = (choosing.sheet as NotesTabSheet.ChooseSpace).spaces
+            assertThat(choices).containsExactlyElementsIn(listed.sections().map { it.space }).inOrder()
+            choosing.eventSink(NotesTabEvent.ChooseSpace(lab))
+            awaitUntil { it.sheet is NotesTabSheet.Name }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `a note whose sheet is dismissed while it saves is still created once and opened, and its catalog is closed after`() = runTest {
         val space = aNotesSpace(design)
         val engine = FakeYjsEngine()
@@ -282,16 +317,24 @@ class NotesTabPresenterTest {
     private fun aNotesSpace(roomId: RoomId, items: List<MatrixTimelineItem> = emptyList()) =
         DocsRoomFixture(listOf(aCreateItem()) + items, roomId = roomId, stateEvents = CONFIGURED_STATE)
 
-    /** A client whose space service lists [spaces] as its joined top-level spaces, in this order, replaying them like the real one. */
-    private fun TestScope.aClient(spaces: List<DocsRoomFixture>): FakeMatrixClient {
-        val spaceRooms = spaces.map { aSpaceRoom(roomId = it.room.roomId, displayName = it.room.roomId.value.removePrefix("!").substringBefore(":")) }
-        return FakeMatrixClient(
+    /**
+     * A client holding the rooms of [spaces], whose space service gives [filters] as its space filters, replaying them like the real
+     * one; by default every space is a joined top-level space, in this order.
+     */
+    private fun TestScope.aClient(spaces: List<DocsRoomFixture>, filters: List<SpaceServiceFilter> = spaces.map { aFilter(it.room.roomId) }) =
+        FakeMatrixClient(
             sessionCoroutineScope = backgroundScope,
             spaceService = object : SpaceService by FakeSpaceService() {
-                override val topLevelSpacesFlow = MutableStateFlow(spaceRooms)
+                override val spaceFiltersFlow = MutableStateFlow(filters)
             },
         ).apply { spaces.forEach { givenGetRoomResult(it.room.roomId, it.room) } }
-    }
+
+    /** The space filter of [roomId], a top-level space at level 0 and a subspace at level 1, named after its id. */
+    private fun aFilter(roomId: RoomId, level: Int = 0, state: CurrentUserMembership = CurrentUserMembership.JOINED) = SpaceServiceFilter(
+        spaceRoom = aSpaceRoom(roomId = roomId, displayName = roomId.value.removePrefix("!").substringBefore(":"), state = state),
+        level = level,
+        descendants = emptyList(),
+    )
 
     private data class Tab(val reader: NotesTabReader, val presenter: NotesTabPresenter)
 

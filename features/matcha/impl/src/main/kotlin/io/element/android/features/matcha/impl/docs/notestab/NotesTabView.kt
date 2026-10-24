@@ -197,12 +197,8 @@ private fun SpaceHeader(space: NotesTabSpace, hasBand: Boolean, onClick: () -> U
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(avatarData = space.avatar, avatarType = AvatarType.Space())
-            Text(
-                text = space.displayName(),
-                style = ElementTheme.typography.fontBodyLgMedium,
-                color = ElementTheme.colors.textPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            SpaceName(
+                space = space,
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 16.dp),
@@ -270,15 +266,31 @@ private fun ChooseSpaceSheet(spaces: ImmutableList<NotesTabSpace>, onChoose: (Ro
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Avatar(avatarData = space.avatar, avatarType = AvatarType.Space())
-                Text(
-                    text = space.displayName(),
-                    style = ElementTheme.typography.fontBodyLgMedium,
-                    color = ElementTheme.colors.textPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 16.dp),
-                )
+                SpaceName(space = space, modifier = Modifier.padding(start = 16.dp))
             }
+        }
+    }
+}
+
+/** The space's name and, for a subspace, the space it is listed under. */
+@Composable
+private fun SpaceName(space: NotesTabSpace, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        Text(
+            text = space.displayName(),
+            style = ElementTheme.typography.fontBodyLgMedium,
+            color = ElementTheme.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        space.parentName?.let { parentName ->
+            Text(
+                text = parentName,
+                style = ElementTheme.typography.fontBodyMdRegular,
+                color = ElementTheme.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
