@@ -1,7 +1,7 @@
 # Matcha integration — engineering brief
 
 Read with `WHATSAPP_DESIGN.md` (spec v2; its §4.0 Contract and §6.1 Supersedes override this brief where they differ), `MATCHA_PORT_PLAN.md` and `docs/matcha/FEATURE_TRACK_BRIEF.md`. The three tracks
-are merged into branch `matcha` in `/Users/david/Code/element-x-android` before you start. The Matcha screens live in
+are merged into branch `matcha` in `/Users/david/Code/element-group/element-x-android` before you start. The Matcha screens live in
 `features/matcha` behind the interfaces in `features/matcha/api`; your job is to show them in the app. Each item below
 is one commit. Gate every entry point with `FeatureFlags.MatchaWorkspaces` (the renderers already render nothing when
 it is off; navigation entries and menu actions must also be hidden).

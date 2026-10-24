@@ -24,7 +24,7 @@ Audience: the engineers implementing:
   - Never copy its name, logo, wordmark, doodle wallpaper, illustrations or icon glyphs.
   - Use `CompoundIcons`, plus the two Material Symbols (Apache-2.0) in §2.8.
   - The Chats title is our own product name in plain text (§6.2, decision 1).
-- **Path prefixes.** All paths are relative to `/Users/david/Code/element-x-android`.
+- **Path prefixes.** All paths are relative to `/Users/david/Code/element-group/element-x-android`.
 
   | Prefix | Path |
   |---|---|

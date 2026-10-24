@@ -36,6 +36,16 @@ open class NotesTabStatePreviewParam : PreviewParameterProvider<NotesTabState> {
             aNotesTabState(sheet = NotesTabSheet.ChooseSpace(persistentListOf(aDesignSpace, aLaunchSpace))),
             aNotesTabState(sheet = NotesTabSheet.Name(DocNameSheetState.new())),
             aNotesTabState(sheet = NotesTabSheet.Name(DocNameSheetState.new().copy(name = "Trip plans", error = DocNameError.SaveFailed))),
+            aNotesTabState(
+                content = NotesTabContent.Spaces(
+                    persistentListOf(
+                        NotesSection(aDesignSpace, NotesSectionContent.Notes(persistentListOf(DocRow(id = "main", title = null, editedAt = "Yesterday")))),
+                        NotesSection(aResearchSpace, NotesSectionContent.Notes(persistentListOf(DocRow(id = "main", title = null, editedAt = "14:05")))),
+                        NotesSection(aLaunchSpace, NotesSectionContent.Loading),
+                    )
+                ),
+            ),
+            aNotesTabState(sheet = NotesTabSheet.ChooseSpace(persistentListOf(aDesignSpace, aResearchSpace, aLaunchSpace))),
         )
 }
 
@@ -73,9 +83,11 @@ internal fun aNotesTabState(
 private val aDesignSpace = aNotesTabSpace("!design:matrix.org", "Design team")
 private val aLaunchSpace = aNotesTabSpace("!launch:matrix.org", "Launch")
 private val aCompanySpace = aNotesTabSpace("!company:matrix.org", null)
+private val aResearchSpace = aNotesTabSpace("!research:matrix.org", "Research", parentName = "Design team")
 
-private fun aNotesTabSpace(roomId: String, name: String?) = NotesTabSpace(
+private fun aNotesTabSpace(roomId: String, name: String?, parentName: String? = null) = NotesTabSpace(
     spaceId = RoomId(roomId),
     name = name,
+    parentName = parentName,
     avatar = AvatarData(id = roomId, name = name, size = AvatarSize.SpaceListItem),
 )

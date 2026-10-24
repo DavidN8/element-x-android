@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +47,7 @@ import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 @Composable
 fun SpaceDocsSetupView(
@@ -76,7 +78,10 @@ fun SpaceDocsSetupView(
                     .padding(horizontal = 24.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                BigIcon(style = BigIcon.Style.Default(CompoundIcons.Document()), modifier = Modifier.align(Alignment.CenterHorizontally))
+                BigIcon(
+                    style = BigIcon.Style.Default(ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes)),
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                )
                 SetupRow(CompoundIcons.Group(), R.string.screen_matcha_docs_setup_together_title, R.string.screen_matcha_docs_setup_together_body)
                 SetupRow(CompoundIcons.Lock(), R.string.screen_matcha_docs_setup_encrypted_title, R.string.screen_matcha_docs_setup_encrypted_body)
                 SetupRow(CompoundIcons.Room(), R.string.screen_matcha_docs_setup_rooms_title, R.string.screen_matcha_docs_setup_rooms_body)

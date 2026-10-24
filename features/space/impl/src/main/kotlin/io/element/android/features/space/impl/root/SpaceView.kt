@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
@@ -98,6 +99,7 @@ import io.element.android.libraries.matrix.ui.model.getAvatarData
 import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.coroutines.delay
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 @Composable
 fun SpaceView(
@@ -392,7 +394,7 @@ private fun DocsRow(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = CompoundIcons.Document(),
+                imageVector = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes),
                 contentDescription = null,
                 tint = ElementTheme.colors.iconSecondary,
             )
@@ -576,7 +578,7 @@ private fun SpaceViewTopBar(
                 if (showDocs) {
                     SpaceMenuItem(
                         titleRes = CommonStrings.common_matcha_docs,
-                        icon = CompoundIcons.Document(),
+                        icon = ImageVector.vectorResource(DesignSystemR.drawable.ic_matcha_notes),
                         onClick = {
                             showMenu = false
                             onDocsClick()

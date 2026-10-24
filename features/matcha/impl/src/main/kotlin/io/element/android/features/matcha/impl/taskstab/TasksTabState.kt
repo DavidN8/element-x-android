@@ -38,6 +38,8 @@ data class TasksTabState(
     /** Some chats have older history that may hold more tasks. */
     val hasMore: Boolean,
     val isLoadingMore: Boolean,
+    /** All boards of a space: the space's name, empty until known; null on the Tasks tab. */
+    val spaceName: String?,
     val sheet: TasksTabSheet?,
     /** The editor sheet, while it is open. */
     val editor: TaskEditorState?,

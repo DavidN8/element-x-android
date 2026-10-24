@@ -54,6 +54,9 @@ open class TasksTabStatePreviewParam : PreviewParameterProvider<TasksTabState> {
             aTasksTabState(isTable = true, content = aTableContent()),
             aTasksTabState(isTable = true, content = aTableContent(sort = TaskTableSort(TaskTableColumn.Task, isAscending = false))),
             aTasksTabState(isTable = true, filter = TasksTabFilter.Archived, content = TasksTabContent.Table(persistentListOf(), TaskTableSort())),
+            aTasksTabState(spaceName = "Acme"),
+            aTasksTabState(spaceName = "Acme", content = TasksTabContent.Empty),
+            aTasksTabState(spaceName = "", content = TasksTabContent.Loading, checkingCount = 3),
         )
 }
 
@@ -70,6 +73,7 @@ internal fun aTasksTabState(
     personFilter: TasksTabPerson? = null,
     hasPeople: Boolean = true,
     isTable: Boolean = false,
+    spaceName: String? = null,
 ) = TasksTabState(
     isVisible = true,
     filter = filter,
@@ -83,6 +87,7 @@ internal fun aTasksTabState(
     isUnreadable = isUnreadable,
     hasMore = hasMore,
     isLoadingMore = isLoadingMore,
+    spaceName = spaceName,
     sheet = sheet,
     editor = null,
     eventSink = {},

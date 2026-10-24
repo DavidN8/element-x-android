@@ -16,9 +16,9 @@ Where the research reports disagreed, the resolution is written next to the item
 
 | What | Where |
 |---|---|
-| Android fork (reference implementation for every client feature) | `~/Code/element-x-android`, branch `matcha` (133 commits past `develop`, all 2026-10-24), PR DavidN8/element-x-android#1. Matcha code in `features/matcha/{api,impl}`; ~13.9k production lines, ~6.1k test lines in `features/matcha/impl` |
+| Android fork (reference implementation for every client feature) | `~/Code/element-group/element-x-android`, branch `matcha` (133 commits past `develop`, all 2026-10-24), PR DavidN8/element-x-android#1. Matcha code in `features/matcha/{api,impl}`; ~13.9k production lines, ~6.1k test lines in `features/matcha/impl` |
 | Android docs to read | `MATCHA_PORT_PLAN.md` (protocol §2, SDK audit §3), `WHATSAPP_DESIGN.md` (§6.1 supersedes, §6.2 decisions, §6.3 round 2), `docs/matcha/rust-sdk/README.md` + `matcha-ffi-relations-json.patch`, `docs/matcha/*_BRIEF.md`, `docs/matcha/INTEGRATION_NOTES.md` |
-| Web fork (source of the wire protocol) | `~/Code/mozart-dm-group/element-web`, branch `matcha-beta`, remote `bouyant-dev/element-web`, deployed at https://beta-element.matchahoneylatte.com. Read `bot.md`, `docs/matcha-beta.md` |
+| Web fork (source of the wire protocol) | `~/Code/element-group/element-web`, branch `matcha-beta`, remote `bouyant-dev/element-web`, deployed at https://beta-element.matchahoneylatte.com. Read `bot.md`, `docs/matcha-beta.md` |
 | Desktop shell | Already inside the web fork: `apps/desktop` (Element Desktop 1.12.32, electron 44.4.5, untouched by the fork). **Verified** (`apps/desktop/package.json`) |
 | Upstream iOS app | `element-hq/element-x-ios`, researched at develop `2f9bac8` (2026-10-23). Fork base: tag `release/26.10.7` (commit `a11c16b602`), which pins SDK `exactVersion: 26.10.24`. **Verified** (`gh api repos/element-hq/element-x-ios/contents/project.yml?ref=release/26.10.7`) |
 | Rust SDK pins | Android `org.matrix.rustcomponents:sdk-android` 26.10.20 = matrix-rust-sdk `56bc591128`. iOS `element-hq/matrix-rust-components-swift` exactVersion 26.10.24 = matrix-rust-sdk `8de215a0aa` (15 commits ahead, same main line). **Verified** (`project.yml:76-79` in the iOS clone, commit message of the 26.10.24 tag) |

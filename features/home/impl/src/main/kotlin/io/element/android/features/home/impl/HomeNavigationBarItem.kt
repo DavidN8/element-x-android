@@ -18,6 +18,7 @@ import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
+import io.element.android.libraries.designsystem.R as DesignSystemR
 
 /**
  * The tabs of the bottom navigation bar. A tab's label is also its top bar title (except on Chats, which shows the product
@@ -51,16 +52,16 @@ enum class HomeNavigationBarItem(
     /** The Matcha tasks of all the user's chats, shown while the Matcha workspaces are on. */
     Tasks(
         labelRes = CommonStrings.common_matcha_tasks,
-        iconRes = CompoundDrawables.ic_compound_check_circle,
-        selectedIconRes = CompoundDrawables.ic_compound_check_circle_solid,
+        iconRes = DesignSystemR.drawable.ic_matcha_board,
+        selectedIconRes = DesignSystemR.drawable.ic_matcha_board_solid,
         homeTab = HomeTab.Tasks,
     ),
 
-    /** The notes (space documents) of all the user's spaces, shown while the Matcha workspaces are on. Compound has no solid document icon. */
+    /** The notes (space documents) of all the user's spaces, shown while the Matcha workspaces are on. */
     Notes(
         labelRes = R.string.screen_home_tab_notes,
-        iconRes = CompoundDrawables.ic_compound_document,
-        selectedIconRes = CompoundDrawables.ic_compound_document,
+        iconRes = DesignSystemR.drawable.ic_matcha_notes,
+        selectedIconRes = DesignSystemR.drawable.ic_matcha_notes_solid,
         homeTab = HomeTab.Notes,
     ),
 

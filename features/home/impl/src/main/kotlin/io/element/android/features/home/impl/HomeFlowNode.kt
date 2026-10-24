@@ -236,6 +236,8 @@ class HomeFlowNode(
             HomeView(
                 homeState = state,
                 onRoomClick = ::navigateToRoom,
+                onSpaceNotesClick = { callback.navigateToSpaceNote(spaceId = it, documentId = null) },
+                onSpaceBoardsClick = callback::navigateToSpaceBoards,
                 onSettingsClick = callback::navigateToSettings,
                 onAddAccountClick = callback::navigateToAddAccount,
                 onSwitchToAccount = callback::navigateToSession,

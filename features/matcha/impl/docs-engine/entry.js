@@ -12,12 +12,14 @@ import * as Y from "yjs";
 import { fromBase64, toBase64 } from "lib0/buffer";
 
 const REMOTE = {};
+// Each open document is a target, which the Kotlin side reads and edits, and a shadow mirroring it, on which remote updates are
+// checked before they reach the target.
 const docs = new Map();
 
 function get(id) {
-    const doc = docs.get(id);
-    if (!doc) throw new Error("unknown_document");
-    return doc;
+    const entry = docs.get(id);
+    if (!entry) throw new Error("unknown_document");
+    return entry;
 }
 
 function create() {
@@ -25,6 +27,21 @@ function create() {
     doc.getText("markdown");
     doc.getMap("documents");
     return doc;
+}
+
+// ponytail: the shadow doubles the memory of each open document; fine for notes of a few hundred kB.
+function openEntry() {
+    const entry = { target: create(), shadow: create() };
+    // Remote updates reach the shadow first, when `apply` checks them; every other change to the target follows here.
+    entry.target.on("update", (update, origin) => {
+        if (origin !== REMOTE) Y.applyUpdate(entry.shadow, update);
+    });
+    return entry;
+}
+
+function destroyEntry(entry) {
+    entry?.target.destroy();
+    entry?.shadow.destroy();
 }
 
 // Yjs queues valid updates whose causal predecessors are absent; that partial state must never look complete.
@@ -49,30 +66,30 @@ function capture(doc, change) {
 
 const operations = {
     open({ doc }) {
-        docs.get(doc)?.destroy();
-        docs.set(doc, create());
+        destroyEntry(docs.get(doc));
+        docs.set(doc, openEntry());
         return {};
     },
     close({ doc }) {
-        docs.get(doc)?.destroy();
+        destroyEntry(docs.get(doc));
         docs.delete(doc);
         return {};
     },
-    // Applies a remote update after checking it on a copy, so a malformed update never corrupts the document.
+    // Applies a remote update after checking it on the shadow, so a malformed update never corrupts the document.
     apply({ doc, update }) {
-        const target = get(doc);
+        const entry = get(doc);
         const bytes = fromBase64(update);
-        const probe = create();
         try {
-            Y.applyUpdate(probe, Y.encodeStateAsUpdate(target));
-            Y.applyUpdate(probe, bytes);
+            Y.applyUpdate(entry.shadow, bytes);
         } catch {
+            // A malformed update can be half integrated before it throws: the shadow is copied again from the target.
+            entry.shadow.destroy();
+            entry.shadow = create();
+            Y.applyUpdate(entry.shadow, Y.encodeStateAsUpdate(entry.target));
             return { valid: false };
-        } finally {
-            probe.destroy();
         }
-        Y.applyUpdate(target, bytes, REMOTE);
-        return { valid: true, missing: isMissingUpdates(target) };
+        Y.applyUpdate(entry.target, bytes, REMOTE);
+        return { valid: true, missing: isMissingUpdates(entry.target) };
     },
     // Applies remote updates in order, each checked like `apply`, and stops at the first malformed one: one bridge call for many.
     applyAll({ doc, updates }) {
@@ -81,7 +98,7 @@ const operations = {
         return { applied };
     },
     snapshot({ doc }) {
-        const target = get(doc);
+        const { target } = get(doc);
         return {
             text: target.getText("markdown").toString(),
             entries: target.getMap("documents").toJSON(),
@@ -90,7 +107,7 @@ const operations = {
     },
     // Changes are {index, remove, insert} against the current text and must not overlap.
     edit({ doc, changes }) {
-        const target = get(doc);
+        const { target } = get(doc);
         const text = target.getText("markdown");
         const ordered = [...changes].sort((a, b) => b.index - a.index);
         const update = capture(target, () => {
@@ -102,7 +119,7 @@ const operations = {
         return { update };
     },
     setEntry({ doc, key, value }) {
-        const target = get(doc);
+        const { target } = get(doc);
         return { update: capture(target, () => target.getMap("documents").set(key, value)) };
     },
     merge({ updates }) {

@@ -34,4 +34,8 @@
     <!-- The section of the Channels tab with the group chats that are in none of the user's spaces. -->
     <string name="screen_home_channels_other_section">Other channels</string>
     <string name="screen_home_channels_empty_title">Create a space to group your channels</string>
+    <!-- The rows under each space on the Channels tab: its notes, the boards of its channels, and its own list of chats. -->
+    <string name="screen_home_channels_all_notes">All notes</string>
+    <string name="screen_home_channels_all_boards">All boards</string>
+    <string name="screen_home_channels_all_chats">All chats</string>
 </resources>

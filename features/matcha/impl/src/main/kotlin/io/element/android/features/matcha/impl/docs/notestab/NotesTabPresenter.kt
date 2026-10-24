@@ -46,7 +46,8 @@ import timber.log.Timber
 
 /**
  * The Notes tab: a section per joined space with its notes, read by [NotesTabReader], and New note. A new note is named in its
- * space's own catalog, which is opened with the name sheet and closed with it.
+ * space's own catalog, which is opened with the name sheet and closed with it. A sheet dismissed while it saves is only hidden, so
+ * the save finishes in that catalog, which closes after it.
  */
 @Inject
 class NotesTabPresenter(
@@ -61,8 +62,8 @@ class NotesTabPresenter(
         data class Name(val spaceId: RoomId) : SheetTarget
     }
 
-    /** The name sheet of a new note and what it handles. */
-    private data class NameSheet(val state: DocNameSheetState, val eventSink: (NotesTabEvent) -> Unit)
+    /** The name sheet of a new note and what it handles; it is hidden after being dismissed while it saves. */
+    private data class NameSheet(val state: DocNameSheetState, val isHidden: Boolean, val eventSink: (NotesTabEvent) -> Unit)
 
     /** @param onOpenNote shows a note of a space, or the space's notes list when the document id is null. */
     @Composable
@@ -87,10 +88,15 @@ class NotesTabPresenter(
 
         val nameSheet = (sheetTarget as? SheetTarget.Name)?.let { target ->
             key(target) {
-                presentNameSheet(target.spaceId) { documentId ->
-                    sheetTarget = null
-                    currentOnOpenNote(target.spaceId, documentId)
-                }
+                presentNameSheet(
+                    spaceId = target.spaceId,
+                    onClose = { sheetTarget = null },
+                    // Like the docs list, a new note opens once saved, even when its sheet was dismissed while it saved.
+                    onCreate = { documentId ->
+                        sheetTarget = null
+                        currentOnOpenNote(target.spaceId, documentId)
+                    },
+                )
             }
         }
 
@@ -99,16 +105,21 @@ class NotesTabPresenter(
                 is NotesTabEvent.OpenNote -> currentOnOpenNote(event.spaceId, event.documentId)
                 is NotesTabEvent.Retry -> reader.retry(event.spaceId)
                 is NotesTabEvent.SpacesShown -> reader.setShown(event.spaceIds)
-                NotesTabEvent.NewNote -> sheetTarget = when {
-                    newNoteSpaces.size == 1 -> SheetTarget.Name(newNoteSpaces.single().spaceId)
-                    newNoteSpaces.isNotEmpty() -> SheetTarget.ChooseSpace
-                    else -> null
+                // A note still saving after its sheet was dismissed shows that sheet again, rather than a second note being started.
+                NotesTabEvent.NewNote -> if (nameSheet != null) {
+                    nameSheet.eventSink(event)
+                } else {
+                    sheetTarget = when {
+                        newNoteSpaces.size == 1 -> SheetTarget.Name(newNoteSpaces.single().spaceId)
+                        newNoteSpaces.isNotEmpty() -> SheetTarget.ChooseSpace
+                        else -> null
+                    }
                 }
                 is NotesTabEvent.ChooseSpace -> if (sheetTarget == SheetTarget.ChooseSpace && newNoteSpaces.any { it.spaceId == event.spaceId }) {
                     sheetTarget = SheetTarget.Name(event.spaceId)
                 }
                 is NotesTabEvent.UpdateName, NotesTabEvent.SubmitName -> nameSheet?.eventSink?.invoke(event)
-                NotesTabEvent.DismissSheet -> sheetTarget = null
+                NotesTabEvent.DismissSheet -> if (nameSheet != null) nameSheet.eventSink(event) else sheetTarget = null
             }
         }
 
@@ -119,18 +130,27 @@ class NotesTabPresenter(
             sheet = when (sheetTarget) {
                 null -> null
                 SheetTarget.ChooseSpace -> NotesTabSheet.ChooseSpace(newNoteSpaces.map { it.toNotesTabSpace() }.toImmutableList())
-                is SheetTarget.Name -> nameSheet?.let { NotesTabSheet.Name(it.state) }
+                is SheetTarget.Name -> nameSheet?.takeUnless { it.isHidden }?.let { NotesTabSheet.Name(it.state) }
             },
             eventSink = ::handleEvent,
         )
     }
 
-    /** The name sheet of a new note in [spaceId]. Its catalog reads the space while the name is typed. */
+    /**
+     * The name sheet of a new note in [spaceId]. Its catalog reads the space while the name is typed. Dismissed while it saves, it
+     * is only hidden, so this composition, with the save and the catalog, stays until the save ends; like the docs list's sheet, a
+     * failed save shows it again with the error, and Create then saves the same note.
+     *
+     * ponytail: leaving the tab while a note saves still cancels the save with the tab's composition, so the note may not be sent.
+     * Saving in the session's scope, with the catalog closed after it, would let it finish.
+     */
     @Composable
-    private fun presentNameSheet(spaceId: RoomId, onCreate: (documentId: String) -> Unit): NameSheet {
+    private fun presentNameSheet(spaceId: RoomId, onClose: () -> Unit, onCreate: (documentId: String) -> Unit): NameSheet {
         val coroutineScope = rememberCoroutineScope()
+        val currentOnClose by rememberUpdatedState(onClose)
         val currentOnCreate by rememberUpdatedState(onCreate)
         var sheet by remember { mutableStateOf(DocNameSheetState.new()) }
+        var isHidden by remember { mutableStateOf(false) }
         val catalog by produceState<Result<DocumentCatalog>?>(null) {
             val context = runCatchingExceptions { contextFactory.create(spaceId, isEarlierChatDocument = false, parentScope = this) }.getOrNull()
             value = context?.catalog?.let { Result.success(it) } ?: Result.failure(IllegalStateException("The space can't be opened"))
@@ -141,33 +161,39 @@ class NotesTabPresenter(
             }
         }
 
-        fun submit() = coroutineScope.launch {
-            val current = sheet.takeIf { !it.isSaving } ?: return@launch
+        fun submit() {
+            val current = sheet.takeIf { !it.isSaving } ?: return
             current.withNameError()?.let {
                 sheet = it
-                return@launch
+                return
             }
+            // Saving from here on, so a dismissal from now only hides the sheet.
             sheet = current.copy(isSaving = true, error = null)
-            snapshotFlow { catalog }.filterNotNull().first()
-                .fold(
-                    onSuccess = { catalog ->
-                        // The name can be typed before the catalog has read the space.
-                        withTimeoutOrNull(NotesTabReader.LOAD_TIMEOUT) { catalog.state.first { it.sync != DocumentSync.Loading } }
-                        current.saveIn(catalog)
-                    },
-                    onFailure = { Result.failure(it) },
-                )
-                .onSuccess { currentOnCreate(it) }
-                .onFailure {
-                    Timber.w(it, "Could not create a note in %s", spaceId)
-                    sheet = current.saveFailed(it)
-                }
+            coroutineScope.launch {
+                snapshotFlow { catalog }.filterNotNull().first()
+                    .fold(
+                        onSuccess = { catalog ->
+                            // The name can be typed before the catalog has read the space.
+                            withTimeoutOrNull(NotesTabReader.LOAD_TIMEOUT) { catalog.state.first { it.sync != DocumentSync.Loading } }
+                            current.saveIn(catalog)
+                        },
+                        onFailure = { Result.failure(it) },
+                    )
+                    .onSuccess { currentOnCreate(it) }
+                    .onFailure {
+                        Timber.w(it, "Could not create a note in %s", spaceId)
+                        sheet = current.saveFailed(it)
+                        isHidden = false
+                    }
+            }
         }
 
-        return NameSheet(sheet) { event ->
+        return NameSheet(sheet, isHidden) { event ->
             when (event) {
                 is NotesTabEvent.UpdateName -> sheet = sheet.copy(name = event.name, error = docNameError(event.name))
                 NotesTabEvent.SubmitName -> submit()
+                NotesTabEvent.DismissSheet -> if (sheet.isSaving) isHidden = true else currentOnClose()
+                NotesTabEvent.NewNote -> isHidden = false
                 else -> Unit
             }
         }
@@ -201,5 +227,6 @@ private fun NotesSpace.canTakeNote(): Boolean {
 private fun NotesSpace.toNotesTabSpace() = NotesTabSpace(
     spaceId = spaceId,
     name = name,
+    parentName = parentName,
     avatar = AvatarData(id = spaceId.value, name = name, url = avatarUrl, size = AvatarSize.SpaceListItem),
 )
