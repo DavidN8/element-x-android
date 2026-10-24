@@ -825,8 +825,6 @@ class MessagesFlowNode(
 
                     override fun openGeneral() = this@MessagesFlowNode.openGeneral()
 
-                    override fun openAllThreads() = backstack.push(NavTarget.ThreadsList)
-
                     override fun openSpaceDocs() = this@MessagesFlowNode.openSpaceDocs()
 
                     override fun openRoomDetails() = callback.navigateToRoomDetails()

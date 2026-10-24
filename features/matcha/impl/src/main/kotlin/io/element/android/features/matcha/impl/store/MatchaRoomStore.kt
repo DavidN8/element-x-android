@@ -8,7 +8,6 @@
 package io.element.android.features.matcha.impl.store
 
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
 import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
@@ -735,12 +734,6 @@ class MatchaRoomStore(
     /** Shows the board this client created until its pointer is read back from the room. */
     fun rememberCreatedBoard(rootId: String) {
         storedState.update { it.copy(createdBoardRoot = rootId) }
-    }
-
-    /** The newest card revision currently known for [cardId], for read-modify-write edits. */
-    fun latestRevision(cardId: String): CardRevision? {
-        val root = _snapshot.value.board?.rootId ?: return null
-        return _snapshot.value.events.firstNotNullOfOrNull { event -> KanbanProtocol.parseCard(event, root)?.takeIf { it.cardId == cardId } }
     }
 
     companion object {

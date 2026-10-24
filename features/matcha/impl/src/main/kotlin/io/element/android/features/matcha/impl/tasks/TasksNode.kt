@@ -61,7 +61,8 @@ class TasksNode(
 
                 override fun openThread(threadId: ThreadId) = callback.openThread(threadId)
 
-                override fun openAllThreads() = callback.openAllThreads()
+                // ponytail: the board has no All threads entry; the chat's top bar has it.
+                override fun openAllThreads() = Unit
 
                 override val openSpaceDocs: (() -> Unit)? = if (state.hasSpaceDocs) callback::openSpaceDocs else null
             }
