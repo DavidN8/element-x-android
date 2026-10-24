@@ -98,7 +98,7 @@
     </plurals>
     <string name="screen_matcha_tasks_filter_chat">"Chat"</string>
     <string name="screen_matcha_tasks_tab_empty_title">"No tasks yet"</string>
-    <string name="screen_matcha_tasks_tab_empty_body">"Tasks from your chats show up here."</string>
+    <string name="screen_matcha_tasks_tab_empty_body">"Tasks from your threads and direct messages show up here."</string>
     <string name="screen_matcha_tasks_tab_unreadable">"Some tasks can't be decrypted on this device yet."</string>
     <string name="screen_matcha_tasks_pick_chat_title">"Choose a chat"</string>
     <string name="screen_matcha_tasks_pick_chat_empty">"None of your chats has a task board yet."</string>
@@ -115,6 +115,11 @@
     <string name="screen_matcha_tasks_show_to_room">"Show to everyone in channel"</string>
     <string name="screen_matcha_tasks_show_to_room_hint">"Controls visibility on this board. Channel members can still read the linked conversation."</string>
     <string name="a11y_matcha_task_shown_to_room">"Shown to everyone in the channel"</string>
+    <string name="screen_matcha_tasks_filter_people">"People"</string>
+    <string name="screen_matcha_tasks_filter_people_title">"Filter by person"</string>
+    <string name="screen_matcha_tasks_all_people">"Everyone I work with"</string>
+    <string name="screen_matcha_tasks_with_people">"With %1$s"</string>
+    <string name="screen_matcha_tasks_just_you">"Just you"</string>
     <!-- End of channel tasks. -->
     <!-- Track C: reminders -->
     <string name="screen_matcha_reminder_title">Remind me</string>

@@ -48,6 +48,9 @@ open class TasksTabStatePreviewParam : PreviewParameterProvider<TasksTabState> {
             ),
             aTasksTabState(sheet = TasksTabSheet.Actions(task = aTabTask(aTaskItem(id = "t1", title = "Book the venue")), canEdit = true, canArchive = true)),
             aTasksTabState(sheet = TasksTabSheet.Actions(task = aTabTask(aTaskItem(id = "t1", title = "Book the venue")), canEdit = false, canArchive = false)),
+            aTasksTabState(personFilter = aBob),
+            aTasksTabState(sheet = TasksTabSheet.ChoosePerson(persistentListOf(aBob, aCarol), selectedUserId = null)),
+            aTasksTabState(personFilter = aCarol, sheet = TasksTabSheet.ChoosePerson(persistentListOf(aBob, aCarol), selectedUserId = aCarol.userId)),
         )
 }
 
@@ -61,10 +64,14 @@ internal fun aTasksTabState(
     hasMore: Boolean = false,
     isLoadingMore: Boolean = false,
     sheet: TasksTabSheet? = null,
+    personFilter: TasksTabPerson? = null,
+    hasPeople: Boolean = true,
 ) = TasksTabState(
     isVisible = true,
     filter = filter,
     chatFilter = chatFilter,
+    personFilter = personFilter,
+    hasPeople = hasPeople,
     content = content,
     checkingCount = checkingCount,
     failedCount = failedCount,
@@ -78,6 +85,8 @@ internal fun aTasksTabState(
 
 private val aDesignChat = aTasksTabChat("!design:matrix.org", "Design team")
 private val aLaunchChat = aTasksTabChat("!launch:matrix.org", "Launch")
+private val aBob = TasksTabPerson("@bob:matrix.org", "Bob")
+private val aCarol = TasksTabPerson("@carol:matrix.org", "Carol")
 
 private fun aTasksTabChat(roomId: String, name: String) = TasksTabChat(
     roomId = RoomId(roomId),
@@ -85,8 +94,8 @@ private fun aTasksTabChat(roomId: String, name: String) = TasksTabChat(
     avatar = AvatarData(id = roomId, name = name, size = AvatarSize.RoomListItem),
 )
 
-private fun aTabTask(task: TaskItem, chat: TasksTabChat = aDesignChat, isSelected: Boolean = false) =
-    TabTask(chat = chat, task = task, createdAt = 0, isSelected = isSelected)
+private fun aTabTask(task: TaskItem, chat: TasksTabChat = aDesignChat, isSelected: Boolean = false, people: List<String> = emptyList()) =
+    TabTask(chat = chat, task = task, createdAt = 0, isSelected = isSelected, people = people.toImmutableList())
 
 private fun aDoneTasks() = persistentListOf(
     aTabTask(aTaskItem(id = "d1", title = "Pick the date", status = TaskStatus.Done, replyCount = 12)),
@@ -97,7 +106,12 @@ private fun aTasksContent(isDoneExpanded: Boolean = false) = TasksTabContent.Tas
     groups = listOf(
         TaskGroup(
             section = TaskSection.Overdue,
-            tasks = persistentListOf(aTabTask(aTaskItem(id = "t1", title = "Book the venue", deadline = "Yesterday", isOverdue = true, hasReminder = true))),
+            tasks = persistentListOf(
+                aTabTask(
+                    aTaskItem(id = "t1", title = "Book the venue", deadline = "Yesterday", isOverdue = true, hasReminder = true, isSharedWithChat = true),
+                    people = listOf("Bob", "Carol"),
+                ),
+            ),
         ),
         TaskGroup(
             section = TaskSection.Today,
@@ -111,7 +125,9 @@ private fun aTasksContent(isDoneExpanded: Boolean = false) = TasksTabContent.Tas
         ),
         TaskGroup(
             section = TaskSection.Upcoming,
-            tasks = persistentListOf(aTabTask(aTaskItem(id = "t3", title = "Order the banners", status = TaskStatus.Doing, deadline = "Tue 17:00"))),
+            tasks = persistentListOf(
+                aTabTask(aTaskItem(id = "t3", title = "Order the banners", status = TaskStatus.Doing, deadline = "Tue 17:00"), people = listOf("Bob")),
+            ),
         ),
         TaskGroup(
             section = TaskSection.NoDeadline,

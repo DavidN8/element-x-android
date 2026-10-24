@@ -22,6 +22,10 @@ data class TasksTabState(
     val filter: TasksTabFilter,
     /** The chat the list is narrowed to with Chat ▾, or null for every chat. */
     val chatFilter: TasksTabChat?,
+    /** The person the list is narrowed to with People ▾, or null for everyone the user works with. */
+    val personFilter: TasksTabPerson?,
+    /** The user's tasks involve someone else, so People ▾ is offered. */
+    val hasPeople: Boolean,
     val content: TasksTabContent,
     /** Chats still being checked or read, for "Checking N more chats…". */
     val checkingCount: Int,
@@ -49,6 +53,13 @@ data class TasksTabChat(
     val avatar: AvatarData,
 )
 
+/** Someone the user's tasks involve, as listed by People ▾. */
+@Immutable
+data class TasksTabPerson(
+    val userId: String,
+    val name: String,
+)
+
 /** A task of one of the user's chats. */
 @Immutable
 data class TabTask(
@@ -58,6 +69,8 @@ data class TabTask(
     val createdAt: Long,
     /** The task's thread is open next to the list (two-pane). */
     val isSelected: Boolean,
+    /** The names of the other people the task involves, for "With Bob, Carol"; empty for "Just you". */
+    val people: ImmutableList<String>,
 )
 
 /** The headers that group the tasks by deadline, in their order. */
@@ -102,6 +115,13 @@ sealed interface TasksTabSheet {
                 return chats.filter { it.name.orEmpty().contains(query, ignoreCase = true) }.toImmutableList()
             }
     }
+
+    /** People ▾: everyone the user works with, or one of them. */
+    data class ChoosePerson(
+        val people: ImmutableList<TasksTabPerson>,
+        /** The chosen person's user id, or null for everyone. */
+        val selectedUserId: String?,
+    ) : TasksTabSheet
 
     /** A task's long-press actions. */
     data class Actions(

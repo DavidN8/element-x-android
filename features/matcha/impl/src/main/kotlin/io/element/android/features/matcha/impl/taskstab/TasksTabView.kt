@@ -7,6 +7,7 @@
 
 package io.element.android.features.matcha.impl.taskstab
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -28,8 +29,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -61,6 +66,8 @@ import io.element.android.features.matcha.impl.tasks.TaskRow
 import io.element.android.libraries.designsystem.components.BigIcon
 import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.components.avatar.Avatar
+import io.element.android.libraries.designsystem.components.avatar.AvatarData
+import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -91,12 +98,13 @@ fun TasksTabView(
 ) {
     val eventSink = state.eventSink
     val layoutDirection = LocalLayoutDirection.current
+    val startPadding = contentPadding.calculateStartPadding(layoutDirection)
     val endPadding = contentPadding.calculateEndPadding(layoutDirection)
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                start = contentPadding.calculateStartPadding(layoutDirection),
+                start = startPadding,
                 top = contentPadding.calculateTopPadding(),
                 end = endPadding,
                 bottom = contentPadding.calculateBottomPadding() + FAB_CLEARANCE,
@@ -126,6 +134,11 @@ fun TasksTabView(
             onChoose = { eventSink(TasksTabEvent.ChooseChat(it)) },
             onDismiss = { eventSink(TasksTabEvent.DismissSheet) },
         )
+        is TasksTabSheet.ChoosePerson -> ChoosePersonSheet(
+            sheet = sheet,
+            onChoose = { eventSink(TasksTabEvent.ChoosePerson(it)) },
+            onDismiss = { eventSink(TasksTabEvent.DismissSheet) },
+        )
         is TasksTabSheet.Actions -> {
             val roomId = sheet.task.chat.roomId
             val taskId = sheet.task.task.id
@@ -151,7 +164,7 @@ fun TasksTabView(
     state.editor?.let { TaskEditorSheet(it) }
 }
 
-/** All · To do · In progress · Done · Archived, then Chat ▾. */
+/** All · To do · In progress · Done · Archived, then Chat ▾ and People ▾. */
 @Composable
 private fun TasksTabChips(state: TasksTabState) {
     Row(
@@ -181,6 +194,19 @@ private fun TasksTabChips(state: TasksTabState) {
             trailingIcon = CompoundIcons.ChevronDown(),
             onClick = { state.eventSink(TasksTabEvent.ToggleChatFilter) },
         )
+        val person = state.personFilter
+        if (state.hasPeople || person != null) {
+            PillFilterChip(
+                label = person?.name ?: stringResource(R.string.screen_matcha_tasks_filter_people),
+                selected = person != null,
+                // Tapping the chosen person shows everyone's tasks again, like the chat chip.
+                contentDescription = person?.let { stringResource(CommonStrings.action_clear) },
+                maxLabelWidth = CHAT_CHIP_MAX_WIDTH,
+                role = Role.Button,
+                trailingIcon = CompoundIcons.ChevronDown(),
+                onClick = { state.eventSink(TasksTabEvent.TogglePersonFilter) },
+            )
+        }
     }
 }
 
@@ -234,7 +260,15 @@ private fun TabTaskRow(task: TabTask, eventSink: (TasksTabEvent) -> Unit) {
         chatName = task.chat.displayName(),
         chatAvatar = task.chat.avatar,
         isSelected = task.isSelected,
+        people = task.peopleLine(),
     )
+}
+
+/** "With Bob, Carol", or "Just you". */
+@Composable
+private fun TabTask.peopleLine(): String = when {
+    people.isEmpty() -> stringResource(R.string.screen_matcha_tasks_just_you)
+    else -> stringResource(R.string.screen_matcha_tasks_with_people, people.joinToString())
 }
 
 @Composable
@@ -381,6 +415,75 @@ private fun ChooseChatSheet(sheet: TasksTabSheet.ChooseChat, onChoose: (RoomId) 
                 items(chats, key = { it.roomId.value }) { chat -> ChatRow(chat = chat, onClick = { onChoose(chat.roomId) }) }
             }
         }
+    }
+}
+
+/** People ▾: everyone the user works with, then each of them. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChoosePersonSheet(sheet: TasksTabSheet.ChoosePerson, onChoose: (String?) -> Unit, onDismiss: () -> Unit) {
+    val title = stringResource(R.string.screen_matcha_tasks_filter_people_title)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        scrollable = false,
+        sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden, enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)),
+        modifier = Modifier.semantics { paneTitle = title },
+    ) {
+        SheetHeader(title = title, onClose = onDismiss)
+        LazyColumn(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+            item(key = "everyone") {
+                PersonRow(
+                    name = stringResource(R.string.screen_matcha_tasks_all_people),
+                    avatar = null,
+                    isSelected = sheet.selectedUserId == null,
+                    onClick = { onChoose(null) },
+                )
+            }
+            items(sheet.people, key = { it.userId }) { person ->
+                PersonRow(
+                    name = person.name,
+                    avatar = AvatarData(id = person.userId, name = person.name, size = AvatarSize.RoomListItem),
+                    isSelected = sheet.selectedUserId == person.userId,
+                    onClick = { onChoose(person.userId) },
+                )
+            }
+        }
+    }
+}
+
+/** A person to filter by, or everyone when [avatar] is null; the chosen one is ticked. */
+@Composable
+private fun PersonRow(name: String, avatar: AvatarData?, isSelected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 76.dp)
+            .selectable(selected = isSelected, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (avatar != null) {
+            Avatar(avatarData = avatar, avatarType = AvatarType.User)
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(AvatarSize.RoomListItem.dp)
+                    .background(color = ElementTheme.colors.bgSubtleSecondary, shape = CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(imageVector = CompoundIcons.Group(), contentDescription = null, tint = ElementTheme.colors.iconSecondary)
+            }
+        }
+        Text(
+            text = name,
+            style = ElementTheme.typography.fontBodyLgMedium,
+            color = ElementTheme.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (isSelected) Icon(imageVector = CompoundIcons.Check(), contentDescription = null, tint = ElementTheme.colors.iconAccentPrimary)
     }
 }
 

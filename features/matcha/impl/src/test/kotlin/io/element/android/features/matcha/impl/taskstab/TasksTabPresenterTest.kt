@@ -31,15 +31,19 @@ import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
+import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.MessageEventType
+import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomSummary
 import io.element.android.libraries.matrix.api.timeline.Timeline
+import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
+import io.element.android.libraries.matrix.test.room.aRoomInfo
 import io.element.android.libraries.matrix.test.room.aRoomSummary
 import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
 import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
@@ -58,6 +62,10 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 class TasksTabPresenterTest {
+    private val me = A_SESSION_ID.value
+    private val bob = "@bob:matrix.org"
+    private val carol = "@carol:matrix.org"
+    private val names = mapOf(bob to "Bob", carol to "Carol")
     private val design = RoomId("!design:matrix.org")
     private val launch = RoomId("!launch:matrix.org")
     private val chat = RoomId("!chat:matrix.org")
@@ -390,6 +398,77 @@ class TasksTabPresenterTest {
         }
     }
 
+    @Test
+    fun `only the tasks that involve the user are listed, from their threads and their direct chats`() = runTest {
+        val client = aClient(
+            listOf(
+                design to aBoardRoom(
+                    design,
+                    linkedCard(1, "\$mine", "My thread"),
+                    linkedCard(2, "\$replied", "Bob's thread I replied to", startedBy = bob),
+                    // Shared with the chat, but not the user's: it stays on the chat's board.
+                    linkedCard(3, "\$others", "Bob's thread", startedBy = bob),
+                    legacyCard(4, "My older card", id = "mine"),
+                    legacyCard(5, "Bob's older card", id = "bobs", writtenBy = bob),
+                    threadReplies = mapOf("\$replied" to listOf(reply(1, "\$replied", carol), reply(2, "\$replied", me))),
+                ),
+                launch to aBoardRoom(
+                    launch,
+                    linkedCard(1, "\$dm", "Bob's task in our chat", startedBy = bob, showToRoom = false),
+                    roomInfo = aRoomInfo(id = launch, isDirect = true, heroes = listOf(MatrixUser(UserId(bob)))),
+                ),
+            )
+        )
+        aPresenter(client).test {
+            val state = awaitUntil {
+                it.checkingCount == 0 && it.titles().size == 4 &&
+                it.tasks().all { task -> task.people.none { name -> name.startsWith("@") } }
+            }
+            assertThat(state.titles()).containsExactly("My thread", "Bob's thread I replied to", "My older card", "Bob's task in our chat")
+            val people = state.tasks().associate { it.task.title to it.people }
+            assertThat(people["My thread"]).isEmpty()
+            assertThat(people["Bob's thread I replied to"]).containsExactly("Bob", "Carol").inOrder()
+            assertThat(people["Bob's task in our chat"]).containsExactly("Bob")
+            // A direct chat's members are in every task anyway, so its tasks aren't marked as shared.
+            assertThat(
+                state.tasks().filter { it.task.isSharedWithChat }.map { it.task.title }
+            ).containsExactly("My thread", "Bob's thread I replied to", "My older card")
+            assertThat(state.hasPeople).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `People narrows the list to one person's tasks, and tapping it again shows everyone's`() = runTest {
+        val client = aClient(
+            listOf(
+                design to aBoardRoom(
+                    design,
+                    linkedCard(1, "\$t1", "With Bob", startedBy = bob),
+                    linkedCard(2, "\$t2", "With Carol"),
+                    linkedCard(3, "\$t3", "Alone"),
+                    threadReplies = mapOf("\$t1" to listOf(reply(1, "\$t1", me)), "\$t2" to listOf(reply(2, "\$t2", carol))),
+                ),
+            )
+        )
+        aPresenter(client).test {
+            val state = awaitUntil { it.titles().size == 3 && it.tasks().flatMap { task -> task.people }.containsAll(listOf("Bob", "Carol")) }
+            state.eventSink(TasksTabEvent.TogglePersonFilter)
+            val sheet = awaitUntil { it.sheet != null }.sheet as TasksTabSheet.ChoosePerson
+            // Everyone else the user's tasks involve, by name.
+            assertThat(sheet.people).containsExactly(TasksTabPerson(bob, "Bob"), TasksTabPerson(carol, "Carol")).inOrder()
+            assertThat(sheet.selectedUserId).isNull()
+            state.eventSink(TasksTabEvent.ChoosePerson(carol))
+            val narrowed = awaitUntil { it.personFilter != null }
+            assertThat(narrowed.sheet).isNull()
+            assertThat(narrowed.personFilter).isEqualTo(TasksTabPerson(carol, "Carol"))
+            assertThat(narrowed.titles()).containsExactly("With Carol")
+            narrowed.eventSink(TasksTabEvent.TogglePersonFilter)
+            assertThat(awaitUntil { it.personFilter == null }.titles()).hasSize(3)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private data class TestCard(
         val index: Int,
         val id: String,
@@ -398,6 +477,9 @@ class TasksTabPresenterTest {
         val threadId: String?,
         val dueAt: Long?,
         val archived: Boolean,
+        /** Who started the card's thread, or wrote the older card without one. */
+        val author: String,
+        val showToRoom: Boolean,
     )
 
     /** A chat with a board holding [cards], each linked card with its thread. */
@@ -407,15 +489,22 @@ class TasksTabPresenterTest {
         canSendMessage: (MessageEventType) -> Boolean = { true },
         /** False when the sync didn't store the board pointer, so only the cards tell the board. */
         isPointerStored: Boolean = true,
+        roomInfo: RoomInfo = aRoomInfo(id = roomId),
+        threadReplies: Map<String, List<String>> = emptyMap(),
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
     ) = aMatchaJoinedRoom(
         roomId = roomId,
         roomCoroutineScope = backgroundScope,
         boardRoot = boardRoot.takeIf { isPointerStored },
         items = cards.map { it.item() },
-        threads = cards.mapNotNull { card -> card.threadId?.let { aThreadListItem(it, body = card.title, timestamp = card.index.toLong()) } },
+        threads = cards.mapNotNull { card ->
+            card.threadId?.let { aThreadListItem(it, body = card.title, timestamp = card.index.toLong(), senderId = UserId(card.author)) }
+        },
         canSendMessage = canSendMessage,
         sendRawEventResult = sendRawEventResult,
+        roomInfo = roomInfo,
+        threadReplies = threadReplies,
+        userDisplayNameResult = { userId -> Result.success(names[userId.value]) },
     )
 
     private fun linkedCard(
@@ -425,9 +514,12 @@ class TasksTabPresenterTest {
         status: TaskStatus = TaskStatus.Todo,
         dueAt: Long? = null,
         archived: Boolean = false,
-    ) = TestCard(index, KanbanProtocol.threadCardId(threadId), title, status, threadId, dueAt, archived)
+        startedBy: String = me,
+        showToRoom: Boolean = true,
+    ) = TestCard(index, KanbanProtocol.threadCardId(threadId), title, status, threadId, dueAt, archived, startedBy, showToRoom)
 
-    private fun legacyCard(index: Int, title: String) = TestCard(index, "legacy", title, TaskStatus.Todo, threadId = null, dueAt = null, archived = false)
+    private fun legacyCard(index: Int, title: String, id: String = "legacy", writtenBy: String = me) =
+        TestCard(index, id, title, TaskStatus.Todo, threadId = null, dueAt = null, archived = false, author = writtenBy, showToRoom = true)
 
     private fun TestCard.item() = aMatchaEventItem(
         index,
@@ -442,11 +534,17 @@ class TasksTabPresenterTest {
                 threadId = threadId,
                 dueAt = dueAt,
                 reminderRequested = null,
-                showToRoom = true,
+                showToRoom = showToRoom,
             ),
             boardRoot,
         ),
+        sender = author,
     )
+
+    /** A reply in [threadId] by [sender], as the homeserver returns it. */
+    private fun reply(index: Int, threadId: String, sender: String) =
+        """{"type": "m.room.message", "event_id": "${'$'}reply$index", "sender": "$sender", "origin_server_ts": $index, """ +
+            """"content": {"msgtype": "m.text", "body": "Reply", "m.relates_to": {"rel_type": "m.thread", "event_id": "$threadId"}}}"""
 
     private fun aSummary(roomId: RoomId, membership: CurrentUserMembership = CurrentUserMembership.JOINED): RoomSummary =
         aRoomSummary(roomId = roomId, name = roomId.value.removePrefix("!").substringBefore(":"), currentUserMembership = membership)

@@ -20,6 +20,12 @@ sealed interface TasksTabEvent {
     data class ChooseChat(val roomId: RoomId) : TasksTabEvent
     data object ToggleDone : TasksTabEvent
 
+    /** People ▾: lists the people to choose from, or shows everyone's tasks again when one is chosen. */
+    data object TogglePersonFilter : TasksTabEvent
+
+    /** A person picked in the Filter by person sheet, or null for everyone the user works with. */
+    data class ChoosePerson(val userId: String?) : TasksTabEvent
+
     /** Tap on a task: its thread, or its chat for an older standalone card. */
     data class OpenTask(val roomId: RoomId, val taskId: String) : TasksTabEvent
 
