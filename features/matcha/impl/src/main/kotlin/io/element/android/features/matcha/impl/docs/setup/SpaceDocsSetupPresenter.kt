@@ -16,7 +16,7 @@ import androidx.compose.runtime.setValue
 import io.element.android.libraries.architecture.Presenter
 import kotlinx.coroutines.launch
 
-/** The one-time Turn on docs screen: confirms encryption when it is off, then turns docs on. */
+/** The one-time Turn on notes screen: confirms encryption when it is off, then turns notes (space docs) on. */
 class SpaceDocsSetupPresenter(
     private val setup: SpaceDocsSetup,
     private val onDone: () -> Unit,
