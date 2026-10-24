@@ -43,6 +43,7 @@ internal fun aHomeSpacesState(
     seenSpaceInvites: Set<RoomId> = emptySet(),
     hideInvitesAvatar: Boolean = false,
     canExploreSpaces: Boolean = true,
+    channels: HomeChannels? = null,
     eventSink: (HomeSpacesEvent) -> Unit = {},
 ) = HomeSpacesState(
     space = space,
@@ -50,6 +51,7 @@ internal fun aHomeSpacesState(
     seenSpaceInvites = seenSpaceInvites.toImmutableSet(),
     hideInvitesAvatar = hideInvitesAvatar,
     canExploreSpaces = canExploreSpaces,
+    channels = channels,
     eventSink = eventSink,
 )
 

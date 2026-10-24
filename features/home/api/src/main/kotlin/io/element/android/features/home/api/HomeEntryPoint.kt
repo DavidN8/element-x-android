@@ -15,6 +15,7 @@ import io.element.android.libraries.architecture.FeatureEntryPoint
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 
 interface HomeEntryPoint : FeatureEntryPoint {
@@ -35,5 +36,19 @@ interface HomeEntryPoint : FeatureEntryPoint {
         fun navigateToBugReport()
         fun navigateToAddAccount()
         fun navigateToSession(sessionId: SessionId)
+
+        /** Called with the selected tab, once Home is shown and each time the user switches tabs. */
+        fun onTabSelected(tab: HomeTab)
+
+        /** Opens a thread of a chat, such as a task's thread from the Tasks tab. */
+        fun navigateToThread(roomId: RoomId, threadId: ThreadId)
+
+        /** Opens a note of a space from the Notes tab, or the space's notes when [documentId] is null. */
+        fun navigateToSpaceNote(spaceId: RoomId, documentId: String?)
+
+        /** Called with whether the Tasks tab shows its table, which a two-pane layout gives the whole width while nothing else is open. */
+        fun onTasksTableVisibilityChange(isVisible: Boolean) {
+            // Only a two-pane host needs it.
+        }
     }
 }

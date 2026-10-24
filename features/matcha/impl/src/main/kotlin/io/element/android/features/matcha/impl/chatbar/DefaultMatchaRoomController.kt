@@ -1,0 +1,104 @@
+/*
+ * Copyright (c) 2026 Element Creations Ltd.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+package io.element.android.features.matcha.impl.chatbar
+
+import dev.zacsweers.metro.ContributesBinding
+import dev.zacsweers.metro.SingleIn
+import io.element.android.features.matcha.api.MatchaRoomController
+import io.element.android.features.matcha.api.MatchaThreadInfo
+import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.protocol.ThreadNameSource
+import io.element.android.features.matcha.impl.protocol.isShownOnBoard
+import io.element.android.features.matcha.impl.store.MatchaRoomSnapshot
+import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.libraries.di.RoomScope
+import io.element.android.libraries.di.annotations.RoomCoroutineScope
+import io.element.android.libraries.matrix.api.core.ThreadId
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+
+/** A sheet the chat screens asked the chip bar renderer to show. */
+enum class ChatBarRequest {
+    NewThread,
+    NewTask,
+}
+
+@SingleIn(RoomScope::class)
+@ContributesBinding(RoomScope::class)
+class DefaultMatchaRoomController(
+    store: MatchaRoomStore,
+    @RoomCoroutineScope coroutineScope: CoroutineScope,
+) : MatchaRoomController {
+    override val hasChatBar: StateFlow<Boolean> = store.snapshot
+        .map { it.isLoaded && it.hasChatBar() }
+        .distinctUntilChanged()
+        .stateIn(coroutineScope, SharingStarted.Eagerly, false)
+
+    override val openTaskCount: StateFlow<Int> = store.snapshot
+        .map { it.openTaskCount(store.sessionUserId) }
+        .distinctUntilChanged()
+        .stateIn(coroutineScope, SharingStarted.Eagerly, 0)
+
+    // The chip bar's New thread rule, so ⋮ never offers a sheet that wouldn't open.
+    override val canCreateThread: StateFlow<Boolean> = store.snapshot
+        .map { it.permissions.canCreateThreads }
+        .distinctUntilChanged()
+        .stateIn(coroutineScope, SharingStarted.Eagerly, false)
+
+    override val threads: StateFlow<ImmutableMap<ThreadId, MatchaThreadInfo>> = store.snapshot
+        .map { snapshot ->
+            snapshot.threads.associate { thread ->
+                thread.id to MatchaThreadInfo(
+                    name = thread.metadata.name.takeIf { thread.metadata.nameSource != ThreadNameSource.EventId },
+                    isArchived = thread.metadata.archived,
+                    hiddenReplies = if (thread.hasHiddenFirstReply) 1 else 0,
+                )
+            }.toImmutableMap()
+        }
+        .distinctUntilChanged()
+        .stateIn(coroutineScope, SharingStarted.Eagerly, persistentMapOf())
+
+    private val _requests = MutableStateFlow<ChatBarRequest?>(null)
+
+    /** The sheet asked for and not yet shown by the chip bar renderer. */
+    val requests: StateFlow<ChatBarRequest?> = _requests.asStateFlow()
+
+    override fun openNewThread() {
+        _requests.value = ChatBarRequest.NewThread
+    }
+
+    override fun openNewTask() {
+        _requests.value = ChatBarRequest.NewTask
+    }
+
+    /** The renderer showed [request]. */
+    fun consume(request: ChatBarRequest) {
+        _requests.compareAndSet(request, null)
+    }
+}
+
+/**
+ * The chip bar has something to show: an active thread someone named. The board alone doesn't count, since the top bar opens it,
+ * and a chat without named threads would only get a bar with General.
+ */
+internal fun MatchaRoomSnapshot.hasChatBar(): Boolean =
+    // A thread named when it was created keeps the name as its root message, so its hidden first reply is what marks it as named.
+    threads.any { !it.metadata.archived && (it.metadata.nameSource == ThreadNameSource.Explicit || it.hasHiddenFirstReply) }
+
+/** To do and In progress tasks the board shows [userId], once loaded; tasks hidden from them don't count. */
+internal fun MatchaRoomSnapshot.openTaskCount(userId: String): Int =
+    if (isLoaded) board?.cards?.count { it.isShownOnBoard(userId) && !it.archived && it.status != TaskStatus.Done } ?: 0 else 0

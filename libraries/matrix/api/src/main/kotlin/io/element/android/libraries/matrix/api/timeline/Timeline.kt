@@ -59,6 +59,9 @@ interface Timeline : AutoCloseable {
         data object PinnedEvents : Mode
         data object Media : Mode
         data class Thread(val threadRootId: ThreadId) : Mode
+
+        /** A live timeline filtered to some custom event types, see [io.element.android.libraries.matrix.api.room.CreateTimelineParams.OnlyEventTypes]. */
+        data object EventTypes : Mode
     }
 
     /** What this timeline is a view over: the live room, a single event and its context, the pinned events, the media, or a thread. */

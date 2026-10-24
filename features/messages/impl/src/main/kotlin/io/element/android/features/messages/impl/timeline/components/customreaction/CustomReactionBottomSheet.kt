@@ -26,6 +26,7 @@ import io.element.android.libraries.designsystem.theme.components.ModalBottomShe
 import io.element.android.libraries.designsystem.theme.components.hide
 import io.element.android.libraries.emoji.api.picker.EmojiPickerRenderer
 import io.element.android.libraries.matrix.api.timeline.item.event.EventOrTransactionId
+import kotlinx.collections.immutable.persistentSetOf
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +35,8 @@ fun CustomReactionBottomSheet(
     onSelectEmoji: (EventOrTransactionId, Emoji) -> Unit,
     emojiPickerRenderer: EmojiPickerRenderer,
     modifier: Modifier = Modifier,
+    onInsertEmoji: (Emoji) -> Unit = {},
+    onComposerPickerDismiss: () -> Unit = {},
 ) {
     val sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden)
     val coroutineScope = rememberCoroutineScope()
@@ -68,6 +71,28 @@ fun CustomReactionBottomSheet(
                     contentDescription = { emoji, isSelected ->
                         a11yReactionAction(emoji = emoji.unicode, userAlreadyReacted = isSelected)
                     },
+                )
+            }
+        }
+        is CustomReactionState.Target.Composer -> {
+            fun onDismiss() {
+                state.eventSink(CustomReactionEvent.DismissCustomReactionSheet)
+                onComposerPickerDismiss()
+            }
+
+            // The sheet stays open, so several emoji can be inserted in a row.
+            ModalBottomSheet(
+                onDismissRequest = ::onDismiss,
+                sheetState = sheetState,
+                modifier = modifier,
+                scrollable = false,
+            ) {
+                ExpandSheetWhenImeIsVisible(sheetState)
+                emojiPickerRenderer.Render(
+                    state = state.target.emojiPickerState,
+                    onSelectEmoji = onInsertEmoji,
+                    selectedEmojis = persistentSetOf(),
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
         }

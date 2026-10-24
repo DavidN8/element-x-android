@@ -13,23 +13,15 @@ import io.element.android.libraries.matrix.api.roomlist.RoomListFilter as Matrix
 
 /**
  * Enum class representing the different filters that can be applied to the room list.
- * Order is important, it'll be used as initial order in the UI.
+ * Only one filter is selected at a time, and the chips keep this order (after the "All" chip).
+ * Favourites comes first, for parity with the Matcha web client.
  */
 enum class RoomListFilter(val stringResource: Int) {
-    Unread(R.string.screen_roomlist_filter_unreads),
-    People(R.string.screen_roomlist_filter_people),
-    Rooms(R.string.screen_roomlist_filter_rooms),
     Favourites(R.string.screen_roomlist_filter_favourites),
-    Invites(R.string.screen_roomlist_filter_invites);
-
-    val incompatibleFilters: Set<RoomListFilter>
-        get() = when (this) {
-            Rooms -> setOf(People, Invites)
-            People -> setOf(Rooms, Invites)
-            Unread -> setOf(Invites)
-            Favourites -> setOf(Invites)
-            Invites -> setOf(Rooms, People, Unread, Favourites)
-        }
+    Unread(R.string.screen_roomlist_filter_unreads),
+    Rooms(R.string.screen_roomlist_filter_rooms),
+    People(R.string.screen_roomlist_filter_people),
+    Invites(R.string.screen_roomlist_filter_invites),
 }
 
 fun RoomListFilter.into(): MatrixRoomListFilter {

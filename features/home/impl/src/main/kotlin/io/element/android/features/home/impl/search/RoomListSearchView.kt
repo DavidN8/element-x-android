@@ -25,24 +25,17 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.input.TextFieldLineLimits
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.home.impl.components.RoomSummaryRow
 import io.element.android.features.home.impl.contentType
 import io.element.android.features.home.impl.model.RoomListRoomSummary
@@ -50,10 +43,8 @@ import io.element.android.features.home.impl.roomlist.RoomListEvent
 import io.element.android.libraries.designsystem.components.button.BackButton
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.FilledTextField
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.Scaffold
+import io.element.android.libraries.designsystem.theme.components.SearchField
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.OnVisibleRangeChangeEffect
 import io.element.android.libraries.matrix.api.core.RoomId
@@ -94,8 +85,6 @@ private fun RoomListSearchContent(
     eventSink: (RoomListEvent) -> Unit,
     onRoomClick: (RoomId) -> Unit,
 ) {
-    val borderColor = MaterialTheme.colorScheme.tertiary
-    val strokeWidth = 1.dp
     fun onBackButtonClick() {
         state.eventSink(RoomListSearchEvent.ToggleSearchVisibility)
     }
@@ -106,47 +95,20 @@ private fun RoomListSearchContent(
     Scaffold(
         topBar = {
             TopAppBar(
-                modifier = Modifier.drawBehind {
-                    drawLine(
-                        color = borderColor,
-                        start = Offset(0f, size.height),
-                        end = Offset(size.width, size.height),
-                        strokeWidth = strokeWidth.value
-                    )
-                },
                 navigationIcon = { BackButton(onClick = ::onBackButtonClick) },
                 title = {
                     // The stateSaver will keep the selection state when returning to this UI
                     val focusRequester = remember { FocusRequester() }
                     val searchLabel = stringResource(CommonStrings.action_search)
-                    FilledTextField(
+                    SearchField(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .padding(end = 12.dp)
                             .focusRequester(focusRequester)
                             .semantics { contentDescription = searchLabel },
                         state = state.query,
-                        lineLimits = TextFieldLineLimits.SingleLine,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = Color.Transparent,
-                            unfocusedContainerColor = Color.Transparent,
-                            disabledContainerColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            disabledIndicatorColor = Color.Transparent,
-                            errorIndicatorColor = Color.Transparent,
-                        ),
-                        trailingIcon = if (state.query.text.isNotEmpty()) {
-                            @Composable {
-                                IconButton(onClick = { state.eventSink(RoomListSearchEvent.ClearQuery) }) {
-                                    Icon(
-                                        imageVector = CompoundIcons.Close(),
-                                        contentDescription = stringResource(CommonStrings.a11y_clear_search_field)
-                                    )
-                                }
-                            }
-                        } else {
-                            null
-                        },
+                        placeholder = searchLabel,
+                        onClear = { state.eventSink(RoomListSearchEvent.ClearQuery) },
                     )
 
                     LaunchedEffect(Unit) {

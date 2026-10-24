@@ -39,9 +39,10 @@ enum class AvatarSize(val dp: Dp) {
     DmCluster(75.dp),
 
     TimelineRoom(32.dp),
-    TimelineSender(32.dp),
+    ChatTopBar(40.dp),
+    TimelineSender(28.dp),
     TimelineReadReceipt(16.dp),
-    TimelineThreadLatestEventSender(24.dp),
+    TimelineThreadLatestEventSender(20.dp),
 
     ComposerAlert(32.dp),
 
@@ -74,7 +75,7 @@ enum class AvatarSize(val dp: Dp) {
     DmCreationConfirmation(64.dp),
 
     OrganizationHeader(64.dp),
-    SpaceHeader(64.dp),
+    SpaceHeader(96.dp),
     RoomPreviewHeader(64.dp),
     RoomPreviewInviter(56.dp),
     SpaceMember(24.dp),

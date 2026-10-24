@@ -36,6 +36,7 @@ internal fun MessageComposerView(
     state: MessageComposerState,
     voiceMessageState: VoiceMessageComposerState,
     modifier: Modifier = Modifier,
+    onEmojiClick: () -> Unit = {},
 ) {
     val view = LocalView.current
     fun sendMessage() {
@@ -48,6 +49,10 @@ internal fun MessageComposerView(
 
     fun onAddAttachment() {
         state.eventSink(MessageComposerEvent.AddAttachment)
+    }
+
+    fun onCameraClick() {
+        state.eventSink(MessageComposerEvent.PickAttachmentSource.PhotoFromCamera)
     }
 
     fun onCloseSpecialMode() {
@@ -106,6 +111,8 @@ internal fun MessageComposerView(
         showTextFormatting = state.showTextFormatting,
         onResetComposerMode = ::onCloseSpecialMode,
         onAddAttachment = ::onAddAttachment,
+        onEmojiClick = onEmojiClick,
+        onCameraClick = ::onCameraClick,
         onDismissTextFormatting = ::onDismissTextFormatting,
         onVoiceRecorderEvent = onVoiceRecorderEvent,
         onVoicePlayerEvent = onVoicePlayerEvent,

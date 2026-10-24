@@ -22,8 +22,9 @@ import androidx.compose.material3.PlainTooltip as M3PlainTooltip
 @Composable
 fun TooltipScope.PlainTooltip(
     modifier: Modifier = Modifier,
-    contentColor: Color = ElementTheme.colors.textOnSolidPrimary,
-    containerColor: Color = ElementTheme.colors.bgActionPrimaryRest,
+    // An inverse surface, like WhatsApp's tooltips: green is kept for actions.
+    contentColor: Color = ElementTheme.materialColors.inverseOnSurface,
+    containerColor: Color = ElementTheme.materialColors.inverseSurface,
     shape: Shape = TooltipDefaults.plainTooltipContainerShape,
     content: @Composable () -> Unit,
 ) = M3PlainTooltip(

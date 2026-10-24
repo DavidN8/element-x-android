@@ -67,7 +67,16 @@ enum class FeatureFlags(
         key = "feature.thread_timeline",
         title = "Threads",
         description = "Renders thread messages as a dedicated timeline. Restarting the app is required for this setting to fully take effect.",
-        defaultValue = { false },
+        // Matcha: named threads, the chat chip bar and task boards are built on thread timelines.
+        defaultValue = { true },
+        isFinished = false,
+        isInLabs = true,
+    ),
+    MatchaWorkspaces(
+        key = "feature.matcha_workspaces",
+        title = "Matcha workspaces",
+        description = "Named threads in a chip bar, task boards, the Tasks tab, reminders and Space documents, shared with the Matcha web client.",
+        defaultValue = { true },
         isFinished = false,
         isInLabs = true,
     ),

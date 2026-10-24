@@ -155,7 +155,8 @@ fun SelectedItem(
         }
         if (canRemove) {
             Surface(
-                color = ElementTheme.colors.bgActionPrimaryRest,
+                // A secondary action: grey, as green is kept for the primary one.
+                color = ElementTheme.colors.iconSecondary,
                 modifier = Modifier
                     .clip(CircleShape)
                     .size(20.dp)

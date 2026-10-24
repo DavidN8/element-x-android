@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -42,14 +41,10 @@ import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.modifiers.onKeyboardContextMenuAction
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.spaces.SpaceRoom
-import io.element.android.libraries.matrix.api.spaces.SpaceRoomVisibility
 import io.element.android.libraries.matrix.ui.model.getAvatarData
-import io.element.android.libraries.matrix.ui.model.icon
-import io.element.android.libraries.matrix.ui.model.label
 import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.collections.immutable.ImmutableList
@@ -96,13 +91,14 @@ fun SpaceRoomItemView(
                 name = spaceRoom.displayName,
                 showIndicator = showUnreadIndicator
             )
-            Spacer(modifier = Modifier.height(1.dp))
-            VisibilityRow(visibility = spaceRoom.visibility)
-            Spacer(modifier = Modifier.height(1.dp))
+            Spacer(modifier = Modifier.height(2.dp))
             Text(
-                modifier = Modifier.weight(1f),
                 style = ElementTheme.typography.fontBodyMdRegular,
-                text = pluralStringResource(CommonPlurals.common_member_count, spaceRoom.numJoinedMembers, spaceRoom.numJoinedMembers),
+                text = spaceRoom.topic?.takeIf { it.isNotBlank() } ?: if (spaceRoom.isSpace) {
+                    pluralStringResource(CommonPlurals.common_matcha_room_count, spaceRoom.childrenCount, spaceRoom.childrenCount)
+                } else {
+                    pluralStringResource(CommonPlurals.common_matcha_member_count, spaceRoom.numJoinedMembers, spaceRoom.numJoinedMembers)
+                },
                 color = ElementTheme.colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -116,34 +112,6 @@ fun SpaceRoomItemView(
             }
             Spacer(modifier = Modifier.height(4.dp))
         }
-    }
-}
-
-@Composable
-private fun VisibilityRow(
-    visibility: SpaceRoomVisibility,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            modifier = Modifier
-                .size(16.dp)
-                .padding(end = 4.dp),
-            imageVector = visibility.icon,
-            contentDescription = null,
-            tint = ElementTheme.colors.iconTertiary,
-        )
-        Text(
-            modifier = Modifier.weight(1f),
-            style = ElementTheme.typography.fontBodyMdRegular,
-            text = visibility.label,
-            color = ElementTheme.colors.textSecondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
     }
 }
 

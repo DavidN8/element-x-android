@@ -13,9 +13,10 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemColors
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import io.element.android.compound.theme.ElementTheme
 
 @Composable
@@ -36,7 +37,13 @@ fun RowScope.NavigationBarItem(
         icon = icon,
         modifier = modifier,
         enabled = enabled,
-        label = label,
+        label = label?.let {
+            {
+                ProvideTextStyle(ElementNavigationBarItemDefaults.labelStyle(selected)) {
+                    it()
+                }
+            }
+        },
         alwaysShowLabel = alwaysShowLabel,
         colors = colors,
         interactionSource = interactionSource,
@@ -44,12 +51,25 @@ fun RowScope.NavigationBarItem(
 }
 
 object ElementNavigationBarItemDefaults {
+    /**
+     * The selected item gets a tonal green pill (64 x 32 dp, the Material 3 indicator) behind a dark green icon.
+     * Callers pass the solid icon variant when selected and the outlined one otherwise.
+     */
     @Composable
     fun colors() = NavigationBarItemDefaults.colors().copy(
-        selectedIconColor = ElementTheme.colors.iconPrimary,
+        selectedIconColor = ElementTheme.colors.textBadgeAccent,
         selectedTextColor = ElementTheme.colors.textPrimary,
-        unselectedIconColor = ElementTheme.colors.iconTertiary,
-        unselectedTextColor = ElementTheme.colors.textDisabled,
-        selectedIndicatorColor = Color.Transparent,
+        selectedIndicatorColor = ElementTheme.colors.bgAccentSubtle,
+        unselectedIconColor = ElementTheme.colors.iconSecondary,
+        unselectedTextColor = ElementTheme.colors.textSecondary,
+        disabledIconColor = ElementTheme.colors.iconDisabled,
+        disabledTextColor = ElementTheme.colors.textDisabled,
     )
+
+    @Composable
+    fun labelStyle(selected: Boolean): TextStyle = if (selected) {
+        ElementTheme.typography.fontBodySmMedium
+    } else {
+        ElementTheme.typography.fontBodySmRegular
+    }
 }

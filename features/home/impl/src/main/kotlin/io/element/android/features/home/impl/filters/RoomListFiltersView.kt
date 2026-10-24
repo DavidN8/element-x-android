@@ -8,206 +8,107 @@
 
 package io.element.android.features.home.impl.filters
 
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
-import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.home.impl.R
+import io.element.android.features.home.impl.spacefilters.SpaceFiltersEvent
+import io.element.android.features.home.impl.spacefilters.SpaceFiltersState
+import io.element.android.features.home.impl.spacefilters.aSelectedSpaceFiltersState
+import io.element.android.features.home.impl.spacefilters.anUnselectedSpaceFiltersState
+import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.testtags.TestTags
-import io.element.android.libraries.testtags.testTag
+import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
- * Ref: https://www.figma.com/design/G1xy0HDZKJf5TCRFmKb5d5/Compound-Android-Components?node-id=2191-606
+ * The WhatsApp-style chips of the chat list: "All", then one chip per [RoomListFilter], single-select,
+ * then a trailing "Spaces" chip that opens the space picker when space filters are available.
  */
 @Composable
 fun RoomListFiltersView(
     state: RoomListFiltersState,
+    spaceFiltersState: SpaceFiltersState,
     modifier: Modifier = Modifier
 ) {
-    fun onClearFiltersClick() {
-        state.eventSink(RoomListFiltersEvent.ClearSelectedFilters)
-    }
-
-    fun onToggleFilter(filter: RoomListFilter) {
-        state.eventSink(RoomListFiltersEvent.ToggleFilter(filter))
-    }
-
-    var scrollToStart by remember { mutableIntStateOf(0) }
-    val lazyListState = rememberLazyListState()
-    LaunchedEffect(scrollToStart) {
-        // Scroll until the first item start to be displayed
-        // Since all items have different size, there is no way to compute the amount of
-        // pixel to scroll to go directly to the start of the row.
-        // But IRL it should only happen for one item.
-        while (lazyListState.firstVisibleItemIndex > 0) {
-            lazyListState.animateScrollBy(
-                value = -(lazyListState.firstVisibleItemScrollOffset + 1f),
-                animationSpec = spring(
-                    stiffness = Spring.StiffnessMediumLow,
-                )
-            )
-        }
-        // Then scroll to the start of the list, a bit faster, to fully reveal the first
-        // item, which can be the close button to reset filter, or the first item
-        // if the user has scroll a bit before clicking on the close button.
-        lazyListState.animateScrollBy(
-            value = -lazyListState.firstVisibleItemScrollOffset.toFloat(),
-            animationSpec = spring(
-                stiffness = Spring.StiffnessMedium,
-            )
-        )
-    }
-    val previousFilters = remember { mutableStateOf(listOf<RoomListFilter>()) }
     LazyRow(
-        contentPadding = PaddingValues(start = 8.dp, end = 16.dp),
-        modifier = modifier.fillMaxWidth(),
-        state = lazyListState,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        // The chips are a single choice, announced as a group of radio buttons
+        modifier = modifier
+            .fillMaxWidth()
+            .selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        item("clear_filters") {
-            if (state.hasAnyFilterSelected) {
-                RoomListClearFiltersButton(
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .testTag(TestTags.homeScreenClearFilters),
-                    onClick = {
-                        previousFilters.value = state.selectedFilters()
-                        onClearFiltersClick()
-                        // When clearing filter, we want to ensure that the list
-                        // of filters is scrolled to the start.
-                        scrollToStart++
+        item("all") {
+            // All means every chat: it is not selected inside a space, and tapping it also leaves the space.
+            PillFilterChip(
+                label = stringResource(CommonStrings.common_matcha_all),
+                selected = !state.hasAnyFilterSelected && spaceFiltersState !is SpaceFiltersState.Selected,
+                onClick = {
+                    state.eventSink(RoomListFiltersEvent.ClearSelectedFilters)
+                    if (spaceFiltersState is SpaceFiltersState.Selected) {
+                        spaceFiltersState.eventSink(SpaceFiltersEvent.Selected.ClearSelection)
                     }
-                )
-            }
+                },
+            )
         }
-        state.filterSelectionStates.forEachIndexed { i, filterWithSelection ->
-            item(filterWithSelection.filter) {
-                val zIndex = (if (previousFilters.value.contains(filterWithSelection.filter)) state.filterSelectionStates.size else 0) - i.toFloat()
-                RoomListFilterView(
-                    modifier = Modifier
-                        .animateItem()
-                        .zIndex(zIndex),
-                    roomListFilter = filterWithSelection.filter,
-                    selected = filterWithSelection.isSelected,
-                    onClick = {
-                        previousFilters.value = state.selectedFilters()
-                        onToggleFilter(it)
-                        // When selecting a filter, we want to scroll to the start of the list
-                        if (filterWithSelection.isSelected.not()) {
-                            scrollToStart++
-                        }
-                    },
-                )
+        items(
+            items = state.filterSelectionStates,
+            key = { it.filter },
+        ) { filterWithSelection ->
+            PillFilterChip(
+                label = stringResource(id = filterWithSelection.filter.stringResource),
+                selected = filterWithSelection.isSelected,
+                onClick = { state.eventSink(RoomListFiltersEvent.ToggleFilter(filterWithSelection.filter)) },
+            )
+        }
+        if (spaceFiltersState != SpaceFiltersState.Disabled) {
+            item("spaces") {
+                SpacesChip(spaceFiltersState)
             }
         }
     }
 }
 
 @Composable
-private fun RoomListClearFiltersButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier
-            .clip(CircleShape)
-            .background(ElementTheme.colors.bgActionPrimaryRest)
-            .clickable(onClick = onClick)
-            .padding(4.dp)
-    ) {
-        Icon(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(16.dp),
-            imageVector = CompoundIcons.Close(),
-            tint = ElementTheme.colors.iconOnSolidPrimary,
-            contentDescription = stringResource(id = R.string.screen_roomlist_clear_filters),
+private fun SpacesChip(spaceFiltersState: SpaceFiltersState) {
+    if (spaceFiltersState is SpaceFiltersState.Selected) {
+        PillFilterChip(
+            label = spaceFiltersState.selectedFilter.spaceRoom.displayName,
+            selected = true,
+            role = Role.Button,
+            trailingIcon = CompoundIcons.ChevronDown(),
+            maxLabelWidth = 160.dp,
+            // Tapping the selected chip goes back to all chats, like the other chips.
+            contentDescription = stringResource(R.string.screen_roomlist_clear_filters),
+            onClick = { spaceFiltersState.eventSink(SpaceFiltersEvent.Selected.ClearSelection) },
+        )
+    } else {
+        PillFilterChip(
+            label = stringResource(R.string.screen_home_tab_spaces),
+            selected = false,
+            role = Role.Button,
+            trailingIcon = CompoundIcons.ChevronDown(),
+            onClick = {
+                if (spaceFiltersState is SpaceFiltersState.Unselected) {
+                    spaceFiltersState.eventSink(SpaceFiltersEvent.Unselected.ShowFilters)
+                }
+            },
         )
     }
-}
-
-@Composable
-private fun RoomListFilterView(
-    roomListFilter: RoomListFilter,
-    selected: Boolean,
-    onClick: (RoomListFilter) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val background = animateColorAsState(
-        targetValue = if (selected) ElementTheme.colors.bgActionPrimaryRest else ElementTheme.colors.bgCanvasDefault,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "chip background colour",
-    )
-    val textColour = animateColorAsState(
-        targetValue = if (selected) ElementTheme.colors.textOnSolidPrimary else ElementTheme.colors.textPrimary,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "chip text colour",
-    )
-    val borderColour = animateColorAsState(
-        targetValue = if (selected) Color.Transparent else ElementTheme.colors.borderInteractiveSecondary,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "chip border colour",
-    )
-
-    FilterChip(
-        selected = selected,
-        onClick = { onClick(roomListFilter) },
-        modifier = modifier.height(32.dp),
-        shape = CircleShape,
-        colors = FilterChipDefaults.filterChipColors(
-            containerColor = background.value,
-            selectedContainerColor = background.value,
-            labelColor = textColour.value,
-            selectedLabelColor = textColour.value,
-        ),
-        label = {
-            Text(
-                text = stringResource(id = roomListFilter.stringResource),
-                style = ElementTheme.typography.fontBodyMdRegular,
-            )
-        },
-        border = FilterChipDefaults.filterChipBorder(
-            enabled = true,
-            selected = selected,
-            borderColor = borderColour.value,
-        ),
-    )
 }
 
 @PreviewsDayNight
@@ -216,5 +117,16 @@ internal fun RoomListFiltersViewPreview(@PreviewParameter(RoomListFiltersStatePr
     RoomListFiltersView(
         modifier = Modifier.padding(vertical = 4.dp),
         state = state,
+        spaceFiltersState = anUnselectedSpaceFiltersState(),
+    )
+}
+
+@PreviewsDayNight
+@Composable
+internal fun RoomListFiltersViewSpaceSelectedPreview() = ElementPreview {
+    RoomListFiltersView(
+        modifier = Modifier.padding(vertical = 4.dp),
+        state = aRoomListFiltersState(),
+        spaceFiltersState = aSelectedSpaceFiltersState(),
     )
 }

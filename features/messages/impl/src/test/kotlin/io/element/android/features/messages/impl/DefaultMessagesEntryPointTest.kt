@@ -19,12 +19,15 @@ import io.element.android.features.knockrequests.test.FakeKnockRequestsListEntry
 import io.element.android.features.location.test.FakeLocationService
 import io.element.android.features.location.test.FakeShareLocationEntryPoint
 import io.element.android.features.location.test.FakeShowLocationEntryPoint
+import io.element.android.features.matcha.test.FakeMatchaRoomEntryPoint
+import io.element.android.features.matcha.test.FakeMatchaSpaceDocsEntryPoint
 import io.element.android.features.messages.api.MessagesEntryPoint
 import io.element.android.features.messages.impl.pinned.banner.createPinnedEventsTimelineProvider
 import io.element.android.features.messages.impl.timeline.createTimelineController
 import io.element.android.features.poll.test.create.FakeCreatePollEntryPoint
 import io.element.android.libraries.androidutils.system.DeviceHasVulkanSupport
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
+import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.UserId
@@ -34,6 +37,7 @@ import io.element.android.libraries.matrix.test.A_SESSION_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
+import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
 import io.element.android.libraries.matrix.ui.messages.RoomMemberProfilesCache
 import io.element.android.libraries.matrix.ui.messages.RoomNamesCache
 import io.element.android.libraries.mediaviewer.test.FakeMediaViewerEntryPoint
@@ -87,7 +91,11 @@ class DefaultMessagesEntryPointTest {
                 knockRequestsListEntryPoint = FakeKnockRequestsListEntryPoint(),
                 dateFormatter = FakeDateFormatter(),
                 coroutineDispatchers = testCoroutineDispatchers(),
-                hasVulkanSupport = DeviceHasVulkanSupport(mockk(relaxed = true))
+                hasVulkanSupport = DeviceHasVulkanSupport(mockk(relaxed = true)),
+                featureFlagService = FakeFeatureFlagService(),
+                spaceService = FakeSpaceService(joinedParentsResult = { Result.success(emptyList()) }),
+                matchaSpaceDocsEntryPoint = FakeMatchaSpaceDocsEntryPoint(),
+                matchaRoomEntryPoint = FakeMatchaRoomEntryPoint(),
             )
         }
         val callback = object : MessagesEntryPoint.Callback {

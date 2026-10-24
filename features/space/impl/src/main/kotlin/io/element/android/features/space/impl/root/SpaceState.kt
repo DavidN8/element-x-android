@@ -32,6 +32,8 @@ data class SpaceState(
     val selectedRoomIds: ImmutableSet<RoomId>,
     val canEditSpaceGraph: Boolean,
     val removeRoomsAction: AsyncAction<Unit>,
+    /** Show the space's Matcha docs: a Docs row above the rooms and a Docs item in the menu. */
+    val showDocs: Boolean,
     val eventSink: (SpaceEvent) -> Unit
 ) {
     fun isJoining(spaceId: RoomId): Boolean = joinActions[spaceId] == AsyncAction.Loading

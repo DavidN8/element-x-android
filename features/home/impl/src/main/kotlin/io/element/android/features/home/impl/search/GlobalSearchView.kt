@@ -26,17 +26,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.input.KeyboardActionHandler
-import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,15 +37,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
@@ -62,6 +51,7 @@ import io.element.android.features.home.impl.R
 import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.libraries.designsystem.atomic.molecules.IconTitleSubtitleMolecule
 import io.element.android.libraries.designsystem.components.BigIcon
+import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.components.avatar.Avatar
 import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
@@ -73,13 +63,10 @@ import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.text.roundToPx
 import io.element.android.libraries.designsystem.text.toDp
 import io.element.android.libraries.designsystem.theme.components.ButtonSize
-import io.element.android.libraries.designsystem.theme.components.FilledTextField
-import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.LinearProgressIndicator
 import io.element.android.libraries.designsystem.theme.components.Scaffold
-import io.element.android.libraries.designsystem.theme.components.SegmentedButton
+import io.element.android.libraries.designsystem.theme.components.SearchField
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
@@ -144,8 +131,6 @@ private fun GlobalSearchContent(
         Column(
             modifier = Modifier.padding(padding),
         ) {
-            HorizontalDivider(color = ElementTheme.colors.borderInteractivePrimary)
-
             SearchTargetSelector(state = state)
 
             val lazyListState = rememberLazyListState()
@@ -198,47 +183,16 @@ private fun SearchTopAppBarContent(state: GlobalSearchState) {
     // The stateSaver will keep the selection state when returning to this UI
     val focusRequester = remember { FocusRequester() }
     val searchLabel = stringResource(CommonStrings.action_search)
-    FilledTextField(
+    SearchField(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(end = 12.dp)
             .focusRequester(focusRequester)
             .semantics { contentDescription = searchLabel },
         state = state.queryState,
-        lineLimits = TextFieldLineLimits.SingleLine,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        keyboardActions = KeyboardActionHandler { performDefault ->
-            state.eventSink(GlobalSearchEvent.SaveQueryToHistory)
-            performDefault()
-        },
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent,
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent,
-            errorIndicatorColor = Color.Transparent,
-        ),
-        trailingIcon = if (state.queryState.text.isNotEmpty()) {
-            @Composable {
-                IconButton(
-                    modifier = Modifier.clip(CircleShape).size(20.dp),
-                    onClick = { state.eventSink(GlobalSearchEvent.ClearQuery) },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = ElementTheme.colors.iconSecondary,
-                        contentColor = ElementTheme.colors.iconOnSolidPrimary
-                    )
-                ) {
-                    Icon(
-                        modifier = Modifier.size(16.dp),
-                        imageVector = CompoundIcons.Close(),
-                        contentDescription = stringResource(CommonStrings.a11y_clear_search_field),
-                    )
-                }
-            }
-        } else {
-            null
-        },
+        placeholder = searchLabel,
+        onClear = { state.eventSink(GlobalSearchEvent.ClearQuery) },
+        onSearch = { state.eventSink(GlobalSearchEvent.SaveQueryToHistory) },
     )
 
     LaunchedEffect(Unit) {
@@ -253,25 +207,22 @@ private fun SearchTopAppBarContent(state: GlobalSearchState) {
 private fun SearchTargetSelector(state: GlobalSearchState) {
     if (state.queryState.text.isEmpty()) return
 
-    SingleChoiceSegmentedButtonRow(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        SegmentedButton(
-            index = 0,
-            count = 2,
+        PillFilterChip(
+            label = stringResource(R.string.search_section_chats),
             selected = state.currentTarget == GlobalSearchTarget.ROOMS,
             onClick = { state.eventSink(GlobalSearchEvent.UpdateTarget(GlobalSearchTarget.ROOMS)) },
-            text = stringResource(R.string.search_section_chats),
         )
-
-        SegmentedButton(
-            index = 1,
-            count = 2,
+        PillFilterChip(
+            label = stringResource(R.string.search_section_messages),
             selected = state.currentTarget == GlobalSearchTarget.MESSAGES,
             onClick = { state.eventSink(GlobalSearchEvent.UpdateTarget(GlobalSearchTarget.MESSAGES)) },
-            text = stringResource(R.string.search_section_messages),
         )
     }
 }
@@ -435,23 +386,22 @@ private fun LazyListScope.roomListResults(
     results: ImmutableList<RoomListRoomSummary>,
     onRoomClick: (RoomId) -> Unit,
 ) {
-    itemsIndexed(
+    items(
         items = results,
-        key = { _, roomSummary -> roomSummary.roomId },
-    ) { index, result ->
+        key = { roomSummary -> roomSummary.roomId },
+    ) { result ->
         Row(
             modifier = Modifier
                 .niceClickable(onClick = { onRoomClick(result.roomId) })
                 .fillMaxWidth()
-                .addSeparatorLine(color = ElementTheme.colors.separatorSecondary, isLastItem = index == results.lastIndex)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Avatar(
-                avatarData = result.avatarData.copy(size = AvatarSize.SearchRoomListItem),
+                avatarData = result.avatarData.copy(size = AvatarSize.RoomListItem),
                 avatarType = AvatarType.Room(
-                    heroes = result.heroes.map { it.copy(size = AvatarSize.SearchRoomListItem) }.toImmutableList(),
+                    heroes = result.heroes.map { it.copy(size = AvatarSize.RoomListItem) }.toImmutableList(),
                     isTombstoned = result.isTombstoned,
                 ),
             )
@@ -463,7 +413,7 @@ private fun LazyListScope.roomListResults(
                     text = result.name ?: result.roomId.value,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    style = ElementTheme.typography.fontBodyLgRegular,
+                    style = ElementTheme.typography.fontBodyLgMedium,
                 )
 
                 if (result.isDm) {
@@ -507,15 +457,15 @@ private fun LazyListScope.messageSearchResults(
             )
         }
     }
-    itemsIndexed(
+    items(
         items = results,
-        contentType = { _, messageSearchResult -> messageSearchResult::class.java },
-        key = { _, messageSearchResult -> messageSearchResult.eventId },
-    ) { index, result ->
+        contentType = { messageSearchResult -> messageSearchResult::class.java },
+        key = { messageSearchResult -> messageSearchResult.eventId },
+    ) { result ->
         val clickableModifier = Modifier.niceClickable(onClick = { onSearchResultSelected(result.roomId, result.eventId) })
         when (result) {
             is MessageSearchListItem.Message -> TextMessageSearchResultItemView(
-                modifier = clickableModifier.addSeparatorLine(color = ElementTheme.colors.separatorSecondary, isLastItem = index == results.lastIndex),
+                modifier = clickableModifier,
                 avatarData = result.roomInfo.getAvatarData(AvatarSize.RoomListItem),
                 avatarType = AvatarType.Room(
                     heroes = result.roomInfo.heroes.map { it.getAvatarData(AvatarSize.RoomListItem) }.toImmutableList(),
@@ -527,7 +477,7 @@ private fun LazyListScope.messageSearchResults(
             )
             is MessageSearchListItem.Media -> {
                 MediaMessageSearchResultItemView(
-                    modifier = clickableModifier.addSeparatorLine(color = ElementTheme.colors.separatorSecondary, isLastItem = index == results.lastIndex),
+                    modifier = clickableModifier,
                     avatarData = result.roomInfo.getAvatarData(AvatarSize.RoomListItem),
                     avatarType = AvatarType.Room(
                         heroes = result.roomInfo.heroes.map { it.getAvatarData(AvatarSize.RoomListItem) }.toImmutableList(),
@@ -702,20 +652,6 @@ private fun MediaMessageSearchResultItemView(
                 }
             }
         }
-    }
-}
-
-private fun Modifier.addSeparatorLine(color: Color, isLastItem: Boolean): Modifier {
-    if (isLastItem) return this
-
-    return this.drawBehind {
-        val strokeWidthPx = 1.dp.toPx()
-        drawLine(
-            color = color,
-            start = Offset(0f, size.height - strokeWidthPx),
-            end = Offset(size.width, size.height - strokeWidthPx),
-            strokeWidth = strokeWidthPx,
-        )
     }
 }
 

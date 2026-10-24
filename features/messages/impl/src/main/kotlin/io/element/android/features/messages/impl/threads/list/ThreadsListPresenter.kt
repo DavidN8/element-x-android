@@ -11,21 +11,29 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Inject
+import io.element.android.features.matcha.api.MatchaRoomController
 import io.element.android.features.messages.impl.timeline.factories.event.TimelineItemContentFactory
 import io.element.android.features.messages.impl.utils.messagesummary.MessageSummaryFormatter
 import io.element.android.libraries.architecture.Presenter
 import io.element.android.libraries.dateformatter.api.DateFormatter
 import io.element.android.libraries.dateformatter.api.DateFormatterMode
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.ui.model.getAvatarData
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -36,15 +44,28 @@ class ThreadsListPresenter(
     private val timelineItemContentFactory: TimelineItemContentFactory,
     private val messageSummaryFormatter: MessageSummaryFormatter,
     private val dateFormatter: DateFormatter,
+    private val featureFlagService: FeatureFlagService,
+    // Lazy: the controller reads the room's Matcha data as soon as it exists, which only the Matcha workspaces need.
+    private val matchaRoomController: Lazy<MatchaRoomController>,
 ) : Presenter<ThreadsListState> {
     @Composable
     override fun present(): ThreadsListState {
         val coroutineScope = rememberCoroutineScope()
         val threadsListService = room.threadsListService
+        var loadFailed by remember { mutableStateOf(false) }
+
+        fun CoroutineScope.paginate() = launch {
+            threadsListService.paginate()
+                .onSuccess { loadFailed = false }
+                .onFailure {
+                    Timber.w(it, "Failed to paginate thread list")
+                    loadFailed = true
+                }
+        }
 
         val threads by produceState(initialValue = persistentListOf(), key1 = threadsListService) {
             threadsListService.subscribeToItemUpdates()
-                .onStart { threadsListService.paginate() }
+                .onStart { paginate() }
                 .collect { items ->
                     Timber.d("Received thread list update with ${items.size} items")
                     value = items.map { item ->
@@ -96,6 +117,14 @@ class ThreadsListPresenter(
         }
 
         val roomInfo by room.roomInfoFlow.collectAsState()
+        val isMatchaEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
+        val matchaThreads = if (isMatchaEnabled) {
+            val controller = remember { matchaRoomController.value }
+            controller.threads.collectAsState().value
+        } else {
+            persistentMapOf()
+        }
+        var archiveFilter by rememberSaveable { mutableStateOf(ThreadArchiveFilter.Active) }
 
         val heroes by remember {
             derivedStateOf { roomInfo.heroes.map { it.getAvatarData(AvatarSize.CurrentUserTopBar) }.toImmutableList() }
@@ -104,14 +133,16 @@ class ThreadsListPresenter(
         fun handleEvent(event: ThreadsListEvent) {
             when (event) {
                 ThreadsListEvent.Paginate -> if ((paginationStatus as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad == true) {
-                    coroutineScope.launch {
-                        Timber.d("Paginating thread list: $paginationStatus")
-                        threadsListService.paginate()
-                            .onFailure { Timber.w(it, "Failed to paginate thread list") }
-                    }
+                    Timber.d("Paginating thread list: $paginationStatus")
+                    coroutineScope.paginate()
                 } else {
                     Timber.d("Not paginating, current status: $paginationStatus")
                 }
+                ThreadsListEvent.Retry -> {
+                    loadFailed = false
+                    coroutineScope.paginate()
+                }
+                is ThreadsListEvent.SelectArchiveFilter -> archiveFilter = event.filter
             }
         }
 
@@ -122,6 +153,11 @@ class ThreadsListPresenter(
             roomAvatarUrl = roomInfo.avatarUrl,
             isRoomTombstoned = roomInfo.successorRoom != null,
             heroes = heroes,
+            // While a page is loading there may be more
+            hasMoreToLoad = (paginationStatus as? ThreadListPaginationStatus.Idle)?.hasMoreToLoad ?: true,
+            loadFailed = loadFailed,
+            archiveFilter = archiveFilter.takeIf { isMatchaEnabled },
+            matchaThreads = matchaThreads,
             eventSink = ::handleEvent,
         )
     }

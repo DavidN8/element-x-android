@@ -11,6 +11,7 @@ package io.element.android.features.messages.impl.messagecomposer
 import android.Manifest
 import android.annotation.SuppressLint
 import android.net.Uri
+import android.text.SpannableStringBuilder
 import androidx.annotation.VisibleForTesting
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -393,6 +394,17 @@ class MessageComposerPresenter(
                             )
                             suggestionSearchTrigger.value = null
                         }
+                    }
+                }
+                MessageComposerEvent.RequestFocus -> localCoroutineScope.launch {
+                    textEditorState.requestFocus()
+                }
+                is MessageComposerEvent.InsertEmoji -> {
+                    if (showTextFormatting) {
+                        // ponytail: the formatting layout has no emoji button, and the rich editor has no API to insert text at the cursor.
+                        Timber.w("Emoji insertion is not supported in the rich text editor")
+                    } else {
+                        markdownTextEditorState.insertText(event.unicode)
                     }
                 }
                 MessageComposerEvent.SaveDraft -> {
@@ -932,4 +944,23 @@ class MessageComposerPresenter(
             }
         }
     }
+}
+
+/**
+ * Inserts [insertion] at the cursor, replacing the selected text if any, and puts the cursor after it.
+ * Without a known cursor (after a reset), the text is appended.
+ */
+internal fun MarkdownTextEditorState.insertText(insertion: String) {
+    val current = SpannableStringBuilder(text.value())
+    val length = current.length
+    val (start, end) = if (selection.isEmpty()) {
+        length to length
+    } else {
+        val start = selection.first.coerceIn(0, length)
+        start to selection.last.coerceIn(start, length)
+    }
+    current.replace(start, end, insertion)
+    text.update(current, true)
+    val cursor = start + insertion.length
+    selection = cursor..cursor
 }

@@ -94,6 +94,19 @@ interface BaseRoom : Closeable {
     suspend fun getUpdatedMember(userId: UserId): Result<RoomMember>
 
     /**
+     * Returns the locally stored state events of a type as raw JSON content, keyed by state key.
+     * Custom state types are only stored when the sync requested them, so an empty result does not prove there is none.
+     */
+    suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>>
+
+    /**
+     * Fetches the content of one state event from the homeserver as raw JSON, or null when the room has no such state. Unlike
+     * [getStateEventsJson], this reads custom state types that the sync doesn't store. Fails with [UnsupportedOperationException]
+     * when the Rust SDK in use doesn't offer it (it needs the Matcha SDK patch).
+     */
+    suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?>
+
+    /**
      * Gets the direct room member, if any.
      * This is a convenience method for getting the other member in a direct message room.
      * Returns null if the room is not a dm or if the member cannot be found.

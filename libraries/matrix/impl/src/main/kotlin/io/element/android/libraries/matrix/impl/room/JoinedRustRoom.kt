@@ -26,8 +26,11 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.IntentionalMention
 import io.element.android.libraries.matrix.api.room.JoinedRoom
+import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.RoomNotificationSettingsState
 import io.element.android.libraries.matrix.api.room.SendQueueUpdate
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.history.RoomHistoryVisibility
 import io.element.android.libraries.matrix.api.room.join.JoinRule
 import io.element.android.libraries.matrix.api.room.knock.KnockRequest
@@ -68,6 +71,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
@@ -77,6 +81,8 @@ import org.matrix.rustcomponents.sdk.IdentityStatusChangeListener
 import org.matrix.rustcomponents.sdk.KnockRequestsListener
 import org.matrix.rustcomponents.sdk.LiveLocationException
 import org.matrix.rustcomponents.sdk.RoomMessageEventMessageType
+import org.matrix.rustcomponents.sdk.RoomMessageLikeEvent
+import org.matrix.rustcomponents.sdk.RoomMessageLikeEventsListener
 import org.matrix.rustcomponents.sdk.RoomSendQueueUpdate
 import org.matrix.rustcomponents.sdk.SendQueueListener
 import org.matrix.rustcomponents.sdk.TimelineConfiguration
@@ -90,8 +96,12 @@ import org.matrix.rustcomponents.sdk.getElementCallRequiredPermissions
 import org.matrix.rustcomponents.sdk.use
 import timber.log.Timber
 import uniffi.matrix_sdk.RoomPowerLevelChanges
+import uniffi.matrix_sdk_ui.TimelineEventCondition
+import uniffi.matrix_sdk_ui.TimelineEventFilter
 import uniffi.matrix_sdk_ui.TimelineEventFocusThreadMode
 import uniffi.matrix_sdk_ui.TimelineReadReceiptTracking
+import uniffi.ruma_events.messageLikeEventTypeFromString
+import uniffi.ruma_events.timelineEventTypeFromString
 import kotlin.coroutines.cancellation.CancellationException
 import org.matrix.rustcomponents.sdk.IdentityStatusChange as RustIdentityStateChange
 import org.matrix.rustcomponents.sdk.KnockRequest as InnerKnockRequest
@@ -211,6 +221,8 @@ class JoinedRustRoom(
             is CreateTimelineParams.Threaded -> TimelineFocus.Thread(
                 rootEventId = createTimelineParams.threadRootEventId.value,
             )
+            // Thread replies carry custom events too (e.g. a thread's bootstrap metadata), so threaded events are kept.
+            is CreateTimelineParams.OnlyEventTypes -> TimelineFocus.Live(hideThreadedEvents = false)
         }
 
         val filter = when (createTimelineParams) {
@@ -233,6 +245,11 @@ class JoinedRustRoom(
                     excludedStateTypes = TimelineConfig.excludedEvents,
                 )?.let(TimelineFilter::EventFilter) ?: TimelineFilter.All
             }
+            is CreateTimelineParams.OnlyEventTypes -> TimelineFilter.EventFilter(
+                TimelineEventFilter.Include(
+                    createTimelineParams.types.map { TimelineEventCondition.EventType(timelineEventTypeFromString(it)) }
+                )
+            )
         }
 
         val internalIdPrefix = when (createTimelineParams) {
@@ -241,6 +258,7 @@ class JoinedRustRoom(
             is CreateTimelineParams.MediaOnly -> "MediaGallery_"
             is CreateTimelineParams.MediaOnlyFocused -> "MediaGallery_${createTimelineParams.focusedEventId}"
             is CreateTimelineParams.Threaded -> "Thread_${createTimelineParams.threadRootEventId}"
+            is CreateTimelineParams.OnlyEventTypes -> "EventTypes_"
         }
 
         // Note that for TimelineFilter.MediaOnlyFocused, the date separator will be filtered out,
@@ -250,13 +268,17 @@ class JoinedRustRoom(
             is CreateTimelineParams.MediaOnlyFocused -> DateDividerMode.MONTHLY
             is CreateTimelineParams.Focused,
             CreateTimelineParams.PinnedOnly,
-            is CreateTimelineParams.Threaded -> DateDividerMode.DAILY
+            is CreateTimelineParams.Threaded,
+            is CreateTimelineParams.OnlyEventTypes -> DateDividerMode.DAILY
         }
 
         // Track read receipts only for focused and threaded timelines for performance optimization
         val trackReadReceipts = when (createTimelineParams) {
             is CreateTimelineParams.Focused, is CreateTimelineParams.Threaded -> true
-            is CreateTimelineParams.MediaOnly, is CreateTimelineParams.MediaOnlyFocused, CreateTimelineParams.PinnedOnly -> false
+            is CreateTimelineParams.MediaOnly,
+            is CreateTimelineParams.MediaOnlyFocused,
+            CreateTimelineParams.PinnedOnly,
+            is CreateTimelineParams.OnlyEventTypes -> false
         }
 
         runCatchingExceptions {
@@ -276,6 +298,7 @@ class JoinedRustRoom(
                     is CreateTimelineParams.MediaOnlyFocused -> Timeline.Mode.FocusedOnEvent(createTimelineParams.focusedEventId)
                     CreateTimelineParams.PinnedOnly -> Timeline.Mode.PinnedEvents
                     is CreateTimelineParams.Threaded -> Timeline.Mode.Thread(createTimelineParams.threadRootEventId)
+                    is CreateTimelineParams.OnlyEventTypes -> Timeline.Mode.EventTypes
                 }
                 innerTimeline.map(mode = mode)
             }
@@ -285,7 +308,8 @@ class JoinedRustRoom(
                 is CreateTimelineParams.MediaOnlyFocused,
                 is CreateTimelineParams.Threaded -> it.toFocusEventException()
                 CreateTimelineParams.MediaOnly,
-                CreateTimelineParams.PinnedOnly -> it
+                CreateTimelineParams.PinnedOnly,
+                is CreateTimelineParams.OnlyEventTypes -> it
             }
         }.onFailure {
             if (it is CancellationException) {
@@ -563,6 +587,50 @@ class JoinedRustRoom(
             innerRoom.setOwnMemberDisplayName(displayName)
         }
     }
+
+    override suspend fun sendRawEvent(eventType: String, contentJson: String): Result<EventId> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            EventId(innerRoom.sendRaw(eventType, contentJson))
+        }
+    }
+
+    override suspend fun sendRawStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            EventId(innerRoom.sendStateEventRaw(eventType, stateKey, contentJson))
+        }
+    }
+
+    override suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            innerRoom.stateEvents(eventType.map()).firstOrNull { it.stateKey == stateKey }?.eventId?.let(::EventId)
+        }
+    }
+
+    override suspend fun fetchRelatedEventsJson(
+        eventId: EventId,
+        relation: RawRelationType,
+        from: String?,
+        limit: Int,
+    ): Result<RawEventsPage> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            innerRoom.fetchRelatedEventsJson(eventId.value, relation, from, limit)
+        }
+    }
+
+    override fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String> = eventTypes
+        .map { type ->
+            mxCallbackFlow {
+                innerRoom.subscribeToMessageLikeEvents(
+                    messageLikeEventTypeFromString(type),
+                    object : RoomMessageLikeEventsListener {
+                        override fun onEvent(event: RoomMessageLikeEvent) {
+                            trySend(event.toRawJson(type))
+                        }
+                    },
+                )
+            }
+        }
+        .merge()
 
     override fun close() = destroy()
 

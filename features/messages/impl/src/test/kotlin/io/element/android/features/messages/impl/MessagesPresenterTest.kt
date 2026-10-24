@@ -14,6 +14,10 @@ import androidx.lifecycle.Lifecycle
 import com.google.common.truth.Truth.assertThat
 import im.vector.app.features.analytics.plan.PinUnpinAction
 import io.element.android.features.location.test.FakeActiveLiveLocationShareManager
+import io.element.android.features.matcha.api.MatchaReminderTarget
+import io.element.android.features.matcha.api.MatchaRoomController
+import io.element.android.features.matcha.api.MatchaThreadInfo
+import io.element.android.features.matcha.test.FakeMatchaRoomController
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.actionlist.anActionListState
@@ -34,7 +38,10 @@ import io.element.android.features.messages.impl.timeline.TimelineController
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineState
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
+import io.element.android.features.messages.impl.timeline.aTimelineItemReadReceipts
 import io.element.android.features.messages.impl.timeline.aTimelineState
+import io.element.android.features.messages.impl.timeline.components.receipt.aReadReceiptData
+import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetEvent
 import io.element.android.features.messages.impl.timeline.model.TimelineItemThreadInfo
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemFileContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemImageContent
@@ -122,6 +129,7 @@ import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.testCoroutineDispatchers
 import io.element.android.tests.testutils.testWithLifecycleOwner
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -147,13 +155,121 @@ class MessagesPresenterTest {
             assertThat(initialState.roomId).isEqualTo(A_ROOM_ID)
             assertThat(initialState.roomName).isEqualTo("")
             assertThat(initialState.roomAvatar)
-                .isEqualTo(AvatarData(id = A_ROOM_ID.value, name = "", url = AN_AVATAR_URL, size = AvatarSize.TimelineRoom))
+                .isEqualTo(AvatarData(id = A_ROOM_ID.value, name = "", url = AN_AVATAR_URL, size = AvatarSize.ChatTopBar))
             assertThat(initialState.userEventPermissions.canSendMessage).isTrue()
             assertThat(initialState.userEventPermissions.canRedactOwn).isTrue()
             assertThat(initialState.snackbarMessage).isNull()
             assertThat(initialState.inviteProgress).isEqualTo(AsyncData.Uninitialized)
             assertThat(initialState.showReinvitePrompt).isFalse()
             assertThat(initialState.showLiveLocationShareBanner).isFalse()
+        }
+    }
+
+    @Test
+    fun `present - the Matcha state is absent while the Matcha workspaces are off`() = runTest {
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
+            matchaRoomController = object : MatchaRoomController by FakeMatchaRoomController() {
+                override val hasChatBar get() = error("The controller must not be read while the Matcha workspaces are off")
+            },
+        )
+        presenter.testWithLifecycleOwner {
+            assertThat(consumeItemsUntilTimeout().last().matcha).isNull()
+        }
+    }
+
+    @Test
+    fun `present - the Matcha state follows the room controller`() = runTest {
+        val threads = persistentMapOf(A_THREAD_ID to MatchaThreadInfo(name = "Release planning", isArchived = false))
+        val controller = FakeMatchaRoomController(hasChatBar = MutableStateFlow(false), threads = MutableStateFlow(threads))
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+            matchaRoomController = controller,
+        )
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.matcha?.hasChatBar).isFalse()
+            assertThat(state.matcha?.threads).isEqualTo(threads)
+            assertThat(state.matcha?.openTaskCount).isEqualTo(0)
+            controller.hasChatBar.value = true
+            controller.openTaskCount.value = 4
+            val updated = consumeItemsUntilTimeout().last()
+            assertThat(updated.matcha?.hasChatBar).isTrue()
+            assertThat(updated.matcha?.openTaskCount).isEqualTo(4)
+        }
+    }
+
+    @Test
+    fun `present - Remind me opens the reminder sheet about the message, and dismissing it closes it`() = runTest {
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+        )
+        presenter.testWithLifecycleOwner {
+            val initialState = consumeItemsUntilTimeout().last()
+            val longText = "a".repeat(250)
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RemindMe, aMessageEvent(content = aTimelineItemTextContent(body = longText))))
+            val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
+            assertThat(target).isEqualTo(MatchaReminderTarget(message = "a".repeat(200), eventId = AN_EVENT_ID, threadId = null))
+
+            initialState.eventSink(MessagesEvent.DismissMatchaReminder)
+            assertThat(consumeItemsUntilPredicate { it.matcha?.reminderTarget == null }.last().matcha?.reminderTarget).isNull()
+        }
+    }
+
+    @Test
+    fun `present - Remind me in a thread links the reminder to the thread`() = runTest {
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+            timelineState = aTimelineState(timelineMode = Timeline.Mode.Thread(A_THREAD_ID)),
+        )
+        presenter.testWithLifecycleOwner {
+            val initialState = consumeItemsUntilTimeout().last()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.RemindMe, aMessageEvent()))
+            val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
+            assertThat(target?.threadId).isEqualTo(A_THREAD_ID)
+            assertThat(target?.eventId).isEqualTo(AN_EVENT_ID)
+        }
+    }
+
+    @Test
+    fun `present - the Matcha menu and the attach sheet open the New thread, new task and reminder sheets`() = runTest {
+        val openNewThread = lambdaRecorder<Unit> {}
+        val openNewTask = lambdaRecorder<Unit> {}
+        val presenter = createMessagesPresenter(
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+            matchaRoomController = FakeMatchaRoomController(openNewThreadLambda = openNewThread, openNewTaskLambda = openNewTask),
+        )
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilPredicate { it.matcha?.canRemind == true }.last()
+            state.eventSink(MessagesEvent.MatchaNewThread)
+            openNewThread.assertions().isCalledOnce()
+            state.eventSink(MessagesEvent.MatchaNewTask)
+            openNewTask.assertions().isCalledOnce()
+            state.eventSink(MessagesEvent.MatchaRemindMe)
+            val target = consumeItemsUntilPredicate { it.matcha?.reminderTarget != null }.last().matcha?.reminderTarget
+            assertThat(target).isEqualTo(MatchaReminderTarget())
+        }
+    }
+
+    @Test
+    fun `present - in a DM, reminders need the reminder bot to have joined`() = runTest {
+        val room = FakeJoinedRoom(
+            baseRoom = FakeBaseRoom(
+                roomPermissions = FakeRoomPermissions(canSendMessage = { true }),
+                initialRoomInfo = aRoomInfo(isDm = true),
+                getUpdatedMemberResult = { userId -> Result.success(aRoomMember(userId = userId, membership = RoomMembershipState.INVITE)) },
+            ),
+            typingNoticeResult = { Result.success(Unit) },
+        )
+        val presenter = createMessagesPresenter(
+            joinedRoom = room,
+            featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true)),
+        )
+        presenter.testWithLifecycleOwner {
+            val state = consumeItemsUntilTimeout().last()
+            assertThat(state.matcha?.canRemind).isFalse()
+            state.eventSink(MessagesEvent.MatchaRemindMe)
+            assertThat(consumeItemsUntilTimeout().lastOrNull()?.matcha?.reminderTarget).isNull()
         }
     }
 
@@ -1221,6 +1337,29 @@ class MessagesPresenterTest {
     }
 
     @Test
+    fun `present - handle action seen by shows everyone with a receipt on the message or a newer one`() = runTest {
+        val newer = aTimelineItemEvent(readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(1))))
+        val target = aTimelineItemEvent(isMine = true, readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(2), aReadReceiptData(1))))
+        val older = aTimelineItemEvent(readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(3))))
+        val eventsRecorder = EventsRecorder<ReadReceiptBottomSheetEvent>()
+        val presenter = createMessagesPresenter(
+            timelineState = aTimelineState(timelineItems = persistentListOf(newer, target, older)),
+            readReceiptBottomSheetEventSink = eventsRecorder,
+        )
+        presenter.testWithLifecycleOwner {
+            skipItems(1)
+            val initialState = awaitItem()
+            initialState.eventSink(MessagesEvent.HandleAction(TimelineItemAction.ReadBy, target))
+            advanceUntilIdle()
+            eventsRecorder.assertSingle(
+                ReadReceiptBottomSheetEvent.EventSelected(
+                    target.copy(readReceiptState = aTimelineItemReadReceipts(listOf(aReadReceiptData(1), aReadReceiptData(2))))
+                )
+            )
+        }
+    }
+
+    @Test
     fun `present - handle action view in timeline, it should have no effect`() = runTest {
         val messageEvent = aMessageEvent(
             content = aTimelineItemTextContent()
@@ -1600,11 +1739,14 @@ class MessagesPresenterTest {
             aRoomMemberModerationState()
         },
         encryptionService: FakeEncryptionService = FakeEncryptionService(),
-        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(),
+        // The Matcha workspaces are tested on their own; they would read the room's Matcha data in every test.
+        featureFlagService: FakeFeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
         actionListEventSink: (ActionListEvent) -> Unit = {},
         addRecentEmoji: AddRecentEmoji = AddRecentEmoji { _ -> lambdaError() },
         markAsFullyRead: MarkAsFullyRead = FakeMarkAsFullyRead(),
         liveLocationShareManager: FakeActiveLiveLocationShareManager = FakeActiveLiveLocationShareManager(),
+        readReceiptBottomSheetEventSink: (ReadReceiptBottomSheetEvent) -> Unit = {},
+        matchaRoomController: MatchaRoomController = FakeMatchaRoomController(),
     ): MessagesPresenter {
         return MessagesPresenter(
             navigator = navigator,
@@ -1618,7 +1760,7 @@ class MessagesPresenterTest {
             actionListPresenter = { anActionListState(eventSink = actionListEventSink) },
             customReactionPresenter = { aCustomReactionState() },
             reactionSummaryPresenter = { aReactionSummaryState() },
-            readReceiptBottomSheetPresenter = { aReadReceiptBottomSheetState() },
+            readReceiptBottomSheetPresenter = { aReadReceiptBottomSheetState(eventSink = readReceiptBottomSheetEventSink) },
             pinnedMessagesBannerPresenter = { aLoadedPinnedMessagesBannerState() },
             roomCallStatePresenter = { aStandByCallState() },
             roomMemberModerationPresenter = roomMemberModerationPresenter,
@@ -1641,6 +1783,7 @@ class MessagesPresenterTest {
             markAsFullyRead = markAsFullyRead,
             liveLocationShareManager = liveLocationShareManager,
             sessionCoroutineScope = backgroundScope,
+            matchaRoomController = lazy { matchaRoomController },
         )
     }
 }

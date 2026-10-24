@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.contentColorFor
@@ -45,6 +45,7 @@ import io.element.android.libraries.designsystem.preview.ElementPreviewDark
 import io.element.android.libraries.designsystem.preview.ElementPreviewLight
 import io.element.android.libraries.designsystem.preview.PreviewGroup
 import io.element.android.libraries.designsystem.preview.sheetStateForPreview
+import io.element.android.libraries.designsystem.theme.raisedSurface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -61,8 +62,8 @@ fun ModalBottomSheet(
     sheetState: SheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
     ),
-    shape: Shape = BottomSheetDefaults.ExpandedShape,
-    containerColor: Color = MaterialTheme.colorScheme.surface,
+    shape: Shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+    containerColor: Color = ElementTheme.colors.raisedSurface,
     contentColor: Color = contentColorFor(containerColor),
     tonalElevation: Dp = if (ElementTheme.isLightTheme) 0.dp else BottomSheetDefaults.Elevation,
     scrimColor: Color = BottomSheetDefaults.ScrimColor,

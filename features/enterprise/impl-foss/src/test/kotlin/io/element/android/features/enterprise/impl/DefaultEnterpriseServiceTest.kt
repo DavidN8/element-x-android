@@ -10,6 +10,7 @@ package io.element.android.features.enterprise.impl
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import io.element.android.compound.colors.MatchaPalette
 import io.element.android.compound.colors.SemanticColorsLightDark
 import io.element.android.features.enterprise.api.BugReportUrl
 import io.element.android.libraries.androidutils.json.JsonProvider
@@ -63,11 +64,14 @@ class DefaultEnterpriseServiceTest {
     }
 
     @Test
-    fun `brandColorsFlow always emits null`() = runTest {
+    fun `brandColorsFlow always emits the Matcha accent green`() = runTest {
         val defaultEnterpriseService = createDefaultEnterpriseService()
         defaultEnterpriseService.brandColorsFlow(null).test {
-            val initialState = awaitItem()
-            assertThat(initialState).isNull()
+            assertThat(awaitItem()).isEqualTo(MatchaPalette.green)
+            awaitComplete()
+        }
+        defaultEnterpriseService.brandColorsFlow(A_SESSION_ID).test {
+            assertThat(awaitItem()).isEqualTo(MatchaPalette.green)
             awaitComplete()
         }
     }

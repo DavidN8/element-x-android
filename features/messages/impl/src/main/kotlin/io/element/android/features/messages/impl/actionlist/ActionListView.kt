@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -89,7 +90,6 @@ import io.element.android.libraries.designsystem.components.list.ListItemContent
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.text.toSp
-import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.IconSource
 import io.element.android.libraries.designsystem.theme.components.ListItem
@@ -97,6 +97,7 @@ import io.element.android.libraries.designsystem.theme.components.ListItemStyle
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.hide
+import io.element.android.libraries.designsystem.theme.raisedSurface
 import io.element.android.libraries.matrix.ui.messages.sender.SenderName
 import io.element.android.libraries.matrix.ui.messages.sender.SenderNameMode
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -214,9 +215,8 @@ private fun ActionListViewContent(
                                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                             )
                         } else {
-                            Spacer(modifier = Modifier.height(14.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
-                        HorizontalDivider()
                     }
                 }
                 if (target.verifiedUserSendFailure != None) {
@@ -226,7 +226,6 @@ private fun ActionListViewContent(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = onVerifiedUserSendFailureClick
                         )
-                        HorizontalDivider()
                     }
                 }
                 if (target.displayEmojiReactions) {
@@ -238,7 +237,6 @@ private fun ActionListViewContent(
                             onCustomReactionClick = onCustomReactionClick,
                             modifier = Modifier.fillMaxWidth(),
                         )
-                        HorizontalDivider()
                     }
                 }
                 items(
@@ -360,6 +358,7 @@ private fun MessageSummary(
 }
 
 private val emojiRippleRadius = 24.dp
+private const val QUICK_EMOJI_COUNT = 6
 
 @Composable
 private fun EmojiReactionsRow(
@@ -369,10 +368,17 @@ private fun EmojiReactionsRow(
     onCustomReactionClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // WhatsApp's emoji tray: a fully rounded 48 dp pill with the quick emoji and the add button.
+    val trayShape = CircleShape
     Row(
-        modifier = modifier.padding(end = 16.dp, top = 16.dp, bottom = 16.dp),
+        modifier = modifier
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .then(if (ElementTheme.colors.isLight) Modifier.shadow(2.dp, trayShape) else Modifier)
+            .background(ElementTheme.colors.raisedSurface, trayShape)
+            .height(48.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val backgroundColor = ElementTheme.colors.bgCanvasDefault
+        val backgroundColor = ElementTheme.colors.raisedSurface
 
         LazyRow(
             modifier = Modifier
@@ -393,10 +399,10 @@ private fun EmojiReactionsRow(
                         size = Size(gradientWidth, size.height)
                     )
                 },
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            items(recentEmojis) { emoji ->
+            items(recentEmojis.take(QUICK_EMOJI_COUNT)) { emoji ->
                 val isHighlighted = highlightedEmojis.contains(emoji)
                 EmojiButton(
                     modifier = Modifier
@@ -413,9 +419,9 @@ private fun EmojiReactionsRow(
 
         Box(
             modifier = Modifier
-                .padding(end = 10.dp)
+                .padding(end = 4.dp)
                 .requiredSize(48.dp),
-            contentAlignment = Alignment.CenterEnd,
+            contentAlignment = Alignment.Center,
         ) {
             Icon(
                 imageVector = CompoundIcons.ReactionAdd(),
@@ -484,7 +490,7 @@ private fun EmojiButton(
     modifier: Modifier = Modifier,
 ) {
     val backgroundColor = if (isHighlighted) {
-        ElementTheme.colors.bgActionPrimaryRest
+        ElementTheme.colors.bgAccentSubtle
     } else {
         Color.Transparent
     }

@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.coroutineScope
+import androidx.lifecycle.lifecycleScope
 import com.bumble.appyx.core.lifecycle.subscribe
 import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.core.node.Node
@@ -40,6 +41,8 @@ import io.element.android.features.invite.api.InviteData
 import io.element.android.features.invite.api.acceptdecline.AcceptDeclineInviteView
 import io.element.android.features.invite.api.declineandblock.DeclineInviteAndBlockEntryPoint
 import io.element.android.features.leaveroom.api.LeaveRoomRenderer
+import io.element.android.features.matcha.api.MatchaNotesTabRenderer
+import io.element.android.features.matcha.api.MatchaTasksTabRenderer
 import io.element.android.features.reportroom.api.ReportRoomEntryPoint
 import io.element.android.features.rolesandpermissions.api.ChangeRoomMemberRolesEntryPoint
 import io.element.android.features.rolesandpermissions.api.ChangeRoomMemberRolesListType
@@ -62,6 +65,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
@@ -87,6 +92,8 @@ class HomeFlowNode(
     private val changeRoomMemberRolesEntryPoint: ChangeRoomMemberRolesEntryPoint,
     private val leaveRoomRenderer: LeaveRoomRenderer,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
+    private val matchaTasksTabRenderer: MatchaTasksTabRenderer,
+    private val matchaNotesTabRenderer: MatchaNotesTabRenderer,
 ) : BaseFlowNode<HomeFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = NavTarget.Root,
@@ -105,6 +112,12 @@ class HomeFlowNode(
                 analyticsService.screen(MobileScreen(screenName = MobileScreen.ScreenName.Home))
             }
         )
+        lifecycleScope.launch {
+            stateFlow
+                .map { it.currentHomeNavigationBarItem.homeTab }
+                .distinctUntilChanged()
+                .collect(callback::onTabSelected)
+        }
         whenChildAttached {
             commonLifecycle: Lifecycle,
             changeRoomMemberRolesNode: ChangeRoomMemberRolesEntryPoint.NodeProxy,
@@ -145,6 +158,9 @@ class HomeFlowNode(
 
     private fun onMenuActionClick(activity: Activity, roomListMenuAction: RoomListMenuAction) {
         when (roomListMenuAction) {
+            RoomListMenuAction.CreateRoom -> callback.navigateToCreateRoom()
+            RoomListMenuAction.CreateSpace -> callback.navigateToCreateSpace()
+            RoomListMenuAction.Settings -> callback.navigateToSettings()
             RoomListMenuAction.InviteFriends -> {
                 inviteFriendsUseCase.execute(activity)
             }
@@ -246,7 +262,23 @@ class HomeFlowNode(
                         onSelectNewOwners = ::navigateToSelectNewOwnersWhenLeavingRoom,
                         modifier = Modifier
                     )
-                }
+                },
+                tasksTab = { padding ->
+                    matchaTasksTabRenderer.Render(
+                        contentPadding = padding,
+                        onOpenRoom = { roomId -> navigateToRoom(roomId = roomId, eventId = null) },
+                        onOpenThread = callback::navigateToThread,
+                        onTableVisibilityChange = callback::onTasksTableVisibilityChange,
+                        modifier = Modifier,
+                    )
+                },
+                notesTab = { padding ->
+                    matchaNotesTabRenderer.Render(
+                        contentPadding = padding,
+                        onOpenNote = callback::navigateToSpaceNote,
+                        modifier = Modifier,
+                    )
+                },
             )
         }
     }

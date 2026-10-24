@@ -13,11 +13,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -32,10 +29,14 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -44,7 +45,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -54,7 +58,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -62,6 +65,9 @@ import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.location.api.LiveLocationSharingBanner
+import io.element.android.features.matcha.api.MatchaChatBarActions
+import io.element.android.features.matcha.api.MatchaChatBarSelection
+import io.element.android.features.matcha.api.MatchaReminderTarget
 import io.element.android.features.messages.api.timeline.voicemessages.composer.VoiceMessageComposerEvent
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListView
@@ -69,7 +75,11 @@ import io.element.android.features.messages.impl.actionlist.model.TimelineItemAc
 import io.element.android.features.messages.impl.crypto.identity.IdentityChangeStateView
 import io.element.android.features.messages.impl.link.LinkEvent
 import io.element.android.features.messages.impl.link.LinkView
+import io.element.android.features.messages.impl.matcha.LocalMatchaThreads
+import io.element.android.features.messages.impl.matcha.MatchaMenuActions
+import io.element.android.features.messages.impl.matcha.NoopMatchaChatBarActions
 import io.element.android.features.messages.impl.messagecomposer.AttachmentsBottomSheet
+import io.element.android.features.messages.impl.messagecomposer.ComposerSlotPill
 import io.element.android.features.messages.impl.messagecomposer.DisabledComposerView
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerEvent
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerView
@@ -97,6 +107,7 @@ import io.element.android.features.messages.impl.timeline.components.receipt.bot
 import io.element.android.features.messages.impl.timeline.isSelectionModeActive
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.TimelineItemGroupPosition
+import io.element.android.features.messages.impl.timeline.model.event.TimelineItemTextBasedContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemStateEventContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
 import io.element.android.features.messages.impl.timeline.selectedCount
@@ -104,11 +115,12 @@ import io.element.android.features.messages.impl.timeline.sendfailure.SendFailur
 import io.element.android.features.messages.impl.topbars.MessagesViewTopBar
 import io.element.android.features.messages.impl.topbars.SelectionModeTopBar
 import io.element.android.features.messages.impl.topbars.ThreadTopBar
+import io.element.android.features.messages.impl.topbars.roomTopBarSubtitle
+import io.element.android.features.messages.impl.topbars.threadTopBarSubtitle
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessagePermissionRationaleDialog
 import io.element.android.features.messages.impl.voicemessages.composer.VoiceMessageSendingFailedDialog
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.libraries.androidutils.ui.hideKeyboard
-import io.element.android.libraries.designsystem.atomic.molecules.ComposerAlertMolecule
 import io.element.android.libraries.designsystem.components.ExpandableBottomSheetLayout
 import io.element.android.libraries.designsystem.components.ExpandableBottomSheetLayoutState
 import io.element.android.libraries.designsystem.components.dialogs.ConfirmationDialog
@@ -116,21 +128,29 @@ import io.element.android.libraries.designsystem.components.dialogs.TextFieldDia
 import io.element.android.libraries.designsystem.components.rememberExpandableBottomSheetLayoutState
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.text.toAnnotatedString
 import io.element.android.libraries.designsystem.text.toDp
+import io.element.android.libraries.designsystem.theme.chatWallpaper
 import io.element.android.libraries.designsystem.theme.components.BottomSheetDragHandle
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.components.TextButton
+import io.element.android.libraries.designsystem.theme.noticePillBackground
+import io.element.android.libraries.designsystem.theme.noticePillText
 import io.element.android.libraries.designsystem.utils.HideKeyboardWhenDisposed
 import io.element.android.libraries.designsystem.utils.KeepScreenOn
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 import io.element.android.libraries.designsystem.utils.OnLifecycleEvent
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
+import io.element.android.libraries.designsystem.utils.screenSystemBarsInsets
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarHost
 import io.element.android.libraries.designsystem.utils.snackbar.rememberSnackbarHostState
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.core.asEventId
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.room.tombstone.SuccessorRoom
 import io.element.android.libraries.matrix.api.timeline.Timeline
@@ -161,6 +181,9 @@ fun MessagesView(
     onViewAllPinnedMessagesClick: () -> Unit,
     onThreadsListClick: () -> Unit,
     knockRequestsBannerView: @Composable () -> Unit,
+    matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit,
+    matchaReminderSheet: @Composable (target: MatchaReminderTarget?, onDismiss: () -> Unit) -> Unit,
+    matchaActions: MatchaChatBarActions,
     modifier: Modifier = Modifier,
     forceJumpToBottomVisibility: Boolean = false,
     customReactionBottomSheet: @Composable () -> Unit,
@@ -235,16 +258,18 @@ fun MessagesView(
         state.reactionSummaryState.eventSink(ReactionSummaryEvent.ShowReactionSummary(event.eventId, event.reactionsState.reactions, emoji))
     }
 
-    fun onMoreReactionsClick(event: TimelineItem.Event) {
-        state.customReactionState.eventSink(CustomReactionEvent.ShowCustomReactionSheet(event))
-    }
-
     val expandableState = rememberExpandableBottomSheetLayoutState()
+    // On the phone the root pads the status bar: give it the top bar's colour rather than the wallpaper's.
+    val statusBarHeightPx = if (LocalIsInDetailPane.current) 0 else WindowInsets.statusBars.getTop(LocalDensity.current)
+    val statusBarColor = ElementTheme.colors.bgCanvasDefault
     ExpandableBottomSheetLayout(
         modifier = modifier
             .fillMaxSize()
+            // The wallpaper is painted before the IME and system bar paddings, so it reaches under the navigation bar and around the composer.
+            .background(ElementTheme.colors.chatWallpaper)
+            .drawBehind { drawRect(statusBarColor, size = Size(size.width, statusBarHeightPx.toFloat())) }
             .imePadding()
-            .systemBarsPadding()
+            .windowInsetsPadding(screenSystemBarsInsets)
             .onSizeChanged { size ->
                 // Let the composer takes at max half of the available height.
                 // The value will be different if the soft keyboard is displayed
@@ -254,50 +279,37 @@ fun MessagesView(
         content = {
             Scaffold(
                 contentWindowInsets = scaffoldScrollableContentInsets,
+                containerColor = Color.Transparent,
+                contentColor = ElementTheme.colors.textPrimary,
                 topBar = {
-                    when {
-                        state.timelineState.isSelectionModeActive -> {
-                            val selection = state.timelineState.selectionState as SelectionState.Active
-                            SelectionModeTopBar(
-                                selectedCount = state.timelineState.selectedCount,
-                                action = selection.action,
-                                onCancelClick = {
-                                    state.timelineState.eventSink(TimelineEvent.ExitSelectionMode)
-                                },
-                                onConfirmClick = {
-                                    state.eventSink(MessagesEvent.ConfirmSelectionAction)
-                                },
-                            )
-                        }
-                        state.timelineState.timelineMode is Timeline.Mode.Thread -> {
-                            ThreadTopBar(
-                                roomName = state.roomName,
-                                roomAvatarData = state.roomAvatar,
-                                heroes = state.heroes,
-                                isTombstoned = state.isTombstoned,
+                    if (state.timelineState.isSelectionModeActive) {
+                        val selection = state.timelineState.selectionState as SelectionState.Active
+                        SelectionModeTopBar(
+                            selectedCount = state.timelineState.selectedCount,
+                            action = selection.action,
+                            onCancelClick = {
+                                state.timelineState.eventSink(TimelineEvent.ExitSelectionMode)
+                            },
+                            onConfirmClick = {
+                                state.eventSink(MessagesEvent.ConfirmSelectionAction)
+                            },
+                        )
+                    } else {
+                        // The chip bar continues the top bar; the Scaffold padding pushes the timeline below both.
+                        Column {
+                            MessagesViewTopBars(
+                                state = state,
                                 onBackClick = onBackClick,
-                            )
-                        }
-                        else -> {
-                            MessagesViewTopBar(
-                                roomName = state.roomName,
-                                roomAvatar = state.roomAvatar,
-                                isTombstoned = state.isTombstoned,
-                                heroes = state.heroes,
-                                dmUserIdentityState = state.dmUserVerificationState,
-                                sharedHistoryIcon = state.topBarSharedHistoryIcon,
-                                dmUserStatus = state.dmUserStatus,
-                                onBackClick = { hidingKeyboard { onBackClick() } },
                                 onRoomDetailsClick = { hidingKeyboard { onRoomDetailsClick() } },
-                                menuActions = {
-                                    MessagesMenuActions(
-                                        displayThreads = state.timelineState.timelineMode !is Timeline.Mode.Thread && state.threads.hasThreads,
-                                        roomCallState = state.roomCallState,
-                                        onJoinCallClick = onJoinCallClick,
-                                        onThreadsListClick = onThreadsListClick
-                                    )
-                                }
+                                onJoinCallClick = onJoinCallClick,
+                                onThreadsListClick = onThreadsListClick,
+                                matchaActions = matchaActions,
+                                hidingKeyboard = ::hidingKeyboard,
                             )
+                            if (state.matcha != null) {
+                                val threadMode = state.timelineState.timelineMode as? Timeline.Mode.Thread
+                                matchaChatBar(threadMode?.let { MatchaChatBarSelection.Thread(it.threadRootId) } ?: MatchaChatBarSelection.General)
+                            }
                         }
                     }
                 },
@@ -307,49 +319,49 @@ fun MessagesView(
                             .padding(padding)
                             .consumeWindowInsets(padding)
                     ) {
-                        MessagesViewContent(
-                            state = state,
-                            onContentClick = ::onContentClick,
-                            onGalleryItemClick = { event, index ->
-                                val hideKeyboard = onGalleryEventItemClick(
-                                    state.timelineState.isLive,
-                                    event,
-                                    index,
-                                )
-                                if (hideKeyboard) {
-                                    localView.hideKeyboard()
-                                }
-                            },
-                            onMessageLongClick = ::onMessageLongClick,
-                            onUserDataClick = {
-                                hidingKeyboard {
-                                    state.eventSink(MessagesEvent.OnUserClicked(it))
-                                }
-                            },
-                            onLinkClick = { link, customTab ->
-                                if (customTab) {
-                                    onLinkClick(link.url, true)
-                                    // Do not check those links, they are internal link only
-                                } else {
-                                    state.linkState.eventSink(LinkEvent.OnLinkClick(link))
-                                }
-                            },
-                            onReactionClick = ::onEmojiReactionClick,
-                            onReactionLongClick = ::onEmojiReactionLongClick,
-                            onMoreReactionsClick = ::onMoreReactionsClick,
-                            onReadReceiptClick = { event ->
-                                state.readReceiptBottomSheetState.eventSink(ReadReceiptBottomSheetEvent.EventSelected(event))
-                            },
-                            onSendLocationClick = onSendLocationClick,
-                            onCreatePollClick = onCreatePollClick,
-                            onSwipeToReply = { targetEvent ->
-                                state.eventSink(MessagesEvent.HandleAction(TimelineItemAction.Reply, targetEvent))
-                            },
-                            onJoinCallClick = onJoinCallClick,
-                            forceJumpToBottomVisibility = forceJumpToBottomVisibility,
-                            onViewAllPinnedMessagesClick = onViewAllPinnedMessagesClick,
-                            knockRequestsBannerView = knockRequestsBannerView,
-                        )
+                        CompositionLocalProvider(LocalMatchaThreads provides state.matcha?.threads) {
+                            MessagesViewContent(
+                                state = state,
+                                onContentClick = ::onContentClick,
+                                onGalleryItemClick = { event, index ->
+                                    val hideKeyboard = onGalleryEventItemClick(
+                                        state.timelineState.isLive,
+                                        event,
+                                        index,
+                                    )
+                                    if (hideKeyboard) {
+                                        localView.hideKeyboard()
+                                    }
+                                },
+                                onMessageLongClick = ::onMessageLongClick,
+                                onUserDataClick = {
+                                    hidingKeyboard {
+                                        state.eventSink(MessagesEvent.OnUserClicked(it))
+                                    }
+                                },
+                                onLinkClick = { link, customTab ->
+                                    if (customTab) {
+                                        onLinkClick(link.url, true)
+                                        // Do not check those links, they are internal link only
+                                    } else {
+                                        state.linkState.eventSink(LinkEvent.OnLinkClick(link))
+                                    }
+                                },
+                                onReactionLongClick = ::onEmojiReactionLongClick,
+                                onReadReceiptClick = { event ->
+                                    state.readReceiptBottomSheetState.eventSink(ReadReceiptBottomSheetEvent.EventSelected(event))
+                                },
+                                onSendLocationClick = onSendLocationClick,
+                                onCreatePollClick = onCreatePollClick,
+                                onSwipeToReply = { targetEvent ->
+                                    state.eventSink(MessagesEvent.HandleAction(TimelineItemAction.Reply, targetEvent))
+                                },
+                                onJoinCallClick = onJoinCallClick,
+                                forceJumpToBottomVisibility = forceJumpToBottomVisibility,
+                                onViewAllPinnedMessagesClick = onViewAllPinnedMessagesClick,
+                                knockRequestsBannerView = knockRequestsBannerView,
+                            )
+                        }
 
                         SuggestionsPickerView(
                             modifier = Modifier
@@ -378,6 +390,11 @@ fun MessagesView(
         bottomSheetContent = {
             MessagesViewComposerBottomSheetContents(
                 state = state,
+                onEmojiClick = {
+                    hidingKeyboard {
+                        state.customReactionState.eventSink(CustomReactionEvent.ShowEmojiPickerForComposer)
+                    }
+                },
                 onLinkClick = { url, customTab -> onLinkClick(url, customTab) },
                 onRoomSuccessorClick = { roomId ->
                     state.timelineState.eventSink(TimelineEvent.NavigateToPredecessorOrSuccessorRoom(roomId = roomId))
@@ -456,6 +473,10 @@ fun MessagesView(
 
     customReactionBottomSheet()
 
+    state.matcha?.let { matcha ->
+        matchaReminderSheet(matcha.reminderTarget) { state.eventSink(MessagesEvent.DismissMatchaReminder) }
+    }
+
     ReactionSummaryView(state = state.reactionSummaryState)
     ReadReceiptBottomSheet(
         state = state.readReceiptBottomSheetState,
@@ -508,6 +529,104 @@ fun MessagesView(
     }
 }
 
+/**
+ * The name of the thread rooted at [threadRootId], from the first line of its root message, or null when the root is not loaded or has no text.
+ */
+private fun List<TimelineItem>.threadName(threadRootId: ThreadId): String? {
+    val rootEventId = threadRootId.asEventId()
+    val root = lastOrNull { it is TimelineItem.Event && it.eventId == rootEventId } as? TimelineItem.Event ?: return null
+    val content = root.content as? TimelineItemTextBasedContent ?: return null
+    return content.plainText.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
+}
+
+/**
+ * The bar above the timeline: the room's, or in a thread, the thread's. With the Matcha workspaces a thread keeps the room's bar,
+ * the thread's name taking the place of the member count.
+ */
+@Composable
+private fun MessagesViewTopBars(
+    state: MessagesState,
+    onBackClick: () -> Unit,
+    onRoomDetailsClick: () -> Unit,
+    onJoinCallClick: (isAudioCall: Boolean) -> Unit,
+    onThreadsListClick: () -> Unit,
+    matchaActions: MatchaChatBarActions,
+    hidingKeyboard: (() -> Unit) -> Unit,
+) {
+    val threadMode = state.timelineState.timelineMode as? Timeline.Mode.Thread
+    val rootThreadName = threadMode?.let { mode ->
+        remember(state.timelineState.timelineItems, mode.threadRootId) {
+            state.timelineState.timelineItems.threadName(mode.threadRootId)
+        }
+    }
+    if (threadMode != null && state.matcha == null) {
+        ThreadTopBar(
+            threadName = rootThreadName,
+            roomName = state.roomName,
+            roomAvatarData = state.roomAvatar,
+            heroes = state.heroes,
+            isTombstoned = state.isTombstoned,
+            onBackClick = onBackClick,
+        )
+        return
+    }
+    val roomInfo = state.timelineState.timelineRoomInfo
+    MessagesViewTopBar(
+        roomName = state.roomName,
+        roomAvatar = state.roomAvatar,
+        isTombstoned = state.isTombstoned,
+        heroes = state.heroes,
+        dmUserIdentityState = state.dmUserVerificationState,
+        sharedHistoryIcon = state.topBarSharedHistoryIcon,
+        dmUserStatus = state.dmUserStatus,
+        subtitle = if (threadMode != null) {
+            threadTopBarSubtitle(
+                // The shared name, else the root's text as the thread screen has it loaded.
+                threadName = state.matcha?.threads?.get(threadMode.threadRootId)?.name ?: rootThreadName,
+                isDm = roomInfo.isDm,
+                typingNotificationState = roomInfo.typingNotificationState,
+            )
+        } else {
+            roomTopBarSubtitle(
+                isDm = roomInfo.isDm,
+                isTombstoned = state.isTombstoned,
+                joinedMemberCount = state.joinedMemberCount,
+                typingNotificationState = roomInfo.typingNotificationState,
+            )
+        },
+        onBackClick = { hidingKeyboard { onBackClick() } },
+        onRoomDetailsClick = onRoomDetailsClick,
+        isBackAlwaysShown = threadMode != null,
+        menuActions = {
+            val matcha = state.matcha
+            if (matcha == null) {
+                MessagesMenuActions(
+                    displayThreads = threadMode == null && state.threads.hasThreads,
+                    roomCallState = state.roomCallState,
+                    onJoinCallClick = onJoinCallClick,
+                    onThreadsListClick = onThreadsListClick,
+                )
+            } else {
+                // Until the chat uses named threads, the chip bar's entries are in ⋮.
+                val inMenu = !matcha.hasChatBar
+                MatchaMenuActions(
+                    openTaskCount = matcha.openTaskCount,
+                    roomCallState = state.roomCallState,
+                    canCreateThread = inMenu && matcha.canCreateThread,
+                    canRemind = inMenu && matcha.canRemind,
+                    canOpenSpaceDocs = inMenu && matchaActions.openSpaceDocs != null,
+                    onJoinCallClick = onJoinCallClick,
+                    onAllThreadsClick = { hidingKeyboard(matchaActions::openAllThreads) },
+                    onTasksClick = { hidingKeyboard(matchaActions::openTasks) },
+                    onNewThreadClick = { state.eventSink(MessagesEvent.MatchaNewThread) },
+                    onRemindMeClick = { state.eventSink(MessagesEvent.MatchaRemindMe) },
+                    onSpaceDocsClick = { matchaActions.openSpaceDocs?.invoke() },
+                )
+            }
+        }
+    )
+}
+
 @Composable
 internal fun RowScope.MessagesMenuActions(
     displayThreads: Boolean,
@@ -516,12 +635,12 @@ internal fun RowScope.MessagesMenuActions(
     onThreadsListClick: () -> Unit,
 ) {
     if (displayThreads) {
-        Icon(
-            modifier = Modifier.clickable(enabled = true, onClick = onThreadsListClick),
-            imageVector = CompoundIcons.ThreadsSolid(),
-            contentDescription = stringResource(CommonStrings.common_threads),
-        )
-        Spacer(Modifier.width(8.dp))
+        IconButton(onClick = onThreadsListClick) {
+            Icon(
+                imageVector = CompoundIcons.Threads(),
+                contentDescription = stringResource(CommonStrings.common_threads),
+            )
+        }
     }
     CallMenuItem(
         roomCallState = roomCallState,
@@ -550,9 +669,7 @@ private fun MessagesViewContent(
     onContentClick: (TimelineItem.Event) -> Unit,
     onUserDataClick: (MatrixUser) -> Unit,
     onLinkClick: (Link, Boolean) -> Unit,
-    onReactionClick: (key: String, TimelineItem.Event) -> Unit,
     onReactionLongClick: (key: String, TimelineItem.Event) -> Unit,
-    onMoreReactionsClick: (TimelineItem.Event) -> Unit,
     onReadReceiptClick: (TimelineItem.Event) -> Unit,
     onMessageLongClick: (TimelineItem.Event) -> Unit,
     onGalleryItemClick: ((TimelineItem.Event, Int) -> Unit),
@@ -576,6 +693,8 @@ private fun MessagesViewContent(
             onSendLocationClick = onSendLocationClick,
             onCreatePollClick = onCreatePollClick,
             enableTextFormatting = state.enableTextFormatting,
+            // Adding a task posts its thread's root message.
+            onCreateTaskClick = { state.eventSink(MessagesEvent.MatchaNewTask) }.takeIf { state.matcha != null && state.userEventPermissions.canSendMessage },
         )
 
         if (state.voiceMessageComposerState.showPermissionRationaleDialog) {
@@ -613,9 +732,7 @@ private fun MessagesViewContent(
                 onGalleryItemClick = onGalleryItemClick,
                 onMessageLongClick = onMessageLongClick,
                 onSwipeToReply = onSwipeToReply,
-                onReactionClick = onReactionClick,
                 onReactionLongClick = onReactionLongClick,
-                onMoreReactionsClick = onMoreReactionsClick,
                 onReadReceiptClick = onReadReceiptClick,
                 onJoinCallClick = onJoinCallClick,
                 forceJumpToBottomVisibility = forceJumpToBottomVisibility,
@@ -662,6 +779,7 @@ private fun MessagesViewComposerBottomSheetContents(
     state: MessagesState,
     onRoomSuccessorClick: (RoomId) -> Unit,
     onLinkClick: (String, Boolean) -> Unit,
+    onEmojiClick: () -> Unit,
 ) {
     val contentPadding = WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()
     when {
@@ -698,6 +816,7 @@ private fun MessagesViewComposerBottomSheetContents(
                         state = state.composerState,
                         voiceMessageState = state.voiceMessageComposerState,
                         modifier = Modifier.fillMaxWidth(),
+                        onEmojiClick = onEmojiClick,
                     )
                 }
             }
@@ -710,37 +829,43 @@ private fun MessagesViewComposerBottomSheetContents(
 
 @Composable
 private fun CantSendMessageBanner(modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(ElementTheme.colors.bgSubtleSecondary)
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
-    ) {
+    ComposerSlotPill(modifier = modifier) {
         Text(
             text = stringResource(id = R.string.screen_room_timeline_no_permission_to_post),
             color = ElementTheme.colors.textSecondary,
-            style = MaterialTheme.typography.bodyMedium,
+            style = ElementTheme.typography.fontBodyMdRegular,
             textAlign = TextAlign.Center,
-            fontStyle = FontStyle.Italic,
         )
     }
 }
 
+/** The composer slot of a replaced room: an amber notice card with the way to the new room. */
 @Composable
 private fun SuccessorRoomBanner(
     roomSuccessor: SuccessorRoom,
     onRoomSuccessorClick: (RoomId) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    ComposerAlertMolecule(
-        avatar = null,
-        content = stringResource(R.string.screen_room_timeline_tombstoned_room_message).toAnnotatedString(),
-        onSubmitClick = { onRoomSuccessorClick(roomSuccessor.roomId) },
-        modifier = modifier,
-        submitText = stringResource(R.string.screen_room_timeline_tombstoned_room_action)
-    )
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        modifier = modifier
+            .padding(6.dp)
+            .background(ElementTheme.colors.noticePillBackground, shape)
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 4.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.screen_room_timeline_tombstoned_room_message),
+            color = ElementTheme.colors.noticePillText,
+            style = ElementTheme.typography.fontBodyMdRegular,
+        )
+        TextButton(
+            modifier = Modifier.align(Alignment.End),
+            text = stringResource(R.string.screen_room_timeline_tombstoned_room_action),
+            onClick = { onRoomSuccessorClick(roomSuccessor.roomId) },
+            // Green text fails contrast on the notice surface
+            colors = ButtonDefaults.textButtonColors(contentColor = ElementTheme.colors.textPrimary),
+        )
+    }
 }
 
 @PreviewsDayNight
@@ -760,6 +885,9 @@ internal fun MessagesViewPreview(@PreviewParameter(MessagesStatePreviewParam::cl
         onViewAllPinnedMessagesClick = { },
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
+        matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -794,6 +922,9 @@ internal fun MessagesViewSelectionModePreview() = ElementPreview {
         onViewAllPinnedMessagesClick = { },
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
+        matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )
@@ -852,6 +983,9 @@ internal fun MessagesViewA11yPreview() = ElementPreview {
         onThreadsListClick = {},
         forceJumpToBottomVisibility = true,
         knockRequestsBannerView = {},
+        matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
     )
 }

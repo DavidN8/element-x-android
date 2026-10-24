@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,11 +34,9 @@ import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Button
-import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
-import io.element.android.libraries.matrix.ui.components.SpaceHeaderRootView
 import io.element.android.libraries.matrix.ui.components.SpaceHeaderView
 import io.element.android.libraries.matrix.ui.components.SpaceRoomItemView
 import io.element.android.libraries.matrix.ui.model.getAvatarData
@@ -57,6 +55,7 @@ fun HomeSpacesView(
 ) {
     if (state.spaceRooms.isEmpty()) {
         EmptySpaceHomeView(
+            title = stringResource(CommonStrings.screen_space_list_empty_state_title),
             modifier = modifier.padding(contentPadding),
             onCreateSpaceClick = onCreateSpaceClick,
             onExploreClick = onExploreClick,
@@ -68,36 +67,25 @@ fun HomeSpacesView(
             state = lazyListState,
             contentPadding = contentPadding,
         ) {
+            // Like WhatsApp's Communities tab, the root list starts directly with the spaces.
             val space = state.space
-            when (space) {
-                CurrentSpace.Root -> {
-                    item {
-                        SpaceHeaderRootView(numberOfSpaces = state.spaceRooms.size)
-                    }
-                }
-                is CurrentSpace.Space -> {
-                    item {
-                        SpaceHeaderView(
-                            avatarData = space.spaceRoom.getAvatarData(AvatarSize.SpaceHeader),
-                            alias = space.spaceRoom.canonicalAlias,
-                            name = space.spaceRoom.displayName,
-                            topic = space.spaceRoom.topic,
-                            visibility = space.spaceRoom.visibility,
-                            heroes = space.spaceRoom.heroes.toImmutableList(),
-                            numberOfMembers = space.spaceRoom.numJoinedMembers,
-                        )
-                    }
+            if (space is CurrentSpace.Space) {
+                item {
+                    SpaceHeaderView(
+                        avatarData = space.spaceRoom.getAvatarData(AvatarSize.SpaceHeader),
+                        name = space.spaceRoom.displayName,
+                        numberOfRooms = space.spaceRoom.childrenCount,
+                        topic = space.spaceRoom.topic,
+                        heroes = space.spaceRoom.heroes.toImmutableList(),
+                        numberOfMembers = space.spaceRoom.numJoinedMembers,
+                    )
                 }
             }
 
-            item {
-                HorizontalDivider()
-            }
-
-            itemsIndexed(
+            items(
                 items = state.spaceRooms,
-                key = { _, spaceRoom -> spaceRoom.roomId }
-            ) { index, spaceRoom ->
+                key = { spaceRoom -> spaceRoom.roomId }
+            ) { spaceRoom ->
                 val isInvitation = spaceRoom.state == CurrentUserMembership.INVITED
                 SpaceRoomItemView(
                     spaceRoom = spaceRoom,
@@ -110,9 +98,6 @@ fun HomeSpacesView(
                         // TODO
                     },
                 )
-                if (index != state.spaceRooms.lastIndex) {
-                    HorizontalDivider()
-                }
             }
         }
     }
@@ -122,7 +107,8 @@ fun HomeSpacesView(
  * Ref: https://www.figma.com/design/pDlJZGBsri47FNTXMnEdXB/Compound-Android-Templates?node-id=1763-74215&t=9IGKMXHDfTGAqzQK-4
  */
 @Composable
-private fun EmptySpaceHomeView(
+internal fun EmptySpaceHomeView(
+    title: String,
     onCreateSpaceClick: () -> Unit,
     onExploreClick: () -> Unit,
     canExploreSpaces: Boolean,
@@ -142,7 +128,7 @@ private fun EmptySpaceHomeView(
                     style = BigIcon.Style.Default(CompoundIcons.SpaceSolid())
                 )
                 Text(
-                    text = stringResource(CommonStrings.screen_space_list_empty_state_title),
+                    text = title,
                     style = ElementTheme.typography.fontHeadingMdBold,
                     color = ElementTheme.colors.textPrimary,
                     textAlign = TextAlign.Center,

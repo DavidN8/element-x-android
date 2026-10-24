@@ -1240,6 +1240,39 @@ class MessageComposerPresenterTest : RobolectricTest() {
         }
     }
 
+    @Test
+    fun `present - InsertEmoji inserts at the cursor and moves the cursor after it`() = runTest {
+        val presenter = createPresenter(isRichTextEditorEnabled = false)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            val markdownState = (initialState.textEditorState as TextEditorState.Markdown).state
+            markdownState.text.update("Hello world", true)
+            markdownState.selection = 5..5
+            initialState.eventSink(MessageComposerEvent.InsertEmoji("👍"))
+            assertThat(markdownState.text.value().toString()).isEqualTo("Hello👍 world")
+            assertThat(markdownState.selection).isEqualTo(7..7)
+            // A selected range is replaced
+            markdownState.selection = 0..5
+            initialState.eventSink(MessageComposerEvent.InsertEmoji("🎉"))
+            assertThat(markdownState.text.value().toString()).isEqualTo("🎉👍 world")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `present - InsertEmoji without a known cursor appends`() = runTest {
+        val presenter = createPresenter(isRichTextEditorEnabled = false)
+        presenter.test {
+            val initialState = awaitFirstItem()
+            val markdownState = (initialState.textEditorState as TextEditorState.Markdown).state
+            markdownState.text.update("Hi", true)
+            markdownState.selection = IntRange.EMPTY
+            initialState.eventSink(MessageComposerEvent.InsertEmoji("👋"))
+            assertThat(markdownState.text.value().toString()).isEqualTo("Hi👋")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `present - send messages with intentional mentions`() = runTest {

@@ -9,4 +9,10 @@ package io.element.android.features.messages.impl.threads.list
 
 sealed interface ThreadsListEvent {
     data object Paginate : ThreadsListEvent
+
+    /** Tries loading again after a failure. */
+    data object Retry : ThreadsListEvent
+
+    /** Shows the active or the archived threads. */
+    data class SelectArchiveFilter(val filter: ThreadArchiveFilter) : ThreadsListEvent
 }

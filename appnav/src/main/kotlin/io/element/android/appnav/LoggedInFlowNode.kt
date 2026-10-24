@@ -14,7 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.bumble.appyx.core.composable.PermanentChild
@@ -57,10 +59,12 @@ import io.element.android.features.ftue.api.FtueEntryPoint
 import io.element.android.features.ftue.api.state.FtueService
 import io.element.android.features.ftue.api.state.FtueState
 import io.element.android.features.home.api.HomeEntryPoint
+import io.element.android.features.home.api.HomeTab
 import io.element.android.features.linknewdevice.api.LinkNewDeviceEntryPoint
 import io.element.android.features.location.api.LocalMapTilerConfig
 import io.element.android.features.location.api.LocationService
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
+import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.networkmonitor.api.NetworkMonitor
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.features.networkmonitor.api.ui.ConnectivityIndicatorContainer
@@ -89,6 +93,7 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.RoomIdOrAlias
 import io.element.android.libraries.matrix.api.core.SessionId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.core.toRoomIdOrAlias
 import io.element.android.libraries.matrix.api.permalink.PermalinkData
@@ -158,6 +163,7 @@ class LoggedInFlowNode(
     private val activeLiveLocationShareManager: ActiveLiveLocationShareManager,
     private val locationService: LocationService,
     private val loggedInEventProcessorFactory: LoggedInEventProcessor.Factory,
+    private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
 ) : BaseFlowNode<LoggedInFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = NavTarget.Placeholder,
@@ -177,6 +183,10 @@ class LoggedInFlowNode(
     }
 
     private val callback: Callback = callback()
+
+    // The tab selected in Home: in the two-pane layout, it picks the message of the empty detail pane.
+    private var homeTab by mutableStateOf(HomeTab.Chats)
+    private var isTasksTableShown by mutableStateOf(false)
     private val loggedInFlowProcessor = loggedInEventProcessorFactory.create(snackbarDispatcher)
 
     /**
@@ -297,6 +307,10 @@ class LoggedInFlowNode(
 
         @Parcelize
         data class IncomingVerificationRequest(val data: VerificationRequest.Incoming) : NavTarget
+
+        /** The notes of a space, opened from the Notes tab of Home. */
+        @Parcelize
+        data class SpaceNote(val spaceId: RoomId, val documentId: String?) : NavTarget
     }
 
     override fun resolve(navTarget: NavTarget, buildContext: BuildContext): Node {
@@ -373,6 +387,27 @@ class LoggedInFlowNode(
 
                     override fun navigateToSession(sessionId: SessionId) {
                         callback.navigateToSession(sessionId)
+                    }
+
+                    override fun onTabSelected(tab: HomeTab) {
+                        homeTab = tab
+                    }
+
+                    override fun onTasksTableVisibilityChange(isVisible: Boolean) {
+                        isTasksTableShown = isVisible
+                    }
+
+                    override fun navigateToThread(roomId: RoomId, threadId: ThreadId) {
+                        lifecycleScope.launch {
+                            // The chat opens first, so back from the thread leads to the chat (spec §4.0).
+                            attachRoom(roomIdOrAlias = roomId.toRoomIdOrAlias(), clearBackstack = false)
+                                .attachThread(threadId, focusedEventId = null)
+                        }
+                    }
+
+                    override fun navigateToSpaceNote(spaceId: RoomId, documentId: String?) {
+                        // Single top: in the two-pane layout, opening another note replaces the one in the detail pane.
+                        backstack.singleTop(NavTarget.SpaceNote(spaceId = spaceId, documentId = documentId))
                     }
                 }
                 homeEntryPoint.createNode(
@@ -585,6 +620,20 @@ class LoggedInFlowNode(
                     },
                 )
             }
+            is NavTarget.SpaceNote -> {
+                val callback = object : MatchaSpaceDocsEntryPoint.Callback {
+                    override fun close() {
+                        // Its own element, as for rooms: in the two-pane layout something else may be on top by then.
+                        backstack.removeLast(navTarget)
+                    }
+                }
+                matchaSpaceDocsEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaSpaceDocsEntryPoint.Params(spaceId = navTarget.spaceId, documentId = navTarget.documentId),
+                    callback = callback,
+                )
+            }
             is NavTarget.IncomingVerificationRequest -> {
                 incomingVerificationEntryPoint.createNode(
                     parentNode = this,
@@ -685,7 +734,12 @@ class LoggedInFlowNode(
                                 element.key.navTarget == NavTarget.Home && element.targetState != DESTROYED
                             }
                             if (isTwoPane && homeElement != null) {
-                                LoggedInTwoPaneView(homeElement = homeElement)
+                                LoggedInTwoPaneView(
+                                    homeElement = homeElement,
+                                    homeTab = homeTab,
+                                    // The tasks table needs the room; it gets the whole width until a task is opened.
+                                    isHomeFullWidth = homeTab == HomeTab.Tasks && isTasksTableShown,
+                                )
                             } else {
                                 BackstackView(transitionHandler = rememberLoggedInFlowTransitionHandler(backstack))
                             }

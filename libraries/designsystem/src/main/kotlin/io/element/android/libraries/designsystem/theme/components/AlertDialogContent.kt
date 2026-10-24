@@ -37,6 +37,7 @@ import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.libraries.designsystem.preview.ElementThemedPreview
 import io.element.android.libraries.designsystem.preview.PreviewGroup
+import io.element.android.libraries.designsystem.theme.raisedSurface
 import io.element.android.libraries.testtags.TestTags
 import io.element.android.libraries.testtags.testTag
 import kotlin.math.max
@@ -118,7 +119,8 @@ internal fun SimpleAlertDialogContent(
                         size = ButtonSize.Medium,
                         onClick = onCancelClick,
                     )
-                    Button(
+                    // Like WhatsApp, dialogs only use text buttons.
+                    TextButton(
                         modifier = Modifier.testTag(TestTags.dialogPositive),
                         text = submitText,
                         enabled = enabled,
@@ -386,7 +388,7 @@ internal fun DialogPreview(content: @Composable () -> Unit) {
 
 internal object DialogContentDefaults {
     private val externalPaddingDp = 24.dp
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(28.dp)
     val externalPadding = PaddingValues(all = externalPaddingDp)
     val externalHorizontalPadding = PaddingValues(horizontal = externalPaddingDp)
     val externalVerticalPadding = PaddingValues(vertical = externalPaddingDp)
@@ -397,7 +399,7 @@ internal object DialogContentDefaults {
     val containerColor: Color
         @Composable
         @ReadOnlyComposable
-        get() = ElementTheme.colors.bgCanvasDefault
+        get() = ElementTheme.colors.raisedSurface
 
     val textContentColor: Color
         @Composable

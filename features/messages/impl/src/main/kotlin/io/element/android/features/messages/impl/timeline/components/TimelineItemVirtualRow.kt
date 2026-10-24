@@ -28,7 +28,6 @@ import io.element.android.features.messages.impl.timeline.model.virtual.Timeline
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemReadMarkerModel
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemRoomBeginningModel
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemTypingNotificationModel
-import io.element.android.features.messages.impl.typing.TypingNotificationView
 import timber.log.Timber
 
 @Composable
@@ -41,12 +40,13 @@ fun TimelineItemVirtualRow(
     Box(modifier = modifier) {
         when (virtual.model) {
             is TimelineItemDaySeparatorModel -> TimelineItemDaySeparatorView(virtual.model)
-            TimelineItemReadMarkerModel -> TimelineItemReadMarkerView()
+            is TimelineItemReadMarkerModel -> TimelineItemReadMarkerView(unreadCount = virtual.model.unreadCount)
             TimelineItemRoomBeginningModel -> {
                 TimelineItemRoomBeginningView(
                     predecessorRoom = timelineRoomInfo.predecessorRoom,
                     roomName = timelineRoomInfo.name,
                     isDm = timelineRoomInfo.isDm,
+                    isEncrypted = timelineRoomInfo.isEncrypted,
                     onPredecessorRoomClick = { roomId ->
                         eventSink(TimelineEvent.NavigateToPredecessorOrSuccessorRoom(roomId))
                     },
@@ -64,11 +64,8 @@ fun TimelineItemVirtualRow(
             is TimelineItemLastForwardIndicatorModel -> {
                 Spacer(modifier = Modifier)
             }
-            is TimelineItemTypingNotificationModel -> {
-                TypingNotificationView(
-                    state = timelineRoomInfo.typingNotificationState,
-                )
-            }
+            // Who is typing is shown in the top bar instead.
+            is TimelineItemTypingNotificationModel -> Unit
         }
     }
 }

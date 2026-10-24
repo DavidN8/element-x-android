@@ -30,8 +30,13 @@ data class HomeState(
     val canReportBug: Boolean,
     val showMultiAccountAnnouncement: Boolean,
     val totalUnreadCount: Int,
+    /** The Matcha workspaces are on, so the bar is Chats · Tasks · Notes · Channels instead of Chats · Spaces. */
+    val isMatchaWorkspacesEnabled: Boolean,
     val eventSink: (HomeEvent) -> Unit,
 ) {
+    /** The tabs of the bottom navigation bar, in order. */
+    val navigationBarItems = HomeNavigationBarItem.barOrder(isMatchaWorkspacesEnabled)
+
     val isBackHandlerEnabled = currentHomeNavigationBarItem != HomeNavigationBarItem.Chats || roomListState.spaceFiltersState is SpaceFiltersState.Selected
     val displayRoomListFilters = currentHomeNavigationBarItem == HomeNavigationBarItem.Chats && roomListState.displayFilters
 }

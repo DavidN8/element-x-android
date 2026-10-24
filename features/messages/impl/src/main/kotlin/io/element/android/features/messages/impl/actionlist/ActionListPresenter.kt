@@ -13,12 +13,14 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.features.matcha.api.isReminderBotJoined
 import io.element.android.features.messages.impl.UserEventPermissions
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemActionComparator
@@ -109,6 +111,11 @@ class DefaultActionListPresenter(
         }.collectAsState(initial = persistentListOf())
 
         val isThreadsEnabled = featureFlagService.isFeatureEnabledFlow(FeatureFlags.Threads).collectAsState(false)
+        val isMatchaEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
+        // The reminder bot posts the reminders; in a DM it must already be there, since inviting it would turn the DM into a group.
+        val canUseReminderBot by produceState(initialValue = false, isMatchaEnabled) {
+            value = isMatchaEnabled && (!room.isDm() || room.isReminderBotJoined())
+        }
 
         fun handleEvent(event: ActionListEvent) {
             when (event) {
@@ -120,6 +127,7 @@ class DefaultActionListPresenter(
                     pinnedEventIds = pinnedEventIds,
                     target = target,
                     isThreadsEnabled = isThreadsEnabled.value,
+                    canUseReminderBot = canUseReminderBot,
                 )
             }
         }
@@ -137,6 +145,7 @@ class DefaultActionListPresenter(
         pinnedEventIds: ImmutableList<EventId>,
         target: MutableState<ActionListState.Target>,
         isThreadsEnabled: Boolean,
+        canUseReminderBot: Boolean,
     ) = launch {
         target.value = ActionListState.Target.Loading(timelineItem)
 
@@ -146,6 +155,7 @@ class DefaultActionListPresenter(
             isDeveloperModeEnabled = isDeveloperModeEnabled,
             isEventPinned = pinnedEventIds.contains(timelineItem.eventId),
             isThreadsEnabled = isThreadsEnabled,
+            canUseReminderBot = canUseReminderBot,
         )
 
         val verifiedUserSendFailure = userSendFailureFactory.create(timelineItem.localSendState)
@@ -179,6 +189,7 @@ class DefaultActionListPresenter(
         isDeveloperModeEnabled: Boolean,
         isEventPinned: Boolean,
         isThreadsEnabled: Boolean,
+        canUseReminderBot: Boolean,
     ): List<TimelineItemAction> {
         val canRedact = timelineItem.isMine && usersEventPermissions.canRedactOwn || !timelineItem.isMine && usersEventPermissions.canRedactOther
         return buildSet {
@@ -229,6 +240,10 @@ class DefaultActionListPresenter(
                     add(TimelineItemAction.Pin)
                 }
             }
+            // The reminder links to the message, so it must have reached the server.
+            if (canUseReminderBot && timelineItem.isRemote && usersEventPermissions.canSendMessage) {
+                add(TimelineItemAction.RemindMe)
+            }
             if (timelineItem.content.canBeCopied()) {
                 add(TimelineItemAction.CopyText)
             } else if (timelineItem.content.captionOrNull().isNullOrBlank().not()) {
@@ -236,6 +251,9 @@ class DefaultActionListPresenter(
             }
             if (timelineItem.isRemote) {
                 add(TimelineItemAction.CopyLink)
+            }
+            if (timelineItem.isMine && timelineItem.isRemote) {
+                add(TimelineItemAction.ReadBy)
             }
             if (isDeveloperModeEnabled) {
                 add(TimelineItemAction.ViewSource)

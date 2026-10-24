@@ -17,4 +17,10 @@ sealed interface CreateTimelineParams {
     data class MediaOnlyFocused(val focusedEventId: EventId) : CreateTimelineParams
     data object PinnedOnly : CreateTimelineParams
     data class Threaded(val threadRootEventId: ThreadId) : CreateTimelineParams
+
+    /**
+     * A live timeline containing only events of the given custom types, read through their raw JSON.
+     * It never sends read receipts, so it can be kept open in the background.
+     */
+    data class OnlyEventTypes(val types: Set<String>) : CreateTimelineParams
 }

@@ -187,6 +187,16 @@ open class ActionListStatePreviewParam : PreviewParameterProvider<ActionListStat
                         recentEmojis = suggestedEmojis,
                     )
                 ),
+                anActionListState(
+                    target = ActionListState.Target.Success(
+                        event = aTimelineItemEvent(),
+                        sentTimeFull = "January 1, 1970 at 12:00 AM",
+                        displayEmojiReactions = true,
+                        verifiedUserSendFailure = VerifiedUserSendFailure.None,
+                        actions = aTimelineItemActionList(withRemindMe = true),
+                        recentEmojis = suggestedEmojis,
+                    )
+                ),
             )
         }
 }
@@ -200,9 +210,11 @@ fun anActionListState(
 )
 
 fun aTimelineItemActionList(
-    copyAction: TimelineItemAction? = TimelineItemAction.CopyText
+    copyAction: TimelineItemAction? = TimelineItemAction.CopyText,
+    withRemindMe: Boolean = false,
 ): ImmutableList<TimelineItemAction> {
     return setOfNotNull(
+        TimelineItemAction.RemindMe.takeIf { withRemindMe },
         TimelineItemAction.Reply,
         TimelineItemAction.Forward,
         copyAction,

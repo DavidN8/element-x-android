@@ -20,10 +20,13 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CreateTimelineParams
 import io.element.android.libraries.matrix.api.room.IntentionalMention
 import io.element.android.libraries.matrix.api.room.JoinedRoom
+import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.RoomMembersState
 import io.element.android.libraries.matrix.api.room.RoomNotificationSettingsState
 import io.element.android.libraries.matrix.api.room.SendQueueUpdate
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.history.RoomHistoryVisibility
 import io.element.android.libraries.matrix.api.room.join.JoinRule
 import io.element.android.libraries.matrix.api.room.knock.KnockRequest
@@ -93,6 +96,18 @@ class FakeJoinedRoom(
     private val stopLiveLocationShareResult: () -> Result<Unit> = { lambdaError() },
     private val sendLiveLocationResult: (String) -> Result<Unit> = { lambdaError() },
     private val setOwnMemberDisplayNameResult: (String) -> Result<Unit> = { lambdaError() },
+    private val sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> lambdaError() },
+    private val sendRawStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> lambdaError() },
+    private val getStateEventsJsonResult: (StateEventType) -> Result<Map<String, String>> = { Result.success(emptyMap()) },
+    private val getStateEventIdResult: (StateEventType, String) -> Result<EventId?> = { _, _ -> Result.success(null) },
+    private val fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?, Int) -> Result<RawEventsPage> = { _, _, _, _ ->
+        Result.success(RawEventsPage(emptyList(), null))
+    },
+    private val rawMessageLikeEvents: Flow<String> = MutableSharedFlow(),
+    /** By default the SDK can't read state from the server, like the published SDK. */
+    private val fetchStateEventContentJsonResult: (String, String) -> Result<String?> = { _, _ ->
+        Result.failure(UnsupportedOperationException("No Matcha SDK patch"))
+    },
 ) : JoinedRoom, BaseRoom by baseRoom {
     private val sendQueueUpdates = MutableSharedFlow<SendQueueUpdate>(extraBufferCapacity = 10)
 
@@ -259,6 +274,32 @@ class FakeJoinedRoom(
     override suspend fun setOwnMemberDisplayName(displayName: String): Result<Unit> = simulateLongTask {
         setOwnMemberDisplayNameResult(displayName)
     }
+
+    override suspend fun sendRawEvent(eventType: String, contentJson: String): Result<EventId> = simulateLongTask {
+        sendRawEventResult(eventType, contentJson)
+    }
+
+    override suspend fun sendRawStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId> = simulateLongTask {
+        sendRawStateEventResult(eventType, stateKey, contentJson)
+    }
+
+    override suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>> {
+        return getStateEventsJsonResult(eventType)
+    }
+
+    override suspend fun getStateEventId(eventType: StateEventType, stateKey: String): Result<EventId?> {
+        return getStateEventIdResult(eventType, stateKey)
+    }
+
+    override suspend fun fetchRelatedEventsJson(eventId: EventId, relation: RawRelationType, from: String?, limit: Int): Result<RawEventsPage> {
+        return fetchRelatedEventsJsonResult(eventId, relation, from, limit)
+    }
+
+    override suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?> {
+        return fetchStateEventContentJsonResult(eventType, stateKey)
+    }
+
+    override fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String> = rawMessageLikeEvents
 
     private suspend fun simulateSendMediaProgress(progressCallback: ProgressCallback?) {
         progressCallbackValues.forEach { (current, total) ->

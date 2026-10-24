@@ -81,7 +81,7 @@ class GlobalSearchViewTest : RobolectricTest() {
         )
         // Remove automatic initial events
         eventsRecorder.clear()
-        val clearSearch = activity!!.getString(CommonStrings.a11y_clear_search_field)
+        val clearSearch = activity!!.getString(CommonStrings.action_clear)
         onNodeWithContentDescription(clearSearch).performClick()
         eventsRecorder.assertSingle(GlobalSearchEvent.ClearQuery)
     }

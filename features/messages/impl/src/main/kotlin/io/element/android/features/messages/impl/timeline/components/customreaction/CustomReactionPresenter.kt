@@ -36,6 +36,9 @@ class CustomReactionPresenter(
                 is CustomReactionEvent.ShowCustomReactionSheet -> {
                     internalTarget = InternalTarget.Showing(event.event)
                 }
+                CustomReactionEvent.ShowEmojiPickerForComposer -> {
+                    internalTarget = InternalTarget.Composer
+                }
                 is CustomReactionEvent.DismissCustomReactionSheet -> {
                     internalTarget = InternalTarget.None
                 }
@@ -51,6 +54,11 @@ class CustomReactionPresenter(
                 )
             } else {
                 CustomReactionState.Target.Loading(target.event)
+            }
+            InternalTarget.Composer -> if (emojiPickerState.isReady) {
+                CustomReactionState.Target.Composer(emojiPickerState = emojiPickerState)
+            } else {
+                CustomReactionState.Target.None
             }
         }
 
@@ -73,4 +81,5 @@ class CustomReactionPresenter(
 private sealed interface InternalTarget {
     data object None : InternalTarget
     data class Showing(val event: TimelineItem.Event) : InternalTarget
+    data object Composer : InternalTarget
 }

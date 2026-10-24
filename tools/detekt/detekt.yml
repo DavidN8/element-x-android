@@ -234,6 +234,7 @@ Compose:
       - LocalCameraPositionState
       - LocalMapTilerConfig
       - LocalMediaItemPresenterFactories
+      - LocalMatchaThreads
       - LocalTimelineItemPresenterFactories
       - LocalRoomMemberProfilesCache
       - LocalMentionSpanUpdater
@@ -242,6 +243,7 @@ Compose:
       - LocalUiTestMode
       - LocalSdkIntVersionProvider
       - LocalTimelineEventRendererConfig
+      - LocalIsInDetailPane
   CompositionLocalNaming:
     active: true
   ContentEmitterReturningValues:

@@ -9,6 +9,7 @@
 package io.element.android.features.messages.impl
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.features.messages.api.timeline.voicemessages.composer.VoiceMessageComposerState
 import io.element.android.features.messages.api.timeline.voicemessages.composer.aVoiceMessageComposerState
 import io.element.android.features.messages.api.timeline.voicemessages.composer.aVoiceMessagePreviewState
@@ -19,6 +20,8 @@ import io.element.android.features.messages.impl.crypto.identity.aRoomMemberIden
 import io.element.android.features.messages.impl.crypto.identity.anIdentityChangeState
 import io.element.android.features.messages.impl.link.LinkState
 import io.element.android.features.messages.impl.link.aLinkState
+import io.element.android.features.messages.impl.matcha.MatchaChatState
+import io.element.android.features.messages.impl.matcha.aMatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerState
 import io.element.android.features.messages.impl.messagecomposer.aMessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerState
@@ -57,6 +60,7 @@ import io.element.android.libraries.textcomposer.model.MessageComposerMode
 import io.element.android.libraries.textcomposer.model.aTextEditorStateMarkdown
 import io.element.android.libraries.textcomposer.model.aTextEditorStateRich
 import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.persistentSetOf
 
 open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
@@ -95,12 +99,25 @@ open class MessagesStatePreviewParam : PreviewParameterProvider<MessagesState> {
                 identityChangeState = anIdentityChangeState(listOf(aRoomMemberIdentityStateChange()))
             ),
             aMessagesState(redactEventAction = MessagesState.ConfirmingRedaction(EventId("\$anEventId"))),
+            aMessagesState(matcha = aMatchaChatState()),
+            aMessagesState(
+                timelineState = aTimelineState(
+                    timelineMode = Timeline.Mode.Thread(threadRootId = ThreadId("\$a-thread-id")),
+                    timelineItems = aTimelineItemList(aTimelineItemTextContent()),
+                ),
+                matcha = aMatchaChatState(
+                    threads = persistentMapOf(ThreadId("\$a-thread-id") to MatchaThreadInfo(name = "Release planning", isArchived = false)),
+                ),
+            ),
+            // A chat with open tasks and no named thread: no chip bar, and the board button shows the count.
+            aMessagesState(matcha = aMatchaChatState(hasChatBar = false, openTaskCount = 3)),
         )
 }
 
 fun aMessagesState(
     roomName: String? = ROOM_NAME,
-    roomAvatar: AvatarData = AvatarData("!id:domain", ROOM_NAME, size = AvatarSize.TimelineRoom),
+    roomAvatar: AvatarData = AvatarData("!id:domain", ROOM_NAME, size = AvatarSize.ChatTopBar),
+    joinedMemberCount: Long = 12,
     userEventPermissions: UserEventPermissions = aUserEventPermissions(),
     composerState: MessageComposerState = aMessageComposerState(
         textEditorState = aTextEditorStateRich(initialText = "Hello", initialFocus = true),
@@ -135,11 +152,13 @@ fun aMessagesState(
     dmUserStatus: DisplayedStatus? = null,
     eventSink: (MessagesEvent) -> Unit = {},
     redactEventAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+    matcha: MatchaChatState? = null,
 ) = MessagesState(
     roomId = RoomId("!id:domain"),
     roomName = roomName,
     roomAvatar = roomAvatar,
     heroes = persistentListOf(),
+    joinedMemberCount = joinedMemberCount,
     userEventPermissions = userEventPermissions,
     composerState = composerState,
     voiceMessageComposerState = voiceMessageComposerState,
@@ -166,6 +185,7 @@ fun aMessagesState(
     showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom,
     dmUserStatus = dmUserStatus,
     redactEventAction = redactEventAction,
+    matcha = matcha,
     eventSink = eventSink,
 )
 

@@ -27,12 +27,12 @@ class RoomListFiltersPresenterTest {
             awaitItem().let { state ->
                 assertThat(state.hasAnyFilterSelected).isFalse()
                 assertThat(state.filterSelectionStates).containsExactly(
-                    filterSelectionState(RoomListFilter.Unread, false),
-                    filterSelectionState(RoomListFilter.People, false),
-                    filterSelectionState(RoomListFilter.Rooms, false),
                     filterSelectionState(RoomListFilter.Favourites, false),
+                    filterSelectionState(RoomListFilter.Unread, false),
+                    filterSelectionState(RoomListFilter.Rooms, false),
+                    filterSelectionState(RoomListFilter.People, false),
                     filterSelectionState(RoomListFilter.Invites, false),
-                )
+                ).inOrder()
             }
             cancelAndIgnoreRemainingEvents()
         }
@@ -40,33 +40,25 @@ class RoomListFiltersPresenterTest {
 
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun `present - toggle rooms filter`() = runTest {
+    fun `present - toggle rooms filter keeps the filters in place`() = runTest {
         val presenter = createRoomListFiltersPresenter()
         presenter.test {
             awaitItem().eventSink.invoke(RoomListFiltersEvent.ToggleFilter(RoomListFilter.Rooms))
             awaitLastSequentialItem().let { state ->
                 assertThat(state.hasAnyFilterSelected).isTrue()
                 assertThat(state.filterSelectionStates).containsExactly(
-                    filterSelectionState(RoomListFilter.Rooms, true),
-                    filterSelectionState(RoomListFilter.Unread, false),
                     filterSelectionState(RoomListFilter.Favourites, false),
+                    filterSelectionState(RoomListFilter.Unread, false),
+                    filterSelectionState(RoomListFilter.Rooms, true),
+                    filterSelectionState(RoomListFilter.People, false),
+                    filterSelectionState(RoomListFilter.Invites, false),
                 ).inOrder()
-
-                assertThat(state.selectedFilters()).containsExactly(
-                    RoomListFilter.Rooms,
-                )
+                assertThat(state.selectedFilters()).containsExactly(RoomListFilter.Rooms)
                 state.eventSink.invoke(RoomListFiltersEvent.ToggleFilter(RoomListFilter.Rooms))
             }
             advanceUntilIdle()
             awaitLastSequentialItem().let { state ->
                 assertThat(state.hasAnyFilterSelected).isFalse()
-                assertThat(state.filterSelectionStates).containsExactly(
-                    filterSelectionState(RoomListFilter.Unread, false),
-                    filterSelectionState(RoomListFilter.People, false),
-                    filterSelectionState(RoomListFilter.Rooms, false),
-                    filterSelectionState(RoomListFilter.Favourites, false),
-                    filterSelectionState(RoomListFilter.Invites, false),
-                ).inOrder()
                 assertThat(state.selectedFilters()).isEmpty()
             }
         }
@@ -74,7 +66,7 @@ class RoomListFiltersPresenterTest {
 
     @Test
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun `present - toggling two incompatible filters in the same frame keeps the first one`() = runTest {
+    fun `present - selecting a filter replaces the selected one`() = runTest {
         val presenter = createRoomListFiltersPresenter()
         presenter.test {
             awaitItem().let { state ->
@@ -83,34 +75,8 @@ class RoomListFiltersPresenterTest {
             }
             advanceUntilIdle()
             awaitLastSequentialItem().let { state ->
-                assertThat(state.selectedFilters()).containsExactly(RoomListFilter.Favourites)
-                assertThat(state.filterSelectionStates).containsExactly(
-                    filterSelectionState(RoomListFilter.Favourites, true),
-                    filterSelectionState(RoomListFilter.Unread, false),
-                    filterSelectionState(RoomListFilter.People, false),
-                    filterSelectionState(RoomListFilter.Rooms, false),
-                ).inOrder()
-            }
-        }
-    }
-
-    @Test
-    @OptIn(ExperimentalCoroutinesApi::class)
-    fun `present - toggling two incompatible categories in the same frame keeps the first one`() = runTest {
-        val presenter = createRoomListFiltersPresenter()
-        presenter.test {
-            awaitItem().let { state ->
-                state.eventSink.invoke(RoomListFiltersEvent.ToggleFilter(RoomListFilter.People))
-                state.eventSink.invoke(RoomListFiltersEvent.ToggleFilter(RoomListFilter.Rooms))
-            }
-            advanceUntilIdle()
-            awaitLastSequentialItem().let { state ->
-                assertThat(state.selectedFilters()).containsExactly(RoomListFilter.People)
-                assertThat(state.filterSelectionStates).containsExactly(
-                    filterSelectionState(RoomListFilter.People, true),
-                    filterSelectionState(RoomListFilter.Unread, false),
-                    filterSelectionState(RoomListFilter.Favourites, false),
-                ).inOrder()
+                assertThat(state.selectedFilters()).containsExactly(RoomListFilter.Invites)
+                assertThat(state.filterSelectionStates).hasSize(RoomListFilter.entries.size)
             }
         }
     }

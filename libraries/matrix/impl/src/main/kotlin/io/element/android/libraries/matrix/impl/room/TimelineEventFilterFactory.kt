@@ -10,12 +10,14 @@ package io.element.android.libraries.matrix.impl.room
 
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.appconfig.MatchaConfig
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.join.JoinRule
 import uniffi.matrix_sdk_ui.MembershipChangeFilter
 import uniffi.matrix_sdk_ui.TimelineEventCondition
 import uniffi.matrix_sdk_ui.TimelineEventFilter
 import uniffi.ruma_events.TimelineEventType
+import uniffi.ruma_events.timelineEventTypeFromString
 
 interface TimelineEventFilterFactory {
     fun create(
@@ -47,8 +49,10 @@ class RustTimelineEventFilterFactory : TimelineEventFilterFactory {
             emptyList()
         }
 
-        // Exclude any custom state events not supported by the SDK
-        val customStateEventsFilter = listOf(TimelineEventCondition.AnyCustomStateEvent)
+        // Exclude any custom state events not supported by the SDK, and the Matcha workspace events,
+        // which are rendered by their own screens instead of as "unsupported event" tiles.
+        val customStateEventsFilter = listOf(TimelineEventCondition.AnyCustomStateEvent) +
+            MatchaConfig.MESSAGE_LIKE_EVENT_TYPES.map { TimelineEventCondition.EventType(timelineEventTypeFromString(it)) }
         return if (excludedEventTypes.isNotEmpty() || excludedMembershipChanges.isNotEmpty()) {
             TimelineEventFilter.Exclude(customStateEventsFilter + excludedEventTypes + excludedMembershipChanges)
         } else {

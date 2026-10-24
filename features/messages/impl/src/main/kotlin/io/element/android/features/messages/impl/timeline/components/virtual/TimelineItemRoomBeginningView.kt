@@ -8,11 +8,14 @@
 
 package io.element.android.features.messages.impl.timeline.components.virtual
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Arrangement.spacedBy
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,13 +23,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
+import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.R
+import io.element.android.features.messages.impl.timeline.components.NoticePill
 import io.element.android.libraries.designsystem.atomic.molecules.ComposerAlertMolecule
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.preview.ROOM_NAME
 import io.element.android.libraries.designsystem.text.toAnnotatedString
+import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.noticePillText
 import io.element.android.libraries.designsystem.utils.allBooleans
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.tombstone.PredecessorRoom
@@ -37,7 +44,8 @@ fun TimelineItemRoomBeginningView(
     predecessorRoom: PredecessorRoom?,
     isDm: Boolean,
     onPredecessorRoomClick: (RoomId) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isEncrypted: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxWidth()
@@ -63,12 +71,27 @@ fun TimelineItemRoomBeginningView(
                 } else {
                     stringResource(id = R.string.screen_room_timeline_beginning_of_room, roomName)
                 }
-                Text(
-                    color = ElementTheme.colors.textSecondary,
-                    style = ElementTheme.typography.fontBodyMdRegular,
-                    text = text,
-                    textAlign = TextAlign.Center,
-                )
+                NoticePill {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        if (isEncrypted) {
+                            Icon(
+                                modifier = Modifier.size(14.dp),
+                                imageVector = CompoundIcons.Lock(),
+                                contentDescription = null,
+                                tint = ElementTheme.colors.noticePillText,
+                            )
+                        }
+                        Text(
+                            color = ElementTheme.colors.noticePillText,
+                            style = ElementTheme.typography.fontBodySmRegular,
+                            text = text,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                }
             }
         }
     }
@@ -89,6 +112,7 @@ internal fun TimelineItemRoomBeginningViewPreview() = ElementPreview {
                 predecessorRoom = null,
                 roomName = ROOM_NAME,
                 isDm = isDm,
+                isEncrypted = true,
                 onPredecessorRoomClick = {},
             )
             TimelineItemRoomBeginningView(

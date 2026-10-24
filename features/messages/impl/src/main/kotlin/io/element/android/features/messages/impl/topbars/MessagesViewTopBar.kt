@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -29,12 +30,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.MessagesMenuActions
 import io.element.android.features.messages.impl.SharedHistoryIcon
+import io.element.android.features.messages.impl.matcha.MatchaMenuActions
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roomcall.api.aStandByCallState
 import io.element.android.features.roomcall.api.anOngoingCallState
@@ -47,9 +51,12 @@ import io.element.android.libraries.designsystem.components.button.BackButton
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.preview.ROOM_NAME
+import io.element.android.libraries.designsystem.theme.aliasChatTitle
 import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 import io.element.android.libraries.designsystem.utils.hasTwoPaneWindowSize
 import io.element.android.libraries.matrix.api.encryption.identity.IdentityState
 import io.element.android.libraries.matrix.api.user.DisplayedStatus
@@ -70,111 +77,117 @@ internal fun MessagesViewTopBar(
     dmUserIdentityState: IdentityState?,
     sharedHistoryIcon: SharedHistoryIcon,
     dmUserStatus: DisplayedStatus?,
+    subtitle: TopBarSubtitle?,
     onRoomDetailsClick: () -> Unit,
     onBackClick: () -> Unit,
     modifier: Modifier = Modifier,
+    // A thread shown with the room's bar goes back to the room, also in the two-pane layout.
+    isBackAlwaysShown: Boolean = false,
     menuActions: @Composable RowScope.() -> Unit,
 ) {
     TopAppBar(
         modifier = modifier.padding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal).asPaddingValues()),
         navigationIcon = {
             // In the two-pane layout the room list is already visible next to the room, so there is nothing to go back to.
-            if (!hasTwoPaneWindowSize()) {
+            if (isBackAlwaysShown || !hasTwoPaneWindowSize()) {
                 BackButton(onClick = onBackClick)
             }
         },
         title = {
-            val roundedCornerShape = RoundedCornerShape(8.dp)
             Row(
                 modifier = Modifier
                     .heightIn(min = 48.dp)
-                    .clip(roundedCornerShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable { onRoomDetailsClick() }
                     .semantics { heading() },
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                val titleModifier = Modifier.weight(1f, fill = false)
-                RoomAvatarAndNameRow(
-                    roomName = roomName,
-                    roomAvatar = roomAvatar,
-                    isTombstoned = isTombstoned,
-                    heroes = heroes,
-                    dmUserStatus = dmUserStatus,
-                    modifier = titleModifier
+                Avatar(
+                    avatarData = roomAvatar,
+                    avatarType = AvatarType.Room(
+                        heroes = heroes,
+                        isTombstoned = isTombstoned,
+                    ),
                 )
-
-                val iconModifier = Modifier.size(16.dp)
-
-                when (dmUserIdentityState) {
-                    IdentityState.Verified -> {
-                        Icon(
-                            modifier = iconModifier,
-                            imageVector = CompoundIcons.Verified(),
-                            tint = ElementTheme.colors.iconSuccessPrimary,
-                            contentDescription = null,
+                Column(
+                    modifier = Modifier.padding(start = 12.dp, end = 4.dp),
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        DisplayNameWithStatus(
+                            name = roomName ?: stringResource(CommonStrings.common_no_room_name),
+                            status = dmUserStatus,
+                            // Only the name ellipsizes, the identity icons stay visible.
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = ElementTheme.typography.aliasChatTitle,
+                            nameColor = ElementTheme.colors.textPrimary,
+                            nameFontStyle = FontStyle.Italic.takeIf { roomName == null },
+                        )
+                        TopBarIdentityIcons(
+                            dmUserIdentityState = dmUserIdentityState,
+                            sharedHistoryIcon = sharedHistoryIcon,
                         )
                     }
-                    IdentityState.VerificationViolation -> {
-                        Icon(
-                            modifier = iconModifier,
-                            imageVector = CompoundIcons.ErrorSolid(),
-                            tint = ElementTheme.colors.iconCriticalPrimary,
-                            contentDescription = null,
+                    if (subtitle != null) {
+                        Text(
+                            text = subtitle.text,
+                            style = ElementTheme.typography.fontBodyMdRegular,
+                            color = if (subtitle.isTyping) ElementTheme.colors.textActionAccent else ElementTheme.colors.textSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    else -> Unit
-                }
-
-                when (sharedHistoryIcon) {
-                    SharedHistoryIcon.NONE -> Unit
-                    SharedHistoryIcon.SHARED -> Icon(
-                        modifier = iconModifier,
-                        imageVector = CompoundIcons.History(),
-                        tint = ElementTheme.colors.iconInfoPrimary,
-                        contentDescription = stringResource(CommonStrings.common_shared_history),
-                    )
-                    SharedHistoryIcon.WORLD_READABLE -> Icon(
-                        modifier = iconModifier,
-                        imageVector = CompoundIcons.UserProfileSolid(),
-                        tint = ElementTheme.colors.iconInfoPrimary,
-                        contentDescription = stringResource(CommonStrings.common_world_readable_history),
-                    )
                 }
             }
         },
         actions = menuActions,
-        windowInsets = WindowInsets(0.dp)
+        // The room screen pads the status bar itself, except in the detail pane where the bar runs under it.
+        windowInsets = if (LocalIsInDetailPane.current) WindowInsets.statusBars else WindowInsets(0.dp),
     )
 }
 
+// The icons are laid out by the caller's row, after the name.
+@Suppress("MultipleEmitters")
 @Composable
-private fun RoomAvatarAndNameRow(
-    roomName: String?,
-    roomAvatar: AvatarData,
-    heroes: ImmutableList<AvatarData>,
-    isTombstoned: Boolean,
-    dmUserStatus: DisplayedStatus?,
-    modifier: Modifier = Modifier
+private fun TopBarIdentityIcons(
+    dmUserIdentityState: IdentityState?,
+    sharedHistoryIcon: SharedHistoryIcon,
 ) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Avatar(
-            avatarData = roomAvatar,
-            avatarType = AvatarType.Room(
-                heroes = heroes,
-                isTombstoned = isTombstoned,
-            ),
+    val iconModifier = Modifier.size(16.dp)
+    when (dmUserIdentityState) {
+        IdentityState.Verified -> {
+            Icon(
+                modifier = iconModifier,
+                imageVector = CompoundIcons.Verified(),
+                tint = ElementTheme.colors.iconSecondary,
+                contentDescription = null,
+            )
+        }
+        IdentityState.VerificationViolation -> {
+            Icon(
+                modifier = iconModifier,
+                imageVector = CompoundIcons.ErrorSolid(),
+                tint = ElementTheme.colors.iconCriticalPrimary,
+                contentDescription = null,
+            )
+        }
+        else -> Unit
+    }
+    when (sharedHistoryIcon) {
+        SharedHistoryIcon.NONE -> Unit
+        SharedHistoryIcon.SHARED -> Icon(
+            modifier = iconModifier,
+            imageVector = CompoundIcons.History(),
+            tint = ElementTheme.colors.iconSecondary,
+            contentDescription = stringResource(CommonStrings.common_shared_history),
         )
-        DisplayNameWithStatus(
-            name = roomName ?: stringResource(CommonStrings.common_no_room_name),
-            status = dmUserStatus,
-            modifier = Modifier.padding(start = 8.dp),
-            style = ElementTheme.typography.fontBodyLgMedium,
-            nameColor = ElementTheme.colors.textPrimary,
-            nameFontStyle = FontStyle.Italic.takeIf { roomName == null },
+        SharedHistoryIcon.WORLD_READABLE -> Icon(
+            modifier = iconModifier,
+            imageVector = CompoundIcons.UserProfileSolid(),
+            tint = ElementTheme.colors.iconSecondary,
+            contentDescription = stringResource(CommonStrings.common_world_readable_history),
         )
     }
 }
@@ -187,7 +200,7 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         roomName: String? = ROOM_NAME,
         roomAvatar: AvatarData = anAvatarData(
             name = ROOM_NAME,
-            size = AvatarSize.TimelineRoom,
+            size = AvatarSize.ChatTopBar,
         ),
         isTombstoned: Boolean = false,
         heroes: ImmutableList<AvatarData> = persistentListOf(),
@@ -196,6 +209,9 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         sharedHistoryIcon: SharedHistoryIcon = SharedHistoryIcon.NONE,
         dmUserStatus: DisplayedStatus? = null,
         displayThreads: Boolean = false,
+        subtitle: TopBarSubtitle? = null,
+        // With the Matcha workspaces on: the open task count on the board button.
+        matchaOpenTaskCount: Int? = null,
     ) = MessagesViewTopBar(
         roomName = roomName,
         roomAvatar = roomAvatar,
@@ -204,22 +220,39 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         dmUserIdentityState = dmUserIdentityState,
         sharedHistoryIcon = sharedHistoryIcon,
         dmUserStatus = dmUserStatus,
+        subtitle = subtitle,
         onRoomDetailsClick = {},
         onBackClick = {},
         menuActions = {
-            MessagesMenuActions(
-                roomCallState = roomCallState,
-                displayThreads = displayThreads,
-                onJoinCallClick = {},
-                onThreadsListClick = {},
-            )
+            if (matchaOpenTaskCount == null) {
+                MessagesMenuActions(
+                    roomCallState = roomCallState,
+                    displayThreads = displayThreads,
+                    onJoinCallClick = {},
+                    onThreadsListClick = {},
+                )
+            } else {
+                MatchaMenuActions(
+                    openTaskCount = matchaOpenTaskCount,
+                    roomCallState = roomCallState,
+                    canCreateThread = true,
+                    canRemind = true,
+                    canOpenSpaceDocs = false,
+                    onJoinCallClick = {},
+                    onAllThreadsClick = {},
+                    onTasksClick = {},
+                    onNewThreadClick = {},
+                    onRemindMeClick = {},
+                    onSpaceDocsClick = {},
+                )
+            }
         }
     )
     Column {
         AMessagesViewTopBar()
         HorizontalDivider()
         AMessagesViewTopBar(
-            heroes = aMatrixUserList().map { it.getAvatarData(AvatarSize.TimelineRoom) }.toImmutableList(),
+            heroes = aMatrixUserList().map { it.getAvatarData(AvatarSize.ChatTopBar) }.toImmutableList(),
             roomCallState = anOngoingCallState(),
         )
         HorizontalDivider()
@@ -231,7 +264,7 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
         AMessagesViewTopBar(
             roomName = "A DM with a very very very long name",
             roomAvatar = anAvatarData(
-                size = AvatarSize.TimelineRoom,
+                size = AvatarSize.ChatTopBar,
                 url = "https://some-avatar.jpg"
             ),
             roomCallState = aStandByCallState(canStartCall = false),
@@ -263,6 +296,32 @@ internal fun MessagesViewTopBarPreview() = ElementPreview {
             roomName = "A DM with a very very very long name",
             dmUserIdentityState = IdentityState.Verified,
             dmUserStatus = DisplayedStatus.InCall(0L)
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("Alice is typing…"), isTyping = true),
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+            roomCallState = aStandByCallState(),
+            matchaOpenTaskCount = 0,
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+            roomCallState = aStandByCallState(),
+            matchaOpenTaskCount = 7,
+        )
+        HorizontalDivider()
+        AMessagesViewTopBar(
+            subtitle = TopBarSubtitle(text = AnnotatedString("12 members"), isTyping = false),
+            roomCallState = anOngoingCallState(),
+            matchaOpenTaskCount = 120,
         )
     }
 }

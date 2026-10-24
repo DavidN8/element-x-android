@@ -49,6 +49,8 @@ data class RoomListRoomSummary(
         (numberOfUnreadNotifications > 0 || numberOfUnreadMentions > 0) ||
         isMarkedUnread
 
+    val isMuted = userDefinedNotificationMode == RoomNotificationMode.MUTE
+
     val hasNewContent = numberOfUnreadMessages > 0 ||
         numberOfUnreadMentions > 0 ||
         numberOfUnreadNotifications > 0 ||

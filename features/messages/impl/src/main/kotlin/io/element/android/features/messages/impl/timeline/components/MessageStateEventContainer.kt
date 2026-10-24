@@ -17,13 +17,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.designsystem.modifiers.onKeyboardContextMenuAction
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Surface
+import io.element.android.libraries.designsystem.theme.systemPillBackground
 import io.element.android.libraries.ui.strings.CommonStrings
 
 private val CORNER_RADIUS = 8.dp
@@ -36,11 +38,12 @@ fun MessageStateEventContainer(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit = {},
 ) {
-    val backgroundColor = Color.Transparent
+    val backgroundColor = ElementTheme.colors.systemPillBackground
     val shape = RoundedCornerShape(CORNER_RADIUS)
     Surface(
         modifier = modifier
             .widthIn(min = 80.dp)
+            .then(if (ElementTheme.colors.isLight) Modifier.shadow(1.dp, shape) else Modifier)
             .clip(shape)
             .combinedClickable(
                 onClick = onClick,

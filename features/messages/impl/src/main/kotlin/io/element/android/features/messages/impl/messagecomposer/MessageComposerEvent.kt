@@ -35,6 +35,12 @@ sealed interface MessageComposerEvent {
     data class TypingNotice(val isTyping: Boolean) : MessageComposerEvent
     data class SuggestionReceived(val suggestion: Suggestion?) : MessageComposerEvent
     data class InsertSuggestion(val resolvedSuggestion: ResolvedSuggestion) : MessageComposerEvent
+
+    /** Inserts [unicode] at the cursor, replacing the selected text if any. */
+    data class InsertEmoji(val unicode: String) : MessageComposerEvent
+
+    /** Gives the focus back to the text input, which brings the keyboard back. */
+    data object RequestFocus : MessageComposerEvent
     data object SaveDraft : MessageComposerEvent
     data object ClearSlashError : MessageComposerEvent
 }

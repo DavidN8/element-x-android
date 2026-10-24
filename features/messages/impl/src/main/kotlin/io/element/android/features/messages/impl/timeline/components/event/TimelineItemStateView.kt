@@ -11,6 +11,7 @@ package io.element.android.features.messages.impl.timeline.components.event
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStateContent
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemStateEventContent
@@ -26,9 +27,11 @@ fun TimelineItemStateView(
     Text(
         modifier = modifier,
         color = ElementTheme.colors.textSecondary,
-        style = ElementTheme.typography.fontBodyMdRegular,
+        style = ElementTheme.typography.fontBodySmRegular,
         text = content.body,
         textAlign = TextAlign.Center,
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

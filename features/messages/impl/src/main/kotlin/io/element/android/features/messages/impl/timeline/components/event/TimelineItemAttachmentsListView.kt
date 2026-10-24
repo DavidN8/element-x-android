@@ -45,6 +45,7 @@ import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeImage
 import io.element.android.libraries.core.mimetype.MimeTypes.isMimeTypeVideo
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+import io.element.android.libraries.designsystem.theme.bubbleSecondaryText
 import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.matrix.api.core.EventId
@@ -253,7 +254,7 @@ private fun AttachmentListItem(
             )
             Text(
                 text = "${attachment.fileExtension} • ${attachment.formattedFileSize}",
-                color = ElementTheme.colors.textSecondary,
+                color = ElementTheme.colors.bubbleSecondaryText,
                 style = ElementTheme.typography.fontBodySmRegular,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

@@ -164,7 +164,17 @@ open class RoomListRoomSummaryPreviewParam : PreviewParameterProvider<RoomListRo
                     hasRoomCall = true,
                     activeCallIntent = CallIntent.AUDIO
                 ),
-            )
+            ),
+            listOf(
+                // A muted chat counts its unread messages on a grey badge
+                aRoomListRoomSummary(
+                    name = "Muted with unread messages",
+                    latestEvent = LatestEvent.Synced("New messages"),
+                    notificationMode = RoomNotificationMode.MUTE,
+                    numberOfUnreadMessages = 12,
+                    numberOfUnreadNotifications = 12,
+                ),
+            ),
         ).flatten()
 }
 

@@ -52,7 +52,7 @@ internal fun RoomSummaryPlaceholderRow(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 20.dp, top = 19.dp, end = 4.dp)
+                .padding(start = 20.dp, top = 12.dp, end = 4.dp)
         ) {
             Row(
                 modifier = Modifier

@@ -25,8 +25,12 @@ import com.bumble.appyx.core.modality.BuildContext
 import com.bumble.appyx.core.node.Node
 import com.bumble.appyx.core.plugin.Plugin
 import com.bumble.appyx.navmodel.backstack.BackStack
+import com.bumble.appyx.navmodel.backstack.active
+import com.bumble.appyx.navmodel.backstack.operation.newRoot
 import com.bumble.appyx.navmodel.backstack.operation.pop
 import com.bumble.appyx.navmodel.backstack.operation.push
+import com.bumble.appyx.navmodel.backstack.operation.replace
+import com.bumble.appyx.navmodel.backstack.operation.singleTop
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedInject
 import im.vector.app.features.analytics.plan.Interaction
@@ -40,9 +44,13 @@ import io.element.android.features.location.api.RenderingMapsNotSupportedDialog
 import io.element.android.features.location.api.ShareLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationEntryPoint
 import io.element.android.features.location.api.ShowLocationMode
+import io.element.android.features.matcha.api.MatchaChatBarActions
+import io.element.android.features.matcha.api.MatchaRoomEntryPoint
+import io.element.android.features.matcha.api.MatchaSpaceDocsEntryPoint
 import io.element.android.features.messages.api.MessagesEntryPoint
 import io.element.android.features.messages.impl.attachments.Attachment
 import io.element.android.features.messages.impl.attachments.preview.AttachmentsPreviewNode
+import io.element.android.features.messages.impl.matcha.ChooseSpaceBottomSheet
 import io.element.android.features.messages.impl.pinned.DefaultPinnedEventsTimelineProvider
 import io.element.android.features.messages.impl.pinned.list.PinnedMessagesListNode
 import io.element.android.features.messages.impl.report.ReportMessageNode
@@ -83,6 +91,8 @@ import io.element.android.libraries.designsystem.components.async.AsyncIndicator
 import io.element.android.libraries.designsystem.components.async.AsyncIndicatorHost
 import io.element.android.libraries.designsystem.components.async.AsyncIndicatorState
 import io.element.android.libraries.di.RoomScope
+import io.element.android.libraries.featureflag.api.FeatureFlagService
+import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
@@ -95,6 +105,8 @@ import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.alias.matches
 import io.element.android.libraries.matrix.api.room.joinedRoomMembers
 import io.element.android.libraries.matrix.api.roomlist.RoomListService
+import io.element.android.libraries.matrix.api.spaces.SpaceRoom
+import io.element.android.libraries.matrix.api.spaces.SpaceService
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.TimelineProvider
 import io.element.android.libraries.matrix.api.timeline.item.TimelineItemDebugInfo
@@ -111,12 +123,16 @@ import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.services.analytics.api.AnalyticsService
 import io.element.android.services.analyticsproviders.api.trackers.captureInteraction
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import kotlinx.parcelize.IgnoredOnParcel
 import kotlinx.parcelize.Parcelize
+import timber.log.Timber
 import kotlin.time.Duration.Companion.milliseconds
 
 @ContributesNode(RoomScope::class)
@@ -145,6 +161,10 @@ class MessagesFlowNode(
     private val dateFormatter: DateFormatter,
     private val coroutineDispatchers: CoroutineDispatchers,
     private val hasVulkanSupport: DeviceHasVulkanSupport,
+    private val featureFlagService: FeatureFlagService,
+    private val spaceService: SpaceService,
+    private val matchaSpaceDocsEntryPoint: MatchaSpaceDocsEntryPoint,
+    private val matchaRoomEntryPoint: MatchaRoomEntryPoint,
 ) : BaseFlowNode<MessagesFlowNode.NavTarget>(
     backstack = BackStack(
         initialElement = plugins.filterIsInstance<MessagesEntryPoint.Params>().first().initialTarget.toNavTarget(),
@@ -222,12 +242,29 @@ class MessagesFlowNode(
 
         @Parcelize
         data class AvatarPreview(val name: String, val avatarUrl: String) : NavTarget
+
+        /** The chat's Matcha task board, opening the task of [initialThreadId] when set. */
+        @Parcelize
+        data class Tasks(val initialThreadId: ThreadId?) : NavTarget
+
+        /** The Matcha docs of [spaceId], one of the chat's joined parent spaces. */
+        @Parcelize
+        data class SpaceDocs(val spaceId: RoomId) : NavTarget
     }
 
     private val callback: MessagesEntryPoint.Callback = callback()
     private val asyncIndicatorState = AsyncIndicatorState()
 
     private var displayVulkanNotSupportedError by mutableStateOf(false)
+
+    /** The joined spaces this chat belongs to, whose docs can be opened from the chat; empty while the Matcha workspaces are off. */
+    private var parentSpaces by mutableStateOf<ImmutableList<SpaceRoom>>(persistentListOf())
+
+    /** Whether the Matcha workspaces are on, read when a thread is picked in All threads. */
+    private var isMatchaWorkspacesEnabled = false
+
+    /** The spaces offered by the "Choose a space" sheet, while it is shown. */
+    private var spaceDocsChoice by mutableStateOf<ImmutableList<SpaceRoom>?>(null)
 
     override fun onBuilt() {
         super.onBuilt()
@@ -237,8 +274,69 @@ class MessagesFlowNode(
             }
         )
         setupCacheUpdaters()
+        loadParentSpaces()
 
         pinnedEventsTimelineProvider.launchIn(lifecycleScope)
+    }
+
+    private fun loadParentSpaces() {
+        featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces)
+            .distinctUntilChanged()
+            .onEach { isEnabled ->
+                isMatchaWorkspacesEnabled = isEnabled
+                parentSpaces = if (isEnabled) {
+                    spaceService.joinedParents(room.roomId)
+                        .onFailure { Timber.w(it, "Could not read the parent spaces of the room") }
+                        .getOrNull()
+                        .orEmpty()
+                        .toImmutableList()
+                } else {
+                    persistentListOf()
+                }
+            }
+            .launchIn(lifecycleScope)
+    }
+
+    /**
+     * Shows a Matcha screen of this chat: from a thread or the board it replaces them, so switching threads and the board doesn't
+     * stack screens and back always returns to the chat; from anywhere else it is pushed.
+     */
+    private fun showMatchaScreen(navTarget: NavTarget) {
+        when (backstack.active?.key?.navTarget) {
+            is NavTarget.Thread, is NavTarget.Tasks -> backstack.replace(navTarget)
+            else -> backstack.push(navTarget)
+        }
+    }
+
+    private fun openGeneral() = backstack.backToGeneral()
+
+    private val openSpaceDocsAction: () -> Unit = { openSpaceDocs() }
+
+    /** Where the chip bar of the chat and of its threads navigates to. */
+    private val matchaChatBarActions = object : MatchaChatBarActions {
+        override fun openGeneral() = this@MessagesFlowNode.openGeneral()
+
+        override fun openTasks() = showMatchaScreen(NavTarget.Tasks(initialThreadId = null))
+
+        override fun openThreadTask(threadId: ThreadId) = showMatchaScreen(NavTarget.Tasks(initialThreadId = threadId))
+
+        override fun openThread(threadId: ThreadId) = showMatchaScreen(NavTarget.Thread(threadId, focusedEventId = null))
+
+        override fun openAllThreads() = backstack.push(NavTarget.ThreadsList)
+
+        // Read while the bar is composed, so More offers Space docs once the parent spaces are known.
+        override val openSpaceDocs: (() -> Unit)?
+            get() = openSpaceDocsAction.takeIf { parentSpaces.isNotEmpty() }
+    }
+
+    /** Opens the docs of the chat's space; with several joined parent spaces, the user chooses one first. */
+    private fun openSpaceDocs() {
+        val spaces = parentSpaces
+        when (spaces.size) {
+            0 -> Timber.w("No joined parent space to open the docs of")
+            1 -> backstack.push(NavTarget.SpaceDocs(spaces.single().roomId))
+            else -> spaceDocsChoice = spaces
+        }
     }
 
     private fun setupCacheUpdaters() {
@@ -382,6 +480,8 @@ class MessagesFlowNode(
                     override fun navigateToAvatarPreview(username: String, avatarUrl: String) {
                         overlay.show(NavTarget.AvatarPreview(username, avatarUrl))
                     }
+
+                    override val matchaChatBarActions = this@MessagesFlowNode.matchaChatBarActions
                 }
                 val inputs = MessagesNode.Inputs(focusedEventId = navTarget.focusedEventId)
                 createNode<MessagesNode>(buildContext, listOf(callback, inputs))
@@ -698,16 +798,56 @@ class MessagesFlowNode(
                     override fun navigateToAvatarPreview(username: String, avatarUrl: String) {
                         overlay.show(NavTarget.AvatarPreview(username, avatarUrl))
                     }
+
+                    override fun navigateToRoomDetails() {
+                        callback.navigateToRoomDetails()
+                    }
+
+                    override val matchaChatBarActions = this@MessagesFlowNode.matchaChatBarActions
                 }
                 createNode<ThreadedMessagesNode>(buildContext, listOf(inputs, callback))
             }
             NavTarget.ThreadsList -> {
                 val callback = object : ThreadsListNode.Callback {
                     override fun openThread(threadId: ThreadId) {
-                        backstack.push(NavTarget.Thread(threadId, focusedEventId = null))
+                        if (isMatchaWorkspacesEnabled) {
+                            backstack.openThreadOverGeneral(threadId)
+                        } else {
+                            backstack.push(NavTarget.Thread(threadId, focusedEventId = null))
+                        }
                     }
                 }
                 createNode<ThreadsListNode>(buildContext, listOf(callback))
+            }
+            is NavTarget.Tasks -> {
+                val callback = object : MatchaRoomEntryPoint.Callback {
+                    override fun openThread(threadId: ThreadId) = showMatchaScreen(NavTarget.Thread(threadId, focusedEventId = null))
+
+                    override fun openGeneral() = this@MessagesFlowNode.openGeneral()
+
+                    override fun openSpaceDocs() = this@MessagesFlowNode.openSpaceDocs()
+
+                    override fun openRoomDetails() = callback.navigateToRoomDetails()
+                }
+                matchaRoomEntryPoint.createTasksNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaRoomEntryPoint.Params(initialThreadId = navTarget.initialThreadId),
+                    callback = callback,
+                )
+            }
+            is NavTarget.SpaceDocs -> {
+                val callback = object : MatchaSpaceDocsEntryPoint.Callback {
+                    override fun close() {
+                        backstack.pop()
+                    }
+                }
+                matchaSpaceDocsEntryPoint.createNode(
+                    parentNode = this,
+                    buildContext = buildContext,
+                    params = MatchaSpaceDocsEntryPoint.Params(spaceId = navTarget.spaceId),
+                    callback = callback,
+                )
             }
             is NavTarget.AvatarPreview -> {
                 val callback = object : MediaViewerEntryPoint.Callback {
@@ -983,6 +1123,17 @@ class MessagesFlowNode(
             RenderingMapsNotSupportedDialog { displayVulkanNotSupportedError = false }
         }
 
+        spaceDocsChoice?.let { spaces ->
+            ChooseSpaceBottomSheet(
+                spaces = spaces,
+                onSelectSpace = { spaceId ->
+                    spaceDocsChoice = null
+                    backstack.push(NavTarget.SpaceDocs(spaceId))
+                },
+                onDismiss = { spaceDocsChoice = null },
+            )
+        }
+
         CompositionLocalProvider(
             LocalMentionSpanUpdater provides mentionSpanUpdater
         ) {
@@ -993,6 +1144,29 @@ class MessagesFlowNode(
             }
         }
     }
+}
+
+/** Goes back to the chat's own timeline, closing the threads and the board opened above it. */
+internal fun BackStack<MessagesFlowNode.NavTarget>.backToGeneral() {
+    val messages = elements.value
+        .lastOrNull { it.key.navTarget is MessagesFlowNode.NavTarget.Messages && it.targetState != BackStack.State.DESTROYED }
+        ?.key
+        ?.navTarget
+    if (messages != null) {
+        singleTop(messages)
+    } else {
+        // The flow started on another screen, such as the pinned messages.
+        newRoot(MessagesFlowNode.NavTarget.Messages(focusedEventId = null))
+    }
+}
+
+/**
+ * Opens [threadId] as the only screen above the chat's timeline, as a thread picked in All threads does: the threads, boards and All threads
+ * opened before are closed, so they don't stack and back returns to General.
+ */
+internal fun BackStack<MessagesFlowNode.NavTarget>.openThreadOverGeneral(threadId: ThreadId) {
+    backToGeneral()
+    push(MessagesFlowNode.NavTarget.Thread(threadId, focusedEventId = null))
 }
 
 private fun GalleryItem.Type.toMediaViewerType(): GalleryItemData.Type {

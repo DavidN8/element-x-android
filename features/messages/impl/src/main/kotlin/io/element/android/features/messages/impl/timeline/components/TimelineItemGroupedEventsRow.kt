@@ -23,8 +23,6 @@ import io.element.android.features.messages.impl.timeline.aRedactedMessagesGroup
 import io.element.android.features.messages.impl.timeline.aTimelineRoomInfo
 import io.element.android.features.messages.impl.timeline.components.event.TimelineItemEventContentView
 import io.element.android.features.messages.impl.timeline.components.group.GroupHeaderView
-import io.element.android.features.messages.impl.timeline.components.receipt.ReadReceiptViewState
-import io.element.android.features.messages.impl.timeline.components.receipt.TimelineItemReadReceiptView
 import io.element.android.features.messages.impl.timeline.groups.isRedactedMessagesGroup
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.TimelineItemSelectionData
@@ -53,9 +51,7 @@ fun TimelineItemGroupedEventsRow(
     onUserDataClick: (MatrixUser) -> Unit,
     onLinkClick: (Link) -> Unit,
     onLinkLongClick: (Link) -> Unit,
-    onReactionClick: (key: String, TimelineItem.Event) -> Unit,
     onReactionLongClick: (key: String, TimelineItem.Event) -> Unit,
-    onMoreReactionsClick: (TimelineItem.Event) -> Unit,
     onReadReceiptClick: (TimelineItem.Event) -> Unit,
     eventSink: (TimelineEvent.TimelineItemEvent) -> Unit,
     modifier: Modifier = Modifier,
@@ -98,9 +94,7 @@ fun TimelineItemGroupedEventsRow(
         onUserDataClick = onUserDataClick,
         onLinkClick = onLinkClick,
         onLinkLongClick = onLinkLongClick,
-        onReactionClick = onReactionClick,
         onReactionLongClick = onReactionLongClick,
-        onMoreReactionsClick = onMoreReactionsClick,
         onReadReceiptClick = onReadReceiptClick,
         eventSink = eventSink,
         modifier = modifier,
@@ -125,9 +119,7 @@ private fun TimelineItemGroupedEventsRowContent(
     onUserDataClick: (MatrixUser) -> Unit,
     onLinkClick: (Link) -> Unit,
     onLinkLongClick: (Link) -> Unit,
-    onReactionClick: (key: String, TimelineItem.Event) -> Unit,
     onReactionLongClick: (key: String, TimelineItem.Event) -> Unit,
-    onMoreReactionsClick: (TimelineItem.Event) -> Unit,
     onReadReceiptClick: (TimelineItem.Event) -> Unit,
     eventSink: (TimelineEvent.TimelineItemEvent) -> Unit,
     modifier: Modifier = Modifier,
@@ -183,9 +175,7 @@ private fun TimelineItemGroupedEventsRowContent(
                         onGalleryItemClick = { _, _ -> },
                         onLongClick = onLongClick,
                         inReplyToClick = inReplyToClick,
-                        onReactionClick = onReactionClick,
                         onReactionLongClick = onReactionLongClick,
-                        onMoreReactionsClick = onMoreReactionsClick,
                         onReadReceiptClick = onReadReceiptClick,
                         onJoinCallClick = {},
                         onSwipeToReply = {},
@@ -195,15 +185,6 @@ private fun TimelineItemGroupedEventsRowContent(
                     )
                 }
             }
-        } else if (timelineItem.aggregatedReadReceipts.isNotEmpty()) {
-            TimelineItemReadReceiptView(
-                state = ReadReceiptViewState(
-                    sendState = null,
-                    isLastOutgoingMessage = false,
-                    receipts = timelineItem.aggregatedReadReceipts,
-                ),
-                onReadReceiptsClick = onExpandGroupClick
-            )
         }
     }
 }
@@ -228,9 +209,7 @@ internal fun TimelineItemGroupedEventsRowContentExpandedPreview() = ElementPrevi
         inReplyToClick = {},
         onUserDataClick = {},
         onLinkClick = {},
-        onReactionClick = { _, _ -> },
         onReactionLongClick = { _, _ -> },
-        onMoreReactionsClick = {},
         onReadReceiptClick = {},
         eventSink = {},
     )
@@ -255,9 +234,7 @@ internal fun TimelineItemGroupedEventsRowContentCollapsePreview() = ElementPrevi
         inReplyToClick = {},
         onUserDataClick = {},
         onLinkClick = {},
-        onReactionClick = { _, _ -> },
         onReactionLongClick = { _, _ -> },
-        onMoreReactionsClick = {},
         onReadReceiptClick = {},
         eventSink = {},
     )
@@ -283,9 +260,7 @@ internal fun TimelineItemRedactedMessagesGroupPreview() = ElementPreview {
         inReplyToClick = {},
         onUserDataClick = {},
         onLinkClick = {},
-        onReactionClick = { _, _ -> },
         onReactionLongClick = { _, _ -> },
-        onMoreReactionsClick = {},
         onReadReceiptClick = {},
         eventSink = {},
     )

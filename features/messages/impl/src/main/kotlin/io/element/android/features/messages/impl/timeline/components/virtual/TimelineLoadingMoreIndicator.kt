@@ -11,13 +11,18 @@ package io.element.android.features.messages.impl.timeline.components.virtual
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.element.android.compound.theme.ElementTheme
+import io.element.android.features.messages.impl.timeline.components.SystemPill
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.CircularProgressIndicator
@@ -43,10 +48,20 @@ internal fun TimelineLoadingMoreIndicator(
                 )
             }
             Timeline.PaginationDirection.BACKWARDS -> {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+                // A small ring in a round system pill.
+                SystemPill(
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .size(32.dp),
+                    shape = CircleShape,
+                    contentPadding = PaddingValues(8.dp),
+                ) {
+                    CircularProgressIndicator(
+                        strokeWidth = 2.dp,
+                        color = ElementTheme.colors.iconAccentPrimary,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }

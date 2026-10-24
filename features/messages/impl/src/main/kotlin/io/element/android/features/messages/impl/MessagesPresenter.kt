@@ -28,12 +28,16 @@ import im.vector.app.features.analytics.plan.PinUnpinAction
 import io.element.android.appconfig.MessageComposerConfig
 import io.element.android.features.location.api.live.ActiveLiveLocationShareManager
 import io.element.android.features.location.api.live.isCurrentlySharing
+import io.element.android.features.matcha.api.MatchaReminderTarget
+import io.element.android.features.matcha.api.MatchaRoomController
+import io.element.android.features.matcha.api.isReminderBotJoined
 import io.element.android.features.messages.api.timeline.HtmlConverterProvider
 import io.element.android.features.messages.impl.MessagesState.Threads
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.crypto.identity.IdentityChangeState
 import io.element.android.features.messages.impl.link.LinkState
+import io.element.android.features.messages.impl.matcha.MatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerEvent
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerState
@@ -45,8 +49,10 @@ import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.TimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionState
 import io.element.android.features.messages.impl.timeline.components.reactionsummary.ReactionSummaryState
+import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetEvent
 import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetState
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
+import io.element.android.features.messages.impl.timeline.model.TimelineItemReadReceipts
 import io.element.android.features.messages.impl.timeline.model.TimelineItemThreadInfo
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemPollContent
 import io.element.android.features.messages.impl.timeline.model.event.TimelineItemStateContent
@@ -137,6 +143,8 @@ class MessagesPresenter(
     private val markAsFullyRead: MarkAsFullyRead,
     private val liveLocationShareManager: ActiveLiveLocationShareManager,
     @SessionCoroutineScope private val sessionCoroutineScope: CoroutineScope,
+    // Lazy: the controller reads the room's Matcha data as soon as it exists, which only the Matcha workspaces need.
+    private val matchaRoomController: Lazy<MatchaRoomController>,
 ) : Presenter<MessagesState> {
     @AssistedFactory
     interface Factory {
@@ -154,6 +162,9 @@ class MessagesPresenter(
     )
 
     private val markingAsReadAndExiting = AtomicBoolean(false)
+
+    /** What the Matcha "Remind me" sheet is about while it is open. */
+    private var matchaReminderTarget by mutableStateOf<MatchaReminderTarget?>(null)
 
     @Composable
     override fun present(): MessagesState {
@@ -182,11 +193,13 @@ class MessagesPresenter(
         }
 
         val canOpenThreadList by featureFlagService.isFeatureEnabledFlow(FeatureFlags.Threads).collectAsState(initial = false)
+        val isMatchaEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
         val isCurrentlySharingLiveLocationInRoom by remember { liveLocationShareManager.isCurrentlySharing(room.roomId) }.collectAsState()
 
         val userEventPermissions by room.permissionsAsState(UserEventPermissions.DEFAULT) { perms ->
             perms.userEventPermissions()
         }
+        val matchaState = if (isMatchaEnabled) presentMatcha(canSendMessages = userEventPermissions.canSendMessage, isDm = roomInfo.isDm) else null
 
         val roomAvatar by remember {
             derivedStateOf { roomInfo.avatarData() }
@@ -258,6 +271,7 @@ class MessagesPresenter(
                         enableTextFormatting = composerState.showTextFormatting,
                         timelineState = timelineState,
                         timelineProtectionState = timelineProtectionState,
+                        readReceiptBottomSheetState = readReceiptBottomSheetState,
                         redactEventAction = redactEventAction,
                     )
                 }
@@ -308,6 +322,12 @@ class MessagesPresenter(
                 MessagesEvent.ShowLiveLocationShare -> {
                     navigator.navigateToCurrentLiveLocation()
                 }
+                MessagesEvent.DismissMatchaReminder -> matchaReminderTarget = null
+                MessagesEvent.MatchaNewThread -> if (matchaState != null) matchaRoomController.value.openNewThread()
+                MessagesEvent.MatchaNewTask -> if (matchaState != null) matchaRoomController.value.openNewTask()
+                MessagesEvent.MatchaRemindMe -> if (matchaState?.canRemind == true) {
+                    matchaReminderTarget = MatchaReminderTarget(threadId = (timelineState.timelineMode as? Timeline.Mode.Thread)?.threadRootId)
+                }
                 is MessagesEvent.MarkAsFullyReadAndExit -> if (!markingAsReadAndExiting.getAndSet(true)) {
                     coroutineScope.launch {
                         val latestEventId = room.liveTimeline.getLatestEventId().getOrElse {
@@ -332,6 +352,7 @@ class MessagesPresenter(
             roomName = roomInfo.name,
             roomAvatar = roomAvatar,
             heroes = heroes,
+            joinedMemberCount = roomInfo.joinedMembersCount,
             userEventPermissions = userEventPermissions,
             composerState = composerState,
             voiceMessageComposerState = voiceMessageComposerState,
@@ -362,7 +383,57 @@ class MessagesPresenter(
             ),
             showLiveLocationShareBanner = isCurrentlySharingLiveLocationInRoom && timelineState.timelineMode !is Timeline.Mode.Thread,
             redactEventAction = redactEventAction.value,
+            matcha = matchaState,
             eventSink = ::handleEvent,
+        )
+    }
+
+    @Composable
+    private fun presentMatcha(canSendMessages: Boolean, isDm: Boolean): MatchaChatState {
+        val controller = remember { matchaRoomController.value }
+        val hasChatBar by controller.hasChatBar.collectAsState()
+        val openTaskCount by controller.openTaskCount.collectAsState()
+        val canCreateThread by controller.canCreateThread.collectAsState()
+        val threads by controller.threads.collectAsState()
+        // The reminder bot posts the reminders; in a DM it must already be there, since inviting it would turn the DM into a group.
+        val isReminderBotJoined by produceState(initialValue = false, isDm) {
+            if (isDm) value = room.isReminderBotJoined()
+        }
+        return MatchaChatState(
+            hasChatBar = hasChatBar,
+            openTaskCount = openTaskCount,
+            threads = threads,
+            reminderTarget = matchaReminderTarget,
+            canRemind = canSendMessages && (!isDm || isReminderBotJoined),
+            canCreateThread = canCreateThread,
+        )
+    }
+
+    /**
+     * Opens "Seen by" for one of your messages. A read receipt sits on the newest event its user has read, so everyone with a receipt on this
+     * message or a newer one has seen it.
+     */
+    private fun handleReadByAction(
+        targetEvent: TimelineItem.Event,
+        timelineState: TimelineState,
+        readReceiptBottomSheetState: ReadReceiptBottomSheetState,
+    ) {
+        val index = timelineState.timelineItems.indexOfFirst { it.identifier() == targetEvent.id }
+        if (index == -1) return
+        val receipts = timelineState.timelineItems
+            .subList(0, index + 1)
+            .flatMap { item ->
+                when (item) {
+                    is TimelineItem.Event -> item.readReceiptState.receipts
+                    is TimelineItem.GroupedEvents -> item.aggregatedReadReceipts
+                    is TimelineItem.Virtual -> emptyList()
+                }
+            }
+            .distinctBy { it.avatarData.id }
+        readReceiptBottomSheetState.eventSink(
+            ReadReceiptBottomSheetEvent.EventSelected(
+                targetEvent.copy(readReceiptState = TimelineItemReadReceipts(receipts.toImmutableList()))
+            )
         )
     }
 
@@ -383,13 +454,13 @@ class MessagesPresenter(
             id = id.value,
             name = name,
             url = avatarUrl,
-            size = AvatarSize.TimelineRoom
+            size = AvatarSize.ChatTopBar
         )
     }
 
     private fun RoomInfo.heroes(): List<AvatarData> {
         return heroes.map { user ->
-            user.getAvatarData(size = AvatarSize.TimelineRoom)
+            user.getAvatarData(size = AvatarSize.ChatTopBar)
         }
     }
 
@@ -400,6 +471,7 @@ class MessagesPresenter(
         timelineProtectionState: TimelineProtectionState,
         enableTextFormatting: Boolean,
         timelineState: TimelineState,
+        readReceiptBottomSheetState: ReadReceiptBottomSheetState,
         redactEventAction: MutableState<AsyncAction<Unit>>,
     ) = launch {
         when (action) {
@@ -442,7 +514,24 @@ class MessagesPresenter(
             TimelineItemAction.ViewInTimeline -> Unit
             TimelineItemAction.RetrySending -> handleRetrySending(targetEvent)
             TimelineItemAction.AbortSending -> handleActionAbortSend(targetEvent)
+            TimelineItemAction.ReadBy -> handleReadByAction(targetEvent, timelineState, readReceiptBottomSheetState)
+            TimelineItemAction.RemindMe -> handleRemindMeAction(targetEvent, timelineState)
         }
+    }
+
+    /** Opens the Matcha "Remind me" sheet about this message, prefilled with the start of its text. */
+    private fun handleRemindMeAction(targetEvent: TimelineItem.Event, timelineState: TimelineState) {
+        val eventId = targetEvent.eventId ?: return
+        val text = when (val content = targetEvent.content) {
+            is TimelineItemTextBasedContent -> content.plainText
+            else -> content.captionOrNull().orEmpty()
+        }
+        matchaReminderTarget = MatchaReminderTarget(
+            message = text.take(REMINDER_MESSAGE_PREFILL_LENGTH),
+            eventId = eventId,
+            threadId = (timelineState.timelineMode as? Timeline.Mode.Thread)?.threadRootId
+                ?: (targetEvent.threadInfo as? TimelineItemThreadInfo.ThreadResponse)?.threadRootId,
+        )
     }
 
     private suspend fun handleRetrySending(targetEvent: TimelineItem.Event) {
@@ -682,3 +771,6 @@ class MessagesPresenter(
         }
     }
 }
+
+/** The reminder sheet is prefilled with at most this much of the message (WHATSAPP_DESIGN.md §4d). */
+private const val REMINDER_MESSAGE_PREFILL_LENGTH = 200

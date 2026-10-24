@@ -27,6 +27,7 @@ import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.DelayedVisibility
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 import io.element.android.libraries.matrix.ui.room.LoadingRoomState
 import io.element.android.libraries.matrix.ui.room.LoadingRoomStatePreviewParam
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -73,7 +74,10 @@ private fun LoadingRoomTopBar(
 ) {
     TopAppBar(
         navigationIcon = {
-            BackButton(onClick = onBackClick)
+            // Like the room's own top bar: the room list is already visible next to the detail pane.
+            if (!LocalIsInDetailPane.current) {
+                BackButton(onClick = onBackClick)
+            }
         },
         title = {
         },

@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import io.element.android.features.messages.impl.MessagesView
 import io.element.android.features.messages.impl.aMessagesState
+import io.element.android.features.messages.impl.matcha.NoopMatchaChatBarActions
 import io.element.android.features.messages.impl.messagecomposer.aMessageComposerState
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -43,6 +44,9 @@ internal fun MessagesViewWithIdentityChangePreview(
         onJoinCallClick = {},
         onViewAllPinnedMessagesClick = {},
         knockRequestsBannerView = {},
+        matchaChatBar = {},
+        matchaReminderSheet = { _, _ -> },
+        matchaActions = NoopMatchaChatBarActions,
         customReactionBottomSheet = {},
         onThreadsListClick = {},
     )

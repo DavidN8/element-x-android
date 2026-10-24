@@ -12,23 +12,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.bumble.appyx.navmodel.backstack.BackStack
 import com.bumble.appyx.navmodel.backstack.BackStackElement
 import io.element.android.appnav.twopane.NoRoomSelectedView
+import io.element.android.compound.theme.ElementTheme
+import io.element.android.features.home.api.HomeTab
 import io.element.android.libraries.architecture.appyx.SafeChildren
+import io.element.android.libraries.designsystem.theme.components.ElementDividerDefaults
+import io.element.android.libraries.designsystem.utils.LocalIsInDetailPane
 
-// Room list / detail split, Material list-detail proportions.
+// Room list / detail split, Material list-detail proportions (40/60).
 private const val LIST_PANE_WEIGHT = 2f
 private const val DETAIL_PANE_WEIGHT = 3f
-private val LIST_PANE_SHADOW_WIDTH = 12.dp
-private val LIST_PANE_SHADOW_COLOR = Color.Black.copy(alpha = 0.35f)
 
 /**
  * Two-pane rendering of [LoggedInFlowNode] for wide windows (tablets, unfolded foldables): the Home node
@@ -37,12 +39,17 @@ private val LIST_PANE_SHADOW_COLOR = Color.Black.copy(alpha = 0.35f)
  * The nav model is untouched: this only changes how the existing backstack is drawn, so phone
  * behaviour is unchanged. While another element is active the Home node is stashed (lifecycle CREATED),
  * so back presses go to the detail pane first and Home's own back handlers only resume once it is active again.
+ * While nothing is open, the detail pane shows a message for the tab selected in Home, [homeTab], unless [isHomeFullWidth] asks for
+ * the whole width for Home, such as the Tasks tab's table.
  */
 @Composable
 internal fun LoggedInFlowNode.LoggedInTwoPaneView(
     homeElement: BackStackElement<LoggedInFlowNode.NavTarget>,
+    homeTab: HomeTab,
     modifier: Modifier = Modifier,
+    isHomeFullWidth: Boolean = false,
 ) {
+    val isDetailPaneHidden = isHomeFullWidth && homeElement.targetState == BackStack.State.ACTIVE
     Row(modifier = modifier) {
         // The Home node is kept alive while stashed (ChildEntry.KeepMode.KEEP), so it can be drawn directly.
         // Wrapped in a Box like Appyx's ChildRendererImpl does: flow nodes don't apply the modifier they are given.
@@ -54,32 +61,38 @@ internal fun LoggedInFlowNode.LoggedInTwoPaneView(
         ) {
             homeNode.Compose()
         }
+        // Kept composed at zero width while hidden, so the backstack's children are never dropped mid-change.
         Box(
             modifier = Modifier
-                .weight(DETAIL_PANE_WEIGHT)
+                .then(if (isDetailPaneHidden) Modifier.width(0.dp) else Modifier.weight(DETAIL_PANE_WEIGHT))
                 .fillMaxHeight(),
         ) {
-            if (homeElement.targetState == BackStack.State.ACTIVE) {
-                NoRoomSelectedView()
-            }
-            // No transition: the phone slide animation would sweep across the whole pane on every room switch.
-            SafeChildren(
-                navModel = backstack,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                children<LoggedInFlowNode.NavTarget> { child, descriptor ->
-                    // Home is drawn in the start pane.
-                    if (descriptor.element !is LoggedInFlowNode.NavTarget.Home) {
-                        child()
+            // The screens of this pane continue the list pane's header band in their top bars.
+            CompositionLocalProvider(LocalIsInDetailPane provides true) {
+                if (homeElement.targetState == BackStack.State.ACTIVE) {
+                    NoRoomSelectedView(tab = homeTab)
+                }
+                // No transition: the phone slide animation would sweep across the whole pane on every room switch.
+                SafeChildren(
+                    navModel = backstack,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    children<LoggedInFlowNode.NavTarget> { child, descriptor ->
+                        // Home is drawn in the start pane.
+                        if (descriptor.element !is LoggedInFlowNode.NavTarget.Home) {
+                            child()
+                        }
                     }
                 }
             }
-            // Shadow cast by the list pane, drawn by hand: an elevation shadow is invisible on dark backgrounds.
+            // Hairline between the panes. It starts below the status bar so the header band reads as one strip, and it is drawn
+            // over this pane rather than between the panes, which would leave a gap in the band.
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(LIST_PANE_SHADOW_WIDTH)
-                    .background(Brush.horizontalGradient(listOf(LIST_PANE_SHADOW_COLOR, Color.Transparent))),
+                    .statusBarsPadding()
+                    .width(ElementDividerDefaults.thickness)
+                    .background(ElementTheme.colors.separatorPrimary),
             )
         }
     }

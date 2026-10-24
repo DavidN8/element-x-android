@@ -39,6 +39,12 @@ fun SemanticColors.toMaterialColorSchemeDark(): ColorScheme = darkColorScheme(
     onSurface = textPrimary,
     surfaceVariant = bgSubtleSecondary,
     onSurfaceVariant = textSecondary,
+    // Without these, Material 3 falls back to its baseline lavender containers (menus, pickers, cards...).
+    surfaceContainerLowest = bgCanvasDefault,
+    surfaceContainerLow = bgSubtleTertiary,
+    surfaceContainer = bgSubtleTertiary,
+    surfaceContainerHigh = bgSubtleTertiary,
+    surfaceContainerHighest = bgSubtleSecondary,
     surfaceTint = DarkColorTokens.colorGray1000,
     inverseSurface = DarkColorTokens.colorGray1300,
     inverseOnSurface = textOnSolidPrimary,

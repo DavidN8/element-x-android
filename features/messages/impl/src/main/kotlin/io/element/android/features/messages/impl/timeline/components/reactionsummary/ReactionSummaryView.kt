@@ -32,7 +32,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CornerSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -167,12 +166,12 @@ private fun AggregatedReactionButton(
     onClick: () -> Unit,
 ) {
     val buttonColor = if (isHighlighted) {
-        ElementTheme.colors.bgActionPrimaryRest
+        ElementTheme.colors.bgAccentSubtle
     } else {
         Color.Transparent
     }
     val textColor = if (isHighlighted) {
-        MaterialTheme.colorScheme.inversePrimary
+        ElementTheme.colors.textBadgeAccent
     } else {
         ElementTheme.colors.textPrimary
     }

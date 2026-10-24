@@ -25,11 +25,14 @@ fun NavigationBarIcon(
     BadgedBox(
         modifier = modifier,
         badge = {
-            CounterAtom(
-                textStyle = ElementTheme.typography.fontBodyXsMedium,
-                count = count,
-                isCritical = isCritical,
-            )
+            // No badge without something to count
+            if (count > 0) {
+                CounterAtom(
+                    textStyle = ElementTheme.typography.fontBodySmMedium,
+                    count = count,
+                    isCritical = isCritical,
+                )
+            }
         }
     ) {
         Icon(

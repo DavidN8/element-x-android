@@ -11,6 +11,7 @@ package io.element.android.features.enterprise.impl
 import androidx.compose.ui.graphics.Color
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.compound.colors.MatchaPalette
 import io.element.android.compound.colors.SemanticColorsLightDark
 import io.element.android.features.enterprise.api.BugReportUrl
 import io.element.android.features.enterprise.api.EnterpriseService
@@ -59,8 +60,9 @@ class DefaultEnterpriseService(
 
     override suspend fun overrideBrandColor(sessionId: SessionId?, brandColor: String?) = Unit
 
+    // Only notifications read this: tint them with the Matcha accent green.
     override fun brandColorsFlow(sessionId: SessionId?): Flow<Color?> {
-        return flowOf(null)
+        return flowOf(MatchaPalette.green)
     }
 
     override fun semanticColorsFlow(sessionId: SessionId?): Flow<SemanticColorsLightDark> {

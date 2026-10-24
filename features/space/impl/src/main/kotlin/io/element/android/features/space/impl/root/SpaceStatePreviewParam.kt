@@ -62,6 +62,7 @@ open class SpaceStatePreviewParam : PreviewParameterProvider<SpaceState> {
                 selectedRoomIds = setOf(RoomId("!spaceId0:example.com")),
                 removeRoomsAction = AsyncAction.ConfirmingNoParams,
             ),
+            aSpaceState(children = aListOfSpaceRooms(), showDocs = true),
         )
 }
 
@@ -80,6 +81,7 @@ fun aSpaceState(
     selectedRoomIds: Set<RoomId> = emptySet(),
     canManageRooms: Boolean = true,
     removeRoomsAction: AsyncAction<Unit> = AsyncAction.Uninitialized,
+    showDocs: Boolean = false,
     eventSink: (SpaceEvent) -> Unit = { },
 ) = SpaceState(
     spaceInfo = spaceInfo,
@@ -95,6 +97,7 @@ fun aSpaceState(
     selectedRoomIds = selectedRoomIds.toImmutableSet(),
     canEditSpaceGraph = canManageRooms,
     removeRoomsAction = removeRoomsAction,
+    showDocs = showDocs,
     eventSink = eventSink,
 )
 

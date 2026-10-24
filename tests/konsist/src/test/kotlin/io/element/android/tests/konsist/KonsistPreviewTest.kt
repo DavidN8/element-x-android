@@ -82,6 +82,7 @@ class KonsistPreviewTest {
     }
 
     private val previewNameExceptions = listOf(
+        "ArchivedTasksViewEmptyPreview",
         "AsyncIndicatorFailurePreview",
         "AsyncIndicatorLoadingPreview",
         "AvatarPickerSizesPreview",
@@ -108,8 +109,6 @@ class KonsistPreviewTest {
         "MatrixBadgeAtomPositivePreview",
         "MentionSpanThemeInTimelinePreview",
         "MessageComposerViewVoicePreview",
-        "MessagesReactionButtonAddPreview",
-        "MessagesReactionButtonExtraPreview",
         "MessagesViewSelectionModePreview",
         "MessagesViewWithIdentityChangePreview",
         "PendingMemberRowWithLongNamePreview",
@@ -131,6 +130,7 @@ class KonsistPreviewTest {
         "ProgressDialogWithContentPreview",
         "ProgressDialogWithTextAndContentPreview",
         "ReadReceiptBottomSheetPreview",
+        "RoomListFiltersViewSpaceSelectedPreview",
         "RoomSummaryRowSelectedPreview",
         "SasEmojisPreview",
         "SecureBackupSetupViewChangePreview",
@@ -138,6 +138,9 @@ class KonsistPreviewTest {
         "SelectionIndicatorSelectedPreview",
         "SpaceMembersViewNoHeroesPreview",
         "SyncStateViewServerUnreachablePreview",
+        "TaskActionsSheetArchivedPreview",
+        "TaskActionsSheetReadOnlyPreview",
+        "TasksViewWidePreview",
         "TextComposerAddCaptionPreview",
         "TextComposerCaptionPreview",
         "TextComposerEditCaptionPreview",
@@ -164,6 +167,7 @@ class KonsistPreviewTest {
         "TimelineItemEventRowWithManyReactionsPreview",
         "TimelineItemEventRowWithRRPreview",
         "TimelineItemEventRowWithReplyPreview",
+        "TimelineItemEventRowWithStickerPreview",
         "TimelineItemEventRowWithThreadSummaryPreview",
         "TimelineItemFileViewScanningContentPreview",
         "TimelineItemGalleryViewScanningContentFailedPreview",

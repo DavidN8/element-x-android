@@ -11,22 +11,35 @@
 package io.element.android.features.home.impl.roomlist
 
 import androidx.activity.ComponentActivity
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
+import com.google.common.truth.Truth.assertThat
 import io.element.android.features.home.impl.HomeEvent
+import io.element.android.features.home.impl.HomeNavigationBarItem
 import io.element.android.features.home.impl.HomeView
 import io.element.android.features.home.impl.R
 import io.element.android.features.home.impl.aHomeState
 import io.element.android.features.home.impl.components.RoomListMenuAction
 import io.element.android.features.home.impl.model.RoomListRoomSummary
 import io.element.android.features.home.impl.model.RoomSummaryDisplayType
+import io.element.android.features.home.impl.model.aRoomListRoomSummary
+import io.element.android.features.home.impl.spaces.HomeChannels
+import io.element.android.features.home.impl.spaces.HomeSpacesState
+import io.element.android.features.home.impl.spaces.SpaceChannels
+import io.element.android.features.home.impl.spaces.aHomeSpacesState
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.room.CurrentUserMembership
+import io.element.android.libraries.previewutils.room.aSpaceRoom
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.tests.testutils.EnsureNeverCalled
 import io.element.android.tests.testutils.EnsureNeverCalledWithParam
@@ -36,6 +49,7 @@ import io.element.android.tests.testutils.ensureCalledOnce
 import io.element.android.tests.testutils.ensureCalledOnceWithParam
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import io.element.android.tests.testutils.setSafeContent
+import kotlinx.collections.immutable.persistentListOf
 import org.junit.Test
 import org.robolectric.annotation.Config
 
@@ -174,6 +188,8 @@ class RoomListViewTest : RobolectricTest() {
         }
     }
 
+    // The search pill and the chips push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `clicking on a room invokes the expected callback`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<RoomListEvent>()
@@ -198,6 +214,8 @@ class RoomListViewTest : RobolectricTest() {
         eventsRecorder.assertEmpty()
     }
 
+    // The search pill and the chips push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `clicking on a room twice invokes the expected callback only once`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<RoomListEvent>()
@@ -221,6 +239,8 @@ class RoomListViewTest : RobolectricTest() {
         eventsRecorder.assertEmpty()
     }
 
+    // The search pill and the chips push the first room below the default window height.
+    @Config(qualifiers = "h1024dp")
     @Test
     fun `long clicking on a room emits the expected Event`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<RoomListEvent>()
@@ -303,6 +323,92 @@ class RoomListViewTest : RobolectricTest() {
         }
         eventsRecorder.assertSingle(HomeEvent.DismissMultiAccountAnnouncement)
     }
+
+    @Test
+    fun `the Tasks tab shows the Matcha tasks, with no Home action button`() = runAndroidComposeUiTest {
+        var tasksTabPadding: PaddingValues? = null
+        setRoomListView(
+            state = aRoomListState(),
+            currentHomeNavigationBarItem = HomeNavigationBarItem.Tasks,
+            isMatchaWorkspacesEnabled = true,
+            tasksTab = { tasksTabPadding = it },
+        )
+        assertThat(tasksTabPadding).isNotNull()
+        val startChat = activity!!.getString(CommonStrings.action_start_chat)
+        onNodeWithContentDescription(startChat).assertDoesNotExist()
+        // The tab's label is also the top bar's title.
+        onAllNodesWithText("Tasks").onFirst().assertExists()
+    }
+
+    @Test
+    fun `tapping the Tasks tab selects it`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<HomeEvent>()
+        setRoomListView(state = aRoomListState(), isMatchaWorkspacesEnabled = true, homeEventSink = eventsRecorder)
+        clickOn(CommonStrings.common_matcha_tasks)
+        eventsRecorder.assertSingle(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Tasks))
+    }
+
+    @Test
+    fun `with the Matcha workspaces the bar is Chats, Tasks, Notes and Channels, and tapping Notes selects it`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<HomeEvent>()
+        setRoomListView(state = aRoomListState(), isMatchaWorkspacesEnabled = true, homeEventSink = eventsRecorder)
+        val activity = requireNotNull(activity)
+        onNodeWithText(activity.getString(R.string.screen_home_tab_channels)).assertExists()
+        onNodeWithText(activity.getString(R.string.screen_home_tab_spaces)).assertDoesNotExist()
+        clickOn(R.string.screen_home_tab_notes)
+        eventsRecorder.assertSingle(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Notes))
+    }
+
+    @Test
+    fun `the Notes tab shows the Matcha notes, with no Home action button`() = runAndroidComposeUiTest {
+        var notesTabPadding: PaddingValues? = null
+        setRoomListView(
+            state = aRoomListState(),
+            currentHomeNavigationBarItem = HomeNavigationBarItem.Notes,
+            isMatchaWorkspacesEnabled = true,
+            notesTab = { notesTabPadding = it },
+        )
+        assertThat(notesTabPadding).isNotNull()
+        val activity = requireNotNull(activity)
+        onNodeWithContentDescription(activity.getString(CommonStrings.action_start_chat)).assertDoesNotExist()
+        onNodeWithContentDescription(activity.getString(CommonStrings.action_create_space)).assertDoesNotExist()
+        // The tab's label is also the top bar's title.
+        onAllNodesWithText(activity.getString(R.string.screen_home_tab_notes)).onFirst().assertExists()
+    }
+
+    @Test
+    fun `on the Channels tab, a channel opens its room`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(RoomId("!general:example.com")) { callback ->
+            setChannelsTab(onRoomClick = callback)
+            onNodeWithText("general").performClick()
+        }
+        onNodeWithContentDescription(activity!!.getString(CommonStrings.action_create_space)).assertExists()
+    }
+
+    @Test
+    fun `on the Channels tab, a space header opens the space`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(RoomId("!acme:example.com")) { callback ->
+            setChannelsTab(onRoomClick = callback)
+            onNodeWithText("Acme").performClick()
+        }
+    }
+}
+
+private fun AndroidComposeUiTest<ComponentActivity>.setChannelsTab(onRoomClick: (RoomId) -> Unit) {
+    val spaceChannels = SpaceChannels(
+        space = aSpaceRoom(displayName = "Acme", roomId = RoomId("!acme:example.com"), state = CurrentUserMembership.JOINED),
+        channels = persistentListOf(aRoomListRoomSummary(id = "!general:example.com", name = "general")),
+    )
+    setRoomListView(
+        state = aRoomListState(),
+        currentHomeNavigationBarItem = HomeNavigationBarItem.Channels,
+        isMatchaWorkspacesEnabled = true,
+        homeSpacesState = aHomeSpacesState(
+            spaceRooms = listOf(spaceChannels.space),
+            channels = HomeChannels(spaces = persistentListOf(spaceChannels), otherChannels = persistentListOf()),
+        ),
+        onRoomClick = onRoomClick,
+    )
 }
 
 private fun AndroidComposeUiTest<ComponentActivity>.setRoomListView(
@@ -320,6 +426,11 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomListView(
     onAddAccountClick: () -> Unit = EnsureNeverCalled(),
     showMultiAccountAnnouncement: Boolean = false,
     homeEventSink: (HomeEvent) -> Unit = {},
+    currentHomeNavigationBarItem: HomeNavigationBarItem = HomeNavigationBarItem.Chats,
+    isMatchaWorkspacesEnabled: Boolean = false,
+    homeSpacesState: HomeSpacesState = aHomeSpacesState(),
+    tasksTab: @Composable (PaddingValues) -> Unit = {},
+    notesTab: @Composable (PaddingValues) -> Unit = {},
 ) {
     setSafeContent {
         HomeView(
@@ -327,6 +438,9 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomListView(
                 roomListState = state,
                 showMultiAccountAnnouncement = showMultiAccountAnnouncement,
                 eventSink = homeEventSink,
+                currentHomeNavigationBarItem = currentHomeNavigationBarItem,
+                isMatchaWorkspacesEnabled = isMatchaWorkspacesEnabled,
+                homeSpacesState = homeSpacesState,
             ),
             onRoomClick = { roomId, _ -> onRoomClick(roomId) },
             onSettingsClick = onSettingsClick,
@@ -341,6 +455,8 @@ private fun AndroidComposeUiTest<ComponentActivity>.setRoomListView(
             onDeclineInviteAndBlockUser = onDeclineInviteAndBlockUser,
             onReportRoomClick = onReportRoomClick,
             acceptDeclineInviteView = {},
+            tasksTab = tasksTab,
+            notesTab = notesTab,
             leaveRoomView = {},
         )
     }

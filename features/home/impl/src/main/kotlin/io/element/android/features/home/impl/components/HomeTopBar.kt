@@ -11,15 +11,15 @@ package io.element.android.features.home.impl.components
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -45,9 +45,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.element.android.appconfig.RoomListConfig
@@ -58,7 +64,6 @@ import io.element.android.features.home.impl.R
 import io.element.android.features.home.impl.filters.RoomListFiltersState
 import io.element.android.features.home.impl.filters.RoomListFiltersView
 import io.element.android.features.home.impl.filters.aRoomListFiltersState
-import io.element.android.features.home.impl.spacefilters.SpaceFiltersEvent
 import io.element.android.features.home.impl.spacefilters.SpaceFiltersState
 import io.element.android.features.home.impl.spacefilters.aSelectedSpaceFiltersState
 import io.element.android.features.home.impl.spacefilters.anUnselectedSpaceFiltersState
@@ -72,10 +77,12 @@ import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.preview.USER_NAME_ALICE
 import io.element.android.libraries.designsystem.text.AdaptativeTitle
+import io.element.android.libraries.designsystem.theme.aliasAppTitle
 import io.element.android.libraries.designsystem.theme.components.DropdownMenu
 import io.element.android.libraries.designsystem.theme.components.DropdownMenuItem
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.IconButton
+import io.element.android.libraries.designsystem.theme.components.Surface
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.matrix.api.core.SessionId
@@ -125,162 +132,146 @@ fun HomeTopBar(
                 scrolledContainerColor = Color.Transparent,
             ),
             title = {
-                val displayTitle = when (selectedNavigationItem) {
-                    HomeNavigationBarItem.Chats -> {
-                        when (spaceFiltersState) {
-                            is SpaceFiltersState.Selected -> spaceFiltersState.selectedFilter.spaceRoom.displayName
-                            else -> stringResource(selectedNavigationItem.labelRes)
-                        }
-                    }
-                    HomeNavigationBarItem.Spaces -> null
-                }
-                displayTitle?.let {
-                    val style = when (spaceFiltersState) {
-                        // Space name
-                        is SpaceFiltersState.Selected -> ElementTheme.typography.fontHeadingSmMedium
-                        // "Chats"
-                        else -> ElementTheme.typography.fontHeadingLgBold
-                    }
-                    AdaptativeTitle(
-                        title = displayTitle,
-                        style = style,
-                        twoLinesStyle = ElementTheme.typography.fontHeadingSmMedium,
-                    )
-                }
+                HomeTopBarTitle(
+                    selectedNavigationItem = selectedNavigationItem,
+                    spaceFiltersState = spaceFiltersState,
+                )
             },
-            navigationIcon = {
+            actions = {
                 NavigationIcon(
                     currentUserAndNeighbors = currentUserAndNeighbors,
                     showAvatarIndicator = showAvatarIndicator,
                     onAccountSwitch = onAccountSwitch,
                     onClick = onOpenSettings,
                 )
+                OverflowMenu(
+                    onMenuActionClick = onMenuActionClick,
+                    canReportBug = canReportBug,
+                )
             },
-            actions = {
-                if (selectedNavigationItem == HomeNavigationBarItem.Chats) {
-                    RoomListMenuItems(
-                        onToggleSearch = onToggleSearch,
-                        onMenuActionClick = onMenuActionClick,
-                        canReportBug = canReportBug,
-                        spaceFiltersState = spaceFiltersState,
-                    )
-                }
-            },
-            // We want a 16dp left padding for the navigationIcon :
-            // 4dp from default TopAppBarHorizontalPadding
-            // 8dp from AccountIcon default padding (48dp touch target around 32dp avatar)
-            // 4dp extra padding using left insets
-            windowInsets = WindowInsets(left = 4.dp),
+            // Without a navigation icon, the default title inset already starts the title 16dp from the edge.
+            windowInsets = WindowInsets(0),
         )
         if (displayFilters) {
             TopAppBarScrollBehaviorLayout(scrollBehavior = scrollBehavior) {
-                RoomListFiltersView(
-                    state = filtersState,
-                    modifier = Modifier
-                        .padding(bottom = 16.dp)
-                        .padding(contentPadding)
-                )
+                Column(modifier = Modifier.padding(contentPadding)) {
+                    SearchPill(onClick = onToggleSearch)
+                    RoomListFiltersView(
+                        state = filtersState,
+                        spaceFiltersState = spaceFiltersState,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                }
             }
         }
     }
 }
 
+/**
+ * Chats shows the product name, or the name of the selected space; the other tabs show their own name. Plain text, never a wordmark.
+ */
 @Composable
-private fun RowScope.RoomListMenuItems(
-    onToggleSearch: () -> Unit,
-    onMenuActionClick: (RoomListMenuAction) -> Unit,
-    canReportBug: Boolean,
+private fun HomeTopBarTitle(
+    selectedNavigationItem: HomeNavigationBarItem,
     spaceFiltersState: SpaceFiltersState,
 ) {
-    IconButton(
-        onClick = onToggleSearch,
-    ) {
-        Icon(
-            imageVector = CompoundIcons.Search(),
-            contentDescription = stringResource(CommonStrings.action_search),
+    val isChats = selectedNavigationItem == HomeNavigationBarItem.Chats
+    if (isChats && spaceFiltersState is SpaceFiltersState.Selected) {
+        AdaptativeTitle(
+            title = spaceFiltersState.selectedFilter.spaceRoom.displayName,
+            style = ElementTheme.typography.fontHeadingSmMedium,
+            twoLinesStyle = ElementTheme.typography.fontHeadingSmMedium,
+        )
+    } else {
+        Text(
+            text = stringResource(if (isChats) R.string.screen_matcha_home_product_name else selectedNavigationItem.labelRes),
+            style = ElementTheme.typography.aliasAppTitle,
+            color = if (isChats && ElementTheme.isLightTheme) ElementTheme.colors.textActionAccent else ElementTheme.colors.textPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() },
         )
     }
-    SpaceFilterButton(spaceFiltersState = spaceFiltersState)
-    if (RoomListConfig.HAS_DROP_DOWN_MENU) {
-        var showMenu by remember { mutableStateOf(false) }
+}
+
+/**
+ * A fake search field: it only opens the search overlay, which has the real one.
+ */
+@Composable
+private fun SearchPill(
+    onClick: () -> Unit,
+) {
+    Surface(
+        shape = CircleShape,
+        color = ElementTheme.colors.bgSubtleSecondary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, bottom = 8.dp)
+            .height(48.dp)
+            .clip(CircleShape)
+            .clickable(role = Role.Button, onClick = onClick),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = CompoundIcons.Search(),
+                contentDescription = null,
+                tint = ElementTheme.colors.iconSecondary,
+            )
+            Text(
+                text = stringResource(CommonStrings.action_search),
+                style = ElementTheme.typography.fontBodyLgRegular,
+                color = ElementTheme.colors.textSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
+private fun OverflowMenu(
+    onMenuActionClick: (RoomListMenuAction) -> Unit,
+    canReportBug: Boolean,
+) {
+    var showMenu by remember { mutableStateOf(false) }
+    Box {
         IconButton(
             onClick = { showMenu = !showMenu }
         ) {
             Icon(
                 imageVector = CompoundIcons.OverflowVertical(),
-                contentDescription = null,
+                contentDescription = stringResource(R.string.a11y_matcha_home_more_options),
             )
         }
         DropdownMenu(
             expanded = showMenu,
             onDismissRequest = { showMenu = false }
         ) {
-            if (RoomListConfig.SHOW_INVITE_MENU_ITEM) {
+            val items = buildList {
+                add(RoomListMenuAction.CreateRoom to CommonStrings.action_create_room)
+                add(RoomListMenuAction.CreateSpace to CommonStrings.action_create_space)
+                add(RoomListMenuAction.Settings to CommonStrings.action_open_settings)
+                if (RoomListConfig.SHOW_INVITE_MENU_ITEM) {
+                    add(RoomListMenuAction.InviteFriends to CommonStrings.action_invite)
+                }
+                if (RoomListConfig.SHOW_REPORT_PROBLEM_MENU_ITEM && canReportBug) {
+                    add(RoomListMenuAction.ReportBug to CommonStrings.common_report_a_problem)
+                }
+            }
+            items.forEach { (action, titleRes) ->
                 DropdownMenuItem(
                     onClick = {
                         showMenu = false
-                        onMenuActionClick(RoomListMenuAction.InviteFriends)
+                        onMenuActionClick(action)
                     },
-                    text = { Text(stringResource(id = CommonStrings.action_invite)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = CompoundIcons.ShareAndroid(),
-                            tint = ElementTheme.colors.iconSecondary,
-                            contentDescription = null,
-                        )
-                    }
-                )
-            }
-            if (RoomListConfig.SHOW_REPORT_PROBLEM_MENU_ITEM && canReportBug) {
-                DropdownMenuItem(
-                    onClick = {
-                        showMenu = false
-                        onMenuActionClick(RoomListMenuAction.ReportBug)
-                    },
-                    text = { Text(stringResource(id = CommonStrings.common_report_a_problem)) },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = CompoundIcons.ChatProblem(),
-                            tint = ElementTheme.colors.iconSecondary,
-                            contentDescription = null,
-                        )
-                    }
+                    text = { Text(stringResource(id = titleRes)) },
                 )
             }
         }
-    }
-}
-
-@Composable
-private fun SpaceFilterButton(
-    spaceFiltersState: SpaceFiltersState,
-) {
-    if (spaceFiltersState == SpaceFiltersState.Disabled) return
-
-    fun onClick() {
-        when (spaceFiltersState) {
-            is SpaceFiltersState.Unselected -> spaceFiltersState.eventSink(SpaceFiltersEvent.Unselected.ShowFilters)
-            is SpaceFiltersState.Selected -> spaceFiltersState.eventSink(SpaceFiltersEvent.Selected.ClearSelection)
-            else -> Unit
-        }
-    }
-
-    val isSelected = spaceFiltersState is SpaceFiltersState.Selected
-    IconButton(
-        onClick = ::onClick,
-        colors = if (isSelected) {
-            IconButtonDefaults.iconButtonColors(
-                containerColor = ElementTheme.colors.bgActionPrimaryRest,
-                contentColor = ElementTheme.colors.iconOnSolidPrimary,
-            )
-        } else {
-            IconButtonDefaults.iconButtonColors()
-        },
-    ) {
-        Icon(
-            imageVector = CompoundIcons.Filter(),
-            contentDescription = stringResource(R.string.screen_roomlist_your_spaces),
-        )
     }
 }
 
@@ -392,7 +383,7 @@ private fun AccountIcon(
         if (reserveStatusEmojiSlot) {
             StatusEmoji(
                 emoji = matrixUser.displayedStatus?.toEmojiText(),
-                modifier = Modifier.offset(x = statusEmojiStartOffset),
+                modifier = Modifier.pullTowardsAvatar(),
             )
         }
     }
@@ -403,6 +394,18 @@ private val statusEmojiSize = 20.dp
 // The avatar is centered inside a 48dp touch target, so there is already 8dp of free space
 // on its trailing side. Compensate it to end up with a 4dp gap after the avatar itself.
 private val statusEmojiStartOffset = 4.dp - (48.dp - AvatarSize.CurrentUserTopBar.dp) / 2
+
+/**
+ * Moves the status emoji by [statusEmojiStartOffset] and gives the space back to the layout, so that the overflow
+ * button that follows the avatar in the top bar actions does not get an extra gap.
+ */
+private fun Modifier.pullTowardsAvatar() = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val offset = statusEmojiStartOffset.roundToPx()
+    layout((placeable.width + offset).coerceAtLeast(0), placeable.height) {
+        placeable.placeRelative(offset, 0)
+    }
+}
 
 @Composable
 private fun StatusEmoji(

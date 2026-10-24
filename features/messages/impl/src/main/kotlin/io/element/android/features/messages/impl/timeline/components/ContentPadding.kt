@@ -13,4 +13,7 @@ enum class ContentPadding {
     Media,
     CaptionedMedia,
     InvalidContent,
+
+    /** A sticker drawn without a bubble: no inset. */
+    Bubbleless,
 }

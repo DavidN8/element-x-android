@@ -15,4 +15,23 @@
     <string name="search_no_results_title">No results</string>
     <string name="search_no_results_subtitle">There are no results for “%1$s”. Try a new search term.</string>
     <string name="screen_search_recent_searches_section_title">Recent searches</string>
+    <!-- The product name, the title of the Chats tab. Placeholder until the final name is decided. -->
+    <string name="screen_matcha_home_product_name" translatable="false">Matcha</string>
+    <string name="screen_matcha_home_view_all_chats">View all chats</string>
+    <plurals name="a11y_matcha_unread_messages">
+        <item quantity="one">%1$d unread message</item>
+        <item quantity="other">%1$d unread messages</item>
+    </plurals>
+    <string name="a11y_matcha_mentioned">You were mentioned</string>
+    <string name="a11y_matcha_home_more_options">More options</string>
+    <string name="screen_home_tab_notes">Notes</string>
+    <!-- In the Matcha web client a group chat is called a channel. -->
+    <string name="screen_home_tab_channels">Channels</string>
+    <plurals name="screen_home_channels_count">
+        <item quantity="one">%1$d channel</item>
+        <item quantity="other">%1$d channels</item>
+    </plurals>
+    <!-- The section of the Channels tab with the group chats that are in none of the user's spaces. -->
+    <string name="screen_home_channels_other_section">Other channels</string>
+    <string name="screen_home_channels_empty_title">Create a space to group your channels</string>
 </resources>

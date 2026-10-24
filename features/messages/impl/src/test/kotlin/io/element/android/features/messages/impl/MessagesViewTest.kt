@@ -11,12 +11,13 @@
 package io.element.android.features.messages.impl
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.longClick
-import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -29,14 +30,21 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import androidx.compose.ui.text.AnnotatedString
+import com.google.common.truth.Truth.assertThat
 import io.element.android.emojibasebindings.Emoji
 import io.element.android.emojibasebindings.EmojibaseCategory
+import io.element.android.features.matcha.api.MatchaChatBarActions
+import io.element.android.features.matcha.api.MatchaChatBarSelection
+import io.element.android.features.matcha.api.MatchaReminderTarget
+import io.element.android.features.matcha.api.MatchaThreadInfo
 import io.element.android.features.messages.impl.actionlist.ActionListEvent
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.actionlist.anActionListState
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemAction
 import io.element.android.features.messages.impl.crypto.sendfailure.VerifiedUserSendFailure
 import io.element.android.features.messages.impl.crypto.sendfailure.resolve.aChangedIdentitySendFailure
+import io.element.android.features.messages.impl.matcha.NoopMatchaChatBarActions
+import io.element.android.features.messages.impl.matcha.aMatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.aMessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerItem
 import io.element.android.features.messages.impl.pinned.banner.aLoadedPinnedMessagesBannerState
@@ -44,24 +52,24 @@ import io.element.android.features.messages.impl.timeline.FOCUS_ON_PINNED_EVENT_
 import io.element.android.features.messages.impl.timeline.TimelineEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemEvent
 import io.element.android.features.messages.impl.timeline.aTimelineItemList
-import io.element.android.features.messages.impl.timeline.aTimelineItemReadReceipts
 import io.element.android.features.messages.impl.timeline.aTimelineRoomInfo
 import io.element.android.features.messages.impl.timeline.aTimelineState
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionBottomSheet
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionEvent
 import io.element.android.features.messages.impl.timeline.components.customreaction.CustomReactionState
 import io.element.android.features.messages.impl.timeline.components.reactionsummary.ReactionSummaryEvent
-import io.element.android.features.messages.impl.timeline.components.receipt.aReadReceiptData
-import io.element.android.features.messages.impl.timeline.components.receipt.bottomsheet.ReadReceiptBottomSheetEvent
 import io.element.android.features.messages.impl.timeline.model.TimelineItem
 import io.element.android.features.messages.impl.timeline.model.event.aTimelineItemTextContent
 import io.element.android.features.messages.impl.timeline.sendfailure.SendFailureDialogState
 import io.element.android.features.roomcall.api.aStandByCallState
+import io.element.android.features.roomcall.api.anOngoingCallState
 import io.element.android.libraries.emoji.impl.picker.DefaultEmojiPickerRenderer
 import io.element.android.libraries.emoji.impl.picker.anEmojiPickerState
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.tombstone.SuccessorRoom
+import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
 import io.element.android.libraries.matrix.api.timeline.item.event.getAvatarUrl
 import io.element.android.libraries.matrix.api.timeline.item.event.getDisplayName
@@ -264,30 +272,19 @@ class MessagesViewTest : RobolectricTest() {
 
     @Test
     @Config(qualifiers = "h1024dp")
-    fun `clicking on a read receipt list emits the expected Event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<ReadReceiptBottomSheetEvent>()
+    fun `an own message read by everyone shows the read tick`() = runAndroidComposeUiTest {
         val state = aMessagesState(
             timelineState = aTimelineState(
                 timelineItems = persistentListOf(
-                    aTimelineItemEvent(
-                        readReceiptState = aTimelineItemReadReceipts(
-                            receipts = listOf(
-                                aReadReceiptData(0),
-                            ),
-                        ),
-                    ),
+                    aTimelineItemEvent(isMine = true).copy(isReadByOthers = true),
                 ),
             ),
-            readReceiptBottomSheetState = aReadReceiptBottomSheetState(
-                eventSink = eventsRecorder
-            ),
         )
-        val timelineItem = state.timelineState.timelineItems.first() as TimelineItem.Event
         setMessagesView(
             state = state,
         )
-        onNodeWithTag(TestTags.messageReadReceipts.value, useUnmergedTree = true).performClick()
-        eventsRecorder.assertSingle(ReadReceiptBottomSheetEvent.EventSelected(timelineItem))
+        val readDescription = activity!!.getString(R.string.a11y_matcha_message_read)
+        onNodeWithContentDescription(readDescription, useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -365,6 +362,30 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `with the Matcha workspaces, the attach sheet's Task tile asks for a new task`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<MessagesEvent>()
+        val state = aMessagesState(
+            composerState = aMessageComposerState(showAttachmentSourcePicker = true),
+            matcha = aMatchaChatState(),
+            eventSink = eventsRecorder,
+        )
+        setMessagesView(state = state)
+        clickOn(R.string.screen_matcha_room_attach_task)
+        eventsRecorder.assertSingle(MessagesEvent.MatchaNewTask)
+    }
+
+    @Test
+    fun `without the Matcha workspaces, the attach sheet has no Task tile`() = runAndroidComposeUiTest {
+        val state = aMessagesState(
+            composerState = aMessageComposerState(showAttachmentSourcePicker = true),
+            matcha = null,
+            eventSink = EventsRecorder(expectEvents = false),
+        )
+        setMessagesView(state = state)
+        assertNoNodeWithText(R.string.screen_matcha_room_attach_task)
+    }
+
+    @Test
     @Config(qualifiers = "h1024dp")
     fun `clicking on the avatar of the sender of an Event emits the expected event`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<MessagesEvent>()
@@ -433,13 +454,16 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
-    fun `clicking on a reaction emits the expected Event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<MessagesEvent>()
+    fun `clicking on the reactions pill opens the reaction summary`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<ReactionSummaryEvent>()
         val state = aMessagesState(
             timelineState = aTimelineState(
                 timelineItems = aTimelineItemList(aTimelineItemTextContent()),
             ),
-            eventSink = eventsRecorder,
+            reactionSummaryState = aReactionSummaryState(
+                target = null,
+                eventSink = eventsRecorder,
+            ),
         )
         val timelineItem = state.timelineState.timelineItems.first() as TimelineItem.Event
         setMessagesView(
@@ -449,7 +473,13 @@ class MessagesViewTest : RobolectricTest() {
             text = "👍️",
             useUnmergedTree = true,
         ).onFirst().performClick()
-        eventsRecorder.assertSingle(MessagesEvent.ToggleReaction("👍️", timelineItem.eventOrTransactionId))
+        eventsRecorder.assertSingle(
+            ReactionSummaryEvent.ShowReactionSummary(
+                timelineItem.eventId!!,
+                timelineItem.reactionsState.reactions,
+                timelineItem.reactionsState.reactions.first().key
+            )
+        )
     }
 
     @Test
@@ -473,26 +503,6 @@ class MessagesViewTest : RobolectricTest() {
             useUnmergedTree = true,
         ).onFirst().performTouchInput { longClick() }
         eventsRecorder.assertSingle(ReactionSummaryEvent.ShowReactionSummary(timelineItem.eventId!!, timelineItem.reactionsState.reactions, "👍️"))
-    }
-
-    @Test
-    fun `clicking on more reaction emits the expected Event`() = runAndroidComposeUiTest {
-        val eventsRecorder = EventsRecorder<CustomReactionEvent>()
-        val state = aMessagesState(
-            timelineState = aTimelineState(
-                timelineItems = aTimelineItemList(aTimelineItemTextContent()),
-            ),
-            customReactionState = aCustomReactionState(
-                eventSink = eventsRecorder,
-            ),
-        )
-        val timelineItem = state.timelineState.timelineItems.first() as TimelineItem.Event
-        setMessagesView(
-            state = state,
-        )
-        val moreReactionContentDescription = activity!!.getString(R.string.screen_room_timeline_add_reaction)
-        onAllNodesWithContentDescription(moreReactionContentDescription).onFirst().performClick()
-        eventsRecorder.assertSingle(CustomReactionEvent.ShowCustomReactionSheet(timelineItem))
     }
 
     @Test
@@ -735,6 +745,160 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
+    fun `with the Matcha workspaces, the chip bar is under the room bar and replaces the threads button`() = runAndroidComposeUiTest {
+        val selections = mutableListOf<MatchaChatBarSelection>()
+        setMessagesView(
+            state = aMessagesState(
+                threads = MessagesState.Threads(hasThreads = true, hasUnreadThreads = false),
+                matcha = aMatchaChatState(),
+            ),
+            matchaChatBar = { selections += it },
+        )
+        assertThat(selections.distinct()).containsExactly(MatchaChatBarSelection.General)
+        onNodeWithContentDescription("Threads").assertDoesNotExist()
+    }
+
+    @Test
+    fun `with the Matcha workspaces, the top bar opens All threads and the board, and shows the open task count`() = runAndroidComposeUiTest {
+        val context = activity!!
+        val openAllThreads = lambdaRecorder<Unit> {}
+        val openTasks = lambdaRecorder<Unit> {}
+        val actions = object : MatchaChatBarActions by NoopMatchaChatBarActions {
+            override fun openAllThreads() = openAllThreads()
+            override fun openTasks() = openTasks()
+        }
+        setMessagesView(state = aMessagesState(matcha = aMatchaChatState(openTaskCount = 3)), matchaActions = actions)
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_all_threads)).performClick()
+        openAllThreads.assertions().isCalledOnce()
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_tasks) + ", 3 open tasks").performClick()
+        openTasks.assertions().isCalledOnce()
+        // The badge's digits are read in the button's label only.
+        onNodeWithText("3").assertDoesNotExist()
+    }
+
+    @Test
+    fun `with the Matcha workspaces, starting a call moves into the menu`() = runAndroidComposeUiTest {
+        val context = activity!!
+        ensureCalledOnceWithParam(false) { callback ->
+            setMessagesView(
+                state = aMessagesState(roomCallState = aStandByCallState(), matcha = aMatchaChatState(hasChatBar = true)),
+                onJoinCallClick = callback,
+            )
+            onNodeWithContentDescription(context.getString(CommonStrings.a11y_start_call)).assertDoesNotExist()
+            onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+            assertNoNodeWithText(CommonStrings.action_voice_call)
+            clickOn(CommonStrings.action_video_call)
+        }
+    }
+
+    @Test
+    fun `with the Matcha workspaces, a voice call is offered in the menu of a DM`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(true) { callback ->
+            setMessagesView(
+                state = aMessagesState(roomCallState = aStandByCallState(isDM = true), matcha = aMatchaChatState()),
+                onJoinCallClick = callback,
+            )
+            onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_more)).performClick()
+            clickOn(CommonStrings.action_voice_call)
+        }
+    }
+
+    @Test
+    fun `with the Matcha workspaces, a call that can't be started is disabled in the menu`() = runAndroidComposeUiTest {
+        val context = activity!!
+        setMessagesView(state = aMessagesState(roomCallState = aStandByCallState(canStartCall = false), matcha = aMatchaChatState()))
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+        onNodeWithText(context.getString(CommonStrings.action_video_call)).assertIsNotEnabled()
+    }
+
+    @Test
+    fun `with the Matcha workspaces, an ongoing call keeps its Join button in the bar and moves All threads into the menu`() = runAndroidComposeUiTest {
+        ensureCalledOnceWithParam(false) { callback ->
+            setMessagesView(
+                state = aMessagesState(roomCallState = anOngoingCallState(), matcha = aMatchaChatState(hasChatBar = true)),
+                onJoinCallClick = callback,
+            )
+            val context = activity!!
+            // Join takes All threads' place in the bar, so the chat's name keeps its room on a narrow phone.
+            onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_all_threads)).assertDoesNotExist()
+            clickOn(CommonStrings.action_join)
+            onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+            onNodeWithText(context.getString(CommonStrings.common_matcha_all_threads)).assertExists()
+        }
+    }
+
+    @Test
+    fun `with the Matcha workspaces, All threads stays in the bar while the user is already in the call`() = runAndroidComposeUiTest {
+        setMessagesView(
+            state = aMessagesState(
+                roomCallState = anOngoingCallState(isUserInTheCall = true),
+                matcha = aMatchaChatState(hasChatBar = true),
+            ),
+        )
+        onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_all_threads)).assertExists()
+    }
+
+    @Test
+    fun `until the chat has a chip bar, its entries are in the top bar's menu`() = runAndroidComposeUiTest {
+        val eventsRecorder = EventsRecorder<MessagesEvent>()
+        setMessagesView(
+            state = aMessagesState(matcha = aMatchaChatState(hasChatBar = false), eventSink = eventsRecorder),
+        )
+        val more = activity!!.getString(CommonStrings.common_matcha_more)
+        onNodeWithContentDescription(more).performClick()
+        clickOn(CommonStrings.common_matcha_new_thread)
+        onNodeWithContentDescription(more).performClick()
+        clickOn(CommonStrings.action_matcha_remind_me)
+        eventsRecorder.assertList(listOf(MessagesEvent.MatchaNewThread, MessagesEvent.MatchaRemindMe))
+    }
+
+    @Test
+    fun `once the chat has a chip bar, the top bar's menu only starts calls`() = runAndroidComposeUiTest {
+        val context = activity!!
+        setMessagesView(state = aMessagesState(matcha = aMatchaChatState(hasChatBar = true)))
+        onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+        onNodeWithText(context.getString(CommonStrings.action_video_call)).assertExists()
+        assertNoNodeWithText(CommonStrings.common_matcha_new_thread)
+        assertNoNodeWithText(CommonStrings.action_matcha_remind_me)
+    }
+
+    @Test
+    fun `without the Matcha workspaces, there is no chip bar`() = runAndroidComposeUiTest {
+        val selections = mutableListOf<MatchaChatBarSelection>()
+        setMessagesView(state = aMessagesState(matcha = null), matchaChatBar = { selections += it })
+        assertThat(selections).isEmpty()
+    }
+
+    @Test
+    fun `a thread keeps the room bar with the thread's name and selects its chip`() = runAndroidComposeUiTest {
+        val threadId = ThreadId("\$a-thread-id")
+        val selections = mutableListOf<MatchaChatBarSelection>()
+        setMessagesView(
+            state = aMessagesState(
+                roomName = "Design team",
+                timelineState = aTimelineState(timelineMode = Timeline.Mode.Thread(threadRootId = threadId)),
+                matcha = aMatchaChatState(threads = persistentMapOf(threadId to MatchaThreadInfo(name = "Release planning", isArchived = false))),
+            ),
+            matchaChatBar = { selections += it },
+        )
+        assertThat(selections.distinct()).containsExactly(MatchaChatBarSelection.Thread(threadId))
+        onNodeWithText("Design team").assertExists()
+        onNodeWithText("Release planning").assertExists()
+    }
+
+    @Test
+    fun `a thread without a known name is untitled`() = runAndroidComposeUiTest {
+        val threadId = ThreadId("\$a-thread-id")
+        setMessagesView(
+            state = aMessagesState(
+                timelineState = aTimelineState(timelineMode = Timeline.Mode.Thread(threadRootId = threadId)),
+                matcha = aMatchaChatState(threads = persistentMapOf(threadId to MatchaThreadInfo(name = null, isArchived = false))),
+            ),
+        )
+        onNodeWithText(activity!!.getString(CommonStrings.common_matcha_thread_untitled)).assertExists()
+    }
+
+    @Test
     fun `no banner shown when there is no successor room`() = runAndroidComposeUiTest {
         val eventsRecorder = EventsRecorder<MessagesEvent>(expectEvents = false)
         val state = aMessagesState(
@@ -798,6 +962,9 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
     onJoinCallClick: (Boolean) -> Unit = EnsureNeverCalledWithParam(),
     onViewAllPinnedMessagesClick: () -> Unit = EnsureNeverCalled(),
     onThreadsListClicked: () -> Unit = EnsureNeverCalled(),
+    matchaChatBar: @Composable (MatchaChatBarSelection) -> Unit = {},
+    matchaReminderSheet: @Composable (MatchaReminderTarget?, () -> Unit) -> Unit = { _, _ -> },
+    matchaActions: MatchaChatBarActions = NoopMatchaChatBarActions,
 ) {
     val emojiPickerRenderer = DefaultEmojiPickerRenderer()
     setSafeContent {
@@ -816,6 +983,9 @@ private fun AndroidComposeUiTest<ComponentActivity>.setMessagesView(
                 onJoinCallClick = onJoinCallClick,
                 onViewAllPinnedMessagesClick = onViewAllPinnedMessagesClick,
                 knockRequestsBannerView = {},
+                matchaChatBar = matchaChatBar,
+                matchaReminderSheet = matchaReminderSheet,
+                matchaActions = matchaActions,
                 customReactionBottomSheet = {
                     CustomReactionBottomSheet(
                         state = state.customReactionState,

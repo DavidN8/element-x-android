@@ -26,11 +26,11 @@ import androidx.core.graphics.createBitmap
 import coil3.Bitmap
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
+import io.element.android.compound.colors.matchaColorsDark
+import io.element.android.compound.colors.matchaColorsLight
 import io.element.android.compound.theme.AvatarColors
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.SemanticColors
-import io.element.android.compound.tokens.generated.compoundColorsDark
-import io.element.android.compound.tokens.generated.compoundColorsLight
 import io.element.android.libraries.designsystem.components.avatar.AvatarData
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.preview.ElementPreview
@@ -41,10 +41,10 @@ import io.element.android.libraries.matrixmedia.api.InitialsAvatarBitmapGenerato
 @ContributesBinding(AppScope::class)
 class DefaultInitialsAvatarBitmapGenerator : InitialsAvatarBitmapGenerator {
     // List of predefined avatar colors to use for initials avatars, in light mode
-    private val lightAvatarColors: List<AvatarColors> = compoundColorsLight.buildAvatarColors()
+    private val lightAvatarColors: List<AvatarColors> = matchaColorsLight.buildAvatarColors()
 
     // List of predefined avatar colors to use for initials avatars, in dark mode
-    private val darkAvatarColors: List<AvatarColors> = compoundColorsDark.buildAvatarColors()
+    private val darkAvatarColors: List<AvatarColors> = matchaColorsDark.buildAvatarColors()
 
     /**
      * Generates a bitmap for an avatar with no URL, using the initials from the [AvatarData].

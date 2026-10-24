@@ -35,7 +35,7 @@ class TimelineItemVirtualFactory(
     private fun MatrixTimelineItem.Virtual.computeModel(): TimelineItemVirtualModel {
         return when (val inner = virtual) {
             is VirtualTimelineItem.DayDivider -> daySeparatorFactory.create(inner)
-            is VirtualTimelineItem.ReadMarker -> TimelineItemReadMarkerModel
+            is VirtualTimelineItem.ReadMarker -> TimelineItemReadMarkerModel()
             is VirtualTimelineItem.RoomBeginning -> TimelineItemRoomBeginningModel
             is VirtualTimelineItem.LoadingIndicator -> TimelineItemLoadingIndicatorModel(
                 direction = inner.direction,

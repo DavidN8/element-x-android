@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,6 +43,7 @@ import io.element.android.features.home.impl.R
 import io.element.android.features.home.impl.contentType
 import io.element.android.features.home.impl.filters.RoomListFilter
 import io.element.android.features.home.impl.filters.RoomListFiltersEmptyStateResources
+import io.element.android.features.home.impl.filters.RoomListFiltersEvent
 import io.element.android.features.home.impl.filters.RoomListFiltersState
 import io.element.android.features.home.impl.filters.aRoomListFiltersState
 import io.element.android.features.home.impl.filters.selection.FilterSelectionState
@@ -53,14 +54,15 @@ import io.element.android.features.home.impl.roomlist.RoomListContentState
 import io.element.android.features.home.impl.roomlist.RoomListContentStatePreviewParam
 import io.element.android.features.home.impl.roomlist.RoomListEvent
 import io.element.android.features.home.impl.roomlist.toRoomListBanner
+import io.element.android.features.home.impl.spacefilters.SpaceFiltersEvent
 import io.element.android.features.home.impl.spacefilters.SpaceFiltersState
 import io.element.android.features.home.impl.spacefilters.anUnselectedSpaceFiltersState
+import io.element.android.libraries.designsystem.components.BigIcon
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Button
-import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
-import io.element.android.libraries.designsystem.theme.components.IconSource
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.utils.OnVisibleRangeChangeEffect
 import io.element.android.libraries.fullscreenintent.api.FullScreenIntentPermissionsEvent
 import io.element.android.libraries.matrix.api.core.RoomId
@@ -131,12 +133,9 @@ private fun SkeletonView(
         modifier = modifier,
         contentPadding = contentPadding,
     ) {
-        repeat(count) { index ->
+        repeat(count) {
             item {
                 RoomSummaryPlaceholderRow()
-                if (index != count - 1) {
-                    HorizontalDivider()
-                }
             }
         }
     }
@@ -155,19 +154,13 @@ private fun EmptyView(
     modifier: Modifier = Modifier,
 ) {
     Box(modifier.fillMaxSize()) {
-        val text = buildString {
-            append(stringResource(R.string.screen_roomlist_empty_title))
-            append("\n")
-            append(stringResource(R.string.screen_roomlist_empty_message))
-        }
         EmptyScaffold(
-            title = null,
-            subtitle = text,
+            title = stringResource(R.string.screen_roomlist_empty_title),
+            subtitle = stringResource(R.string.screen_roomlist_empty_message),
             bottomPart = {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
                 Button(
                     text = stringResource(CommonStrings.action_start_chat),
-                    leadingIcon = IconSource.Vector(CompoundIcons.Chat()),
                     onClick = onCreateRoomClick,
                 )
             },
@@ -212,6 +205,12 @@ private fun RoomsView(
         EmptyViewForFilterStates(
             selectedFilters = filtersState.selectedFilters(),
             isSpaceFilterSelected = isSpaceFilterSelected,
+            onViewAllChatsClick = {
+                filtersState.eventSink(RoomListFiltersEvent.ClearSelectedFilters)
+                if (spaceFiltersState is SpaceFiltersState.Selected) {
+                    spaceFiltersState.eventSink(SpaceFiltersEvent.Selected.ClearSelection)
+                }
+            },
             modifier = modifier.fillMaxSize()
         )
     } else {
@@ -295,10 +294,10 @@ private fun RoomsViewList(
         }
         // Note: do not use a key for the LazyColumn, or the scroll will not behave as expected if a room
         // is moved to the top of the list.
-        itemsIndexed(
+        items(
             items = state.summaries,
-            contentType = { _, room -> room.contentType() },
-        ) { index, room ->
+            contentType = { room -> room.contentType() },
+        ) { room ->
             RoomSummaryRow(
                 room = room,
                 hideInviteAvatars = hideInvitesAvatars,
@@ -310,9 +309,6 @@ private fun RoomsViewList(
                 onClick = onRoomClick,
                 eventSink = eventSink,
             )
-            if (index != state.summaries.lastIndex) {
-                HorizontalDivider()
-            }
         }
     }
 }
@@ -388,6 +384,7 @@ private fun RoomListBannerView(
 private fun EmptyViewForFilterStates(
     selectedFilters: ImmutableList<RoomListFilter>,
     isSpaceFilterSelected: Boolean,
+    onViewAllChatsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val emptyStateResources = RoomListFiltersEmptyStateResources.fromSelectedFilters(selectedFilters, isSpaceFilterSelected) ?: return
@@ -396,6 +393,11 @@ private fun EmptyViewForFilterStates(
         subtitle = stringResource(emptyStateResources.subtitle),
         modifier = modifier,
         bottomPart = {
+            Spacer(modifier = Modifier.height(16.dp))
+            TextButton(
+                text = stringResource(R.string.screen_matcha_home_view_all_chats),
+                onClick = onViewAllChatsClick,
+            )
             // Keep a spacer so that the content is not too low on the screen
             Spacer(modifier = Modifier.height(32.dp))
         }
@@ -404,25 +406,25 @@ private fun EmptyViewForFilterStates(
 
 @Composable
 private fun EmptyScaffold(
-    title: String?,
+    title: String,
     subtitle: String,
     modifier: Modifier = Modifier,
     bottomPart: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = modifier.padding(horizontal = 60.dp),
+        modifier = modifier.padding(horizontal = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        title?.let {
-            Text(
-                text = title,
-                style = ElementTheme.typography.fontHeadingMdBold,
-                color = ElementTheme.colors.textPrimary,
-                textAlign = TextAlign.Center,
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+        BigIcon(style = BigIcon.Style.Default(CompoundIcons.ChatSolid()))
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = title,
+            style = ElementTheme.typography.fontHeadingMdBold,
+            color = ElementTheme.colors.textPrimary,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = subtitle,
             style = ElementTheme.typography.fontBodyLgRegular,
@@ -442,7 +444,7 @@ internal fun RoomListContentViewPreview(@PreviewParameter(RoomListContentStatePr
             filterSelectionStates = RoomListFilter.entries.map {
                 FilterSelectionState(
                     filter = it,
-                    isSelected = true
+                    isSelected = it == RoomListFilter.Favourites,
                 )
             }
         ),

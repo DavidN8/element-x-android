@@ -24,6 +24,18 @@ sealed interface MessagesEvent {
     data object ShowLiveLocationShare : MessagesEvent
     data object MarkAsFullyReadAndExit : MessagesEvent
     data object ConfirmSelectionAction : MessagesEvent
+
+    /** The Matcha "Remind me" sheet was closed. */
+    data object DismissMatchaReminder : MessagesEvent
+
+    /** The attach sheet asked for a new task in this chat. */
+    data object MatchaNewTask : MessagesEvent
+
+    /** The chat's ⋮ asked for a new named thread. */
+    data object MatchaNewThread : MessagesEvent
+
+    /** The chat's ⋮ asked for a reminder about the chat, or the thread when one is open. */
+    data object MatchaRemindMe : MessagesEvent
 }
 
 enum class InviteDialogAction {

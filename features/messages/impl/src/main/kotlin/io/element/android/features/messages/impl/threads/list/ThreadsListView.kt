@@ -7,22 +7,28 @@
 
 package io.element.android.features.messages.impl.threads.list
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.plus
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -31,32 +37,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.libraries.designsystem.atomic.atoms.UnreadIndicatorAtom
-import io.element.android.libraries.designsystem.components.avatar.Avatar
-import io.element.android.libraries.designsystem.components.avatar.AvatarData
+import io.element.android.features.messages.impl.R
+import io.element.android.libraries.designsystem.atomic.atoms.PlaceholderAtom
+import io.element.android.libraries.designsystem.atomic.molecules.IconTitleSubtitleMolecule
+import io.element.android.libraries.designsystem.components.BigIcon
+import io.element.android.libraries.designsystem.components.PillFilterChip
 import io.element.android.libraries.designsystem.components.avatar.AvatarSize
-import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.components.button.BackButton
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.preview.ROOM_NAME
 import io.element.android.libraries.designsystem.preview.USER_NAME_ALICE
-import io.element.android.libraries.designsystem.theme.components.HorizontalDivider
+import io.element.android.libraries.designsystem.theme.aliasChatTitle
+import io.element.android.libraries.designsystem.theme.components.Button
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Scaffold
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.lazyColumnContentPadding
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
-import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.core.asEventId
@@ -66,11 +75,9 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EventContent
 import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
 import io.element.android.libraries.matrix.api.timeline.item.event.ProfileDetails
 import io.element.android.libraries.matrix.api.timeline.item.event.TextMessageType
-import io.element.android.libraries.matrix.api.timeline.item.event.getAvatarUrl
 import io.element.android.libraries.matrix.api.timeline.item.event.getDisambiguatedDisplayName
+import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.ui.strings.CommonStrings
-import kotlinx.collections.immutable.persistentListOf
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.delay
 
 @Composable
@@ -83,78 +90,199 @@ fun ThreadsListView(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = {
-                    val description = stringResource(
-                        CommonStrings.a11y_threads_in_room,
-                        state.roomName,
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clearAndSetSemantics {
-                            heading()
-                            contentDescription = description
-                        },
-                    ) {
-                        Avatar(
-                            avatarData = AvatarData(
-                                id = state.roomId.value,
-                                name = state.roomName,
-                                url = state.roomAvatarUrl,
-                                size = AvatarSize.CurrentUserTopBar,
-                            ),
-                            avatarType = AvatarType.Room(
-                                heroes = state.heroes,
-                                isTombstoned = state.isRoomTombstoned,
-                            ),
-                            contentDescription = null,
+            Column {
+                TopAppBar(
+                    title = {
+                        val description = stringResource(
+                            CommonStrings.a11y_threads_in_room,
+                            state.roomName,
                         )
-                        Column {
+                        Column(
+                            modifier = Modifier.clearAndSetSemantics {
+                                heading()
+                                contentDescription = description
+                            },
+                        ) {
                             Text(
-                                text = stringResource(CommonStrings.common_threads),
-                                style = ElementTheme.typography.fontBodyLgMedium,
+                                text = stringResource(CommonStrings.common_matcha_all_threads),
+                                style = ElementTheme.typography.aliasChatTitle,
                                 color = ElementTheme.colors.textPrimary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
                                 text = state.roomName,
-                                style = ElementTheme.typography.fontBodyXsRegular,
+                                style = ElementTheme.typography.fontBodyMdRegular,
                                 color = ElementTheme.colors.textSecondary,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                    }
-                },
-                navigationIcon = {
-                    BackButton(onBackClick)
-                },
-                windowInsets = scaffoldScrollableContentInsets,
-            )
-        }
-    ) { padding ->
-        val lazyListState = rememberLazyListState()
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = padding + lazyColumnContentPadding,
-            state = lazyListState,
-        ) {
-            itemsIndexed(state.threads, key = { _, row -> row.item.threadId }) { index, row ->
-                ThreadListItemRow(
-                    threadItem = row,
-                    onClick = onThreadClick,
+                    },
+                    navigationIcon = {
+                        BackButton(onBackClick)
+                    },
+                    windowInsets = scaffoldScrollableContentInsets,
                 )
-
-                if (index < state.threads.size - 1) {
-                    HorizontalDivider()
+                state.archiveFilter?.let { filter ->
+                    ThreadArchiveChips(
+                        selected = filter,
+                        onSelect = { state.eventSink(ThreadsListEvent.SelectArchiveFilter(it)) },
+                    )
                 }
             }
         }
+    ) { padding ->
+        when {
+            state.visibleThreads.isNotEmpty() -> ThreadsList(
+                state = state,
+                onThreadClick = onThreadClick,
+                contentPadding = padding,
+            )
+            state.loadFailed -> ThreadsListMessage(
+                title = stringResource(R.string.screen_matcha_threads_list_load_error),
+                modifier = Modifier.padding(padding),
+            ) {
+                Button(
+                    text = stringResource(CommonStrings.action_retry),
+                    onClick = { state.eventSink(ThreadsListEvent.Retry) },
+                )
+            }
+            state.isLoadingFirstPage -> Column(modifier = Modifier.padding(padding)) {
+                repeat(3) { ThreadListPlaceholderRow() }
+            }
+            else -> ThreadsListMessage(
+                title = stringResource(
+                    if (state.archiveFilter == ThreadArchiveFilter.Archived) {
+                        R.string.screen_matcha_threads_list_archived_empty
+                    } else {
+                        R.string.screen_matcha_threads_list_empty_title
+                    }
+                ),
+                // Only the Matcha workspaces have a New thread chip to point at.
+                subtitle = if (state.archiveFilter == ThreadArchiveFilter.Active) stringResource(R.string.screen_matcha_threads_list_empty_body) else null,
+                modifier = Modifier.padding(padding),
+            ) {
+                // The loaded threads may all be in the other chip; older ones may still match this one.
+                if (state.threads.isNotEmpty() && state.hasMoreToLoad) {
+                    TextButton(
+                        text = stringResource(R.string.screen_matcha_threads_list_load_older),
+                        onClick = { state.eventSink(ThreadsListEvent.Paginate) },
+                    )
+                }
+            }
+        }
+    }
+}
 
-        ScrollHelper(lazyListState) {
-            state.eventSink(ThreadsListEvent.Paginate)
+/** Active · Archived, single-select chips like the chat list's. */
+@Composable
+private fun ThreadArchiveChips(
+    selected: ThreadArchiveFilter,
+    onSelect: (ThreadArchiveFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectableGroup()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ThreadArchiveFilter.entries.forEach { filter ->
+            PillFilterChip(
+                label = stringResource(
+                    when (filter) {
+                        ThreadArchiveFilter.Active -> CommonStrings.common_matcha_active
+                        ThreadArchiveFilter.Archived -> CommonStrings.common_matcha_archived
+                    }
+                ),
+                selected = filter == selected,
+                onClick = { onSelect(filter) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThreadsList(
+    state: ThreadsListState,
+    onThreadClick: (ThreadId) -> Unit,
+    contentPadding: PaddingValues,
+) {
+    val lazyListState = rememberLazyListState()
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = contentPadding + lazyColumnContentPadding,
+        state = lazyListState,
+    ) {
+        items(state.visibleThreads, key = { row -> row.item.threadId }) { row ->
+            ThreadListItemRow(
+                threadItem = row,
+                name = state.nameOf(row),
+                replies = state.repliesOf(row),
+                onClick = onThreadClick,
+            )
+        }
+        if (state.hasMoreToLoad) {
+            item {
+                TextButton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    text = stringResource(R.string.screen_matcha_threads_list_load_older),
+                    onClick = { state.eventSink(ThreadsListEvent.Paginate) },
+                )
+            }
+        }
+    }
+
+    ScrollHelper(lazyListState) {
+        state.eventSink(ThreadsListEvent.Paginate)
+    }
+}
+
+/** The empty and error states: a big thread icon, a title and an optional action under it. */
+@Composable
+private fun ThreadsListMessage(
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    action: @Composable () -> Unit = {},
+) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        IconTitleSubtitleMolecule(
+            title = title,
+            subTitle = subtitle,
+            iconStyle = BigIcon.Style.Default(CompoundIcons.Threads()),
+        )
+        action()
+    }
+}
+
+@Composable
+private fun ThreadListPlaceholderRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 76.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(AvatarSize.ThreadsListItem.dp)
+                .background(ElementTheme.colors.bgSubtleSecondary, CircleShape)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            PlaceholderAtom(width = 160.dp, height = 14.dp)
+            PlaceholderAtom(width = 220.dp, height = 12.dp)
         }
     }
 }
@@ -182,56 +310,58 @@ private fun ScrollHelper(
     }
 }
 
+/**
+ * A thread as a chat row: a round thread tile, the thread's name and the time of the last reply, then the last reply with the reply count.
+ */
 @Composable
 private fun ThreadListItemRow(
     threadItem: ThreadListRowItem,
+    name: String?,
+    replies: Int,
     onClick: (ThreadId) -> Unit,
 ) {
     Row(
         modifier = Modifier
             .clickable { onClick(threadItem.item.threadId) }
             .fillMaxWidth()
-            .padding(top = 4.dp, bottom = 8.dp, start = 16.dp, end = 16.dp),
+            .heightIn(min = 76.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        val rootEvent = threadItem.item.rootEvent
-        val senderProfile = rootEvent.senderProfile
-        Avatar(
-            modifier = Modifier.align(Alignment.CenterVertically),
-            avatarData = AvatarData(
-                id = rootEvent.senderId.value,
-                name = senderProfile.getDisambiguatedDisplayName(rootEvent.senderId),
-                url = senderProfile.getAvatarUrl(),
-                size = AvatarSize.ThreadsListItem,
-            ),
-            avatarType = AvatarType.User,
-            contentDescription = null,
-        )
+        Box(
+            modifier = Modifier
+                .size(AvatarSize.ThreadsListItem.dp)
+                .background(ElementTheme.colors.bgSubtleSecondary, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = CompoundIcons.Threads(),
+                contentDescription = null,
+                tint = ElementTheme.colors.iconSecondary,
+            )
+        }
 
         Spacer(modifier = Modifier.width(16.dp))
 
         Column(modifier = Modifier.fillMaxWidth()) {
-            // TODO actually compute these values based on the thread state (not available yet)
-            val hasMentions = false
-            val hasUnreadNotifications = false
-
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     modifier = Modifier.weight(1f),
-                    text = senderProfile.getDisambiguatedDisplayName(rootEvent.senderId),
+                    text = name ?: stringResource(CommonStrings.common_matcha_thread_untitled),
                     style = ElementTheme.typography.fontBodyLgMedium,
-                    color = ElementTheme.colors.textPrimary,
+                    color = if (name != null) ElementTheme.colors.textPrimary else ElementTheme.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-
+                // The time turns green once there is unread data for threads; there is none yet.
                 Text(
                     text = threadItem.formattedTimestamp,
                     style = ElementTheme.typography.fontBodySmRegular,
-                    color = if (hasUnreadNotifications || hasMentions) ElementTheme.colors.textActionAccent else ElementTheme.colors.textSecondary,
+                    color = ElementTheme.colors.textSecondary,
                 )
             }
 
@@ -239,84 +369,39 @@ private fun ThreadListItemRow(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val latestEvent = threadItem.item.latestEvent
+                val latestText = if (latestEvent != null) {
+                    "${latestEvent.senderProfile.getDisambiguatedDisplayName(latestEvent.senderId)}: ${threadItem.latestEventText.orEmpty()}"
+                } else {
+                    ""
+                }
                 Text(
                     modifier = Modifier.weight(1f),
-                    text = threadItem.rootEventText.orEmpty(),
+                    text = latestText,
                     style = ElementTheme.typography.fontBodyMdRegular,
                     color = ElementTheme.colors.textSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp)
-                ) {
-                    if (hasMentions) {
-                        Icon(
-                            modifier = Modifier.size(14.dp),
-                            imageVector = CompoundIcons.Mention(),
-                            contentDescription = null,
-                            tint = ElementTheme.colors.textActionAccent,
-                        )
-                    }
-
-                    if (hasUnreadNotifications) {
-                        UnreadIndicatorAtom(
-                            dotIndicatorSize = 14.dp,
-                            count = 0,
-                        )
-                    }
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "${threadItem.item.numberOfReplies}",
-                    style = ElementTheme.typography.fontBodySmRegular,
-                    color = ElementTheme.colors.textSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-
-                Spacer(modifier = Modifier.width(4.dp))
-
                 Icon(
-                    modifier = Modifier.size(20.dp),
-                    imageVector = CompoundIcons.ThreadsSolid(),
+                    modifier = Modifier.size(14.dp),
+                    imageVector = CompoundIcons.Threads(),
                     contentDescription = null,
                     tint = ElementTheme.colors.iconSecondary
                 )
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                threadItem.item.latestEvent?.let { latestEvent ->
-                    Avatar(
-                        avatarData = AvatarData(
-                            id = latestEvent.senderId.value,
-                            name = latestEvent.senderProfile.getDisambiguatedDisplayName(latestEvent.senderId),
-                            url = latestEvent.senderProfile.getAvatarUrl(),
-                            size = AvatarSize.TimelineThreadLatestEventSender,
-                        ),
-                        avatarType = AvatarType.User,
-                        contentDescription = null,
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Text(
-                        text = threadItem.latestEventText.orEmpty(),
-                        style = ElementTheme.typography.fontBodySmRegular,
-                        color = ElementTheme.colors.textSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                val repliesDescription = pluralStringResource(CommonPlurals.common_replies, replies, replies)
+                Text(
+                    modifier = Modifier.clearAndSetSemantics {
+                        contentDescription = repliesDescription
+                    },
+                    text = "$replies",
+                    style = ElementTheme.typography.fontBodySmRegular,
+                    color = ElementTheme.colors.textSecondary,
+                    maxLines = 1,
+                )
             }
         }
     }
@@ -324,18 +409,10 @@ private fun ThreadListItemRow(
 
 @PreviewsDayNight
 @Composable
-internal fun ThreadsListViewPreview() {
+internal fun ThreadsListViewPreview(@PreviewParameter(ThreadsListStatePreviewParam::class) state: ThreadsListState) {
     ElementPreview {
         ThreadsListView(
-            state = ThreadsListState(
-                roomId = RoomId("!room-id:server"),
-                roomName = ROOM_NAME,
-                roomAvatarUrl = null,
-                heroes = persistentListOf(),
-                threads = List(10) { aThreadListRowItem(threadId = ThreadId("\$thread-$it")) }.toImmutableList(),
-                isRoomTombstoned = false,
-                eventSink = {},
-            ),
+            state = state,
             onThreadClick = {},
             onBackClick = {},
         )
@@ -348,6 +425,8 @@ internal fun ThreadListItemRowPreview() {
     ElementPreview {
         ThreadListItemRow(
             threadItem = aThreadListRowItem(),
+            name = "Hello world!",
+            replies = 42,
             onClick = {},
         )
     }

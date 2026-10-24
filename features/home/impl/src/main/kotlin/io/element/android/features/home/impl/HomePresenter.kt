@@ -100,11 +100,10 @@ class HomePresenter(
         }
         val roomListState = roomListPresenter.present()
         val homeSpacesState = homeSpacesPresenter.present()
+        val isMatchaWorkspacesEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
         var currentHomeNavigationBarItemOrdinal by rememberSaveable { mutableIntStateOf(HomeNavigationBarItem.Chats.ordinal) }
         val currentHomeNavigationBarItem by remember {
-            derivedStateOf {
-                HomeNavigationBarItem.from(currentHomeNavigationBarItemOrdinal)
-            }
+            derivedStateOf { HomeNavigationBarItem.from(currentHomeNavigationBarItemOrdinal, isMatchaWorkspacesEnabled) }
         }
         LaunchedEffect(Unit) {
             // Force a refresh of the profile
@@ -140,6 +139,7 @@ class HomePresenter(
             canReportBug = canReportBug,
             showMultiAccountAnnouncement = showMultiAccountAnnouncement,
             totalUnreadCount = totalUnreadCount,
+            isMatchaWorkspacesEnabled = isMatchaWorkspacesEnabled,
             eventSink = ::handleEvent,
         )
     }

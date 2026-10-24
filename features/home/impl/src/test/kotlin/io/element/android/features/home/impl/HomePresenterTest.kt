@@ -14,6 +14,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.features.announcement.api.Announcement
 import io.element.android.features.announcement.api.AnnouncementService
 import io.element.android.features.announcement.test.FakeAnnouncementService
+import io.element.android.features.home.api.HomeTab
 import io.element.android.features.home.impl.roomlist.aRoomListState
 import io.element.android.features.home.impl.spaces.HomeSpacesState
 import io.element.android.features.home.impl.spaces.aHomeSpacesState
@@ -38,6 +39,7 @@ import io.element.android.libraries.sessionstorage.api.SessionStore
 import io.element.android.libraries.sessionstorage.test.InMemorySessionStore
 import io.element.android.libraries.sessionstorage.test.aSessionData
 import io.element.android.tests.testutils.WarmUpRule
+import io.element.android.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.tests.testutils.lambda.lambdaRecorder
 import io.element.android.tests.testutils.lambda.value
 import io.element.android.tests.testutils.test
@@ -314,6 +316,59 @@ class HomePresenterTest {
     }
 
     @Test
+    fun `present - the bar is Chats, Tasks, Notes, Channels with the Matcha workspaces, and Chats, Spaces without`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false))
+        createHomePresenter(featureFlagService = featureFlagService).test {
+            assertThat(awaitItem().navigationBarItems).containsExactly(HomeNavigationBarItem.Chats, HomeNavigationBarItem.Spaces).inOrder()
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, true)
+            assertThat(awaitItem().navigationBarItems)
+                .containsExactly(HomeNavigationBarItem.Chats, HomeNavigationBarItem.Tasks, HomeNavigationBarItem.Notes, HomeNavigationBarItem.Channels)
+                .inOrder()
+        }
+    }
+
+    @Test
+    fun `present - the Tasks tab can be selected, and falls back to Chats once the Matcha workspaces are off`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true))
+        createHomePresenter(featureFlagService = featureFlagService).test {
+            val initialState = consumeItemsUntilPredicate { it.isMatchaWorkspacesEnabled }.last()
+            initialState.eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Tasks))
+            val tasksState = awaitItem()
+            assertThat(tasksState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Tasks)
+            assertThat(tasksState.currentHomeNavigationBarItem.homeTab).isEqualTo(HomeTab.Tasks)
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, false)
+            assertThat(awaitItem().currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Chats)
+        }
+    }
+
+    @Test
+    fun `present - the Notes tab can be selected`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to true))
+        createHomePresenter(featureFlagService = featureFlagService).test {
+            val initialState = consumeItemsUntilPredicate { it.isMatchaWorkspacesEnabled }.last()
+            initialState.eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Notes))
+            val notesState = awaitItem()
+            assertThat(notesState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Notes)
+            assertThat(notesState.currentHomeNavigationBarItem.homeTab).isEqualTo(HomeTab.Notes)
+        }
+    }
+
+    @Test
+    fun `present - the selected Spaces tab becomes Channels with the Matcha workspaces, and back`() = runTest {
+        val featureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false))
+        createHomePresenter(featureFlagService = featureFlagService).test {
+            awaitItem().eventSink(HomeEvent.SelectHomeNavigationBarItem(HomeNavigationBarItem.Spaces))
+            assertThat(awaitItem().currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Spaces)
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, true)
+            val channelsState = awaitItem()
+            assertThat(channelsState.currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Channels)
+            assertThat(channelsState.currentHomeNavigationBarItem.homeTab).isEqualTo(HomeTab.Channels)
+            featureFlagService.setFeatureEnabled(FeatureFlags.MatchaWorkspaces, false)
+            assertThat(awaitItem().currentHomeNavigationBarItem).isEqualTo(HomeNavigationBarItem.Spaces)
+        }
+    }
+
+    @Test
     fun `present - total unread count is loaded in the initial state`() = runTest {
         val presenter = createHomePresenter(
             client = FakeMatrixClient(totalUnreadCountResult = { Result.success(5) }),
@@ -333,7 +388,7 @@ internal fun TestScope.createHomePresenter(
     homeSpacesPresenter: Presenter<HomeSpacesState> = Presenter { aHomeSpacesState() },
     sessionStore: SessionStore = InMemorySessionStore(),
     announcementService: AnnouncementService = FakeAnnouncementService(),
-    featureFlagService: FeatureFlagService = FakeFeatureFlagService(),
+    featureFlagService: FeatureFlagService = FakeFeatureFlagService(initialState = mapOf(FeatureFlags.MatchaWorkspaces.key to false)),
     appCoroutineScope: CoroutineScope = backgroundScope,
 ) = HomePresenter(
     client = client,

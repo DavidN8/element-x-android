@@ -9,11 +9,9 @@
 package io.element.android.libraries.textcomposer
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -36,7 +34,9 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.quoteOverlay
 import io.element.android.libraries.matrix.ui.media.contentvalidation.collectOverallState
 import io.element.android.libraries.matrix.ui.media.contentvalidation.rememberEventContentValidationState
 import io.element.android.libraries.matrix.ui.messages.reply.InReplyToDetails
@@ -70,7 +70,7 @@ internal fun ComposerModeView(
         }
         is MessageComposerMode.Reply -> {
             ReplyToModeView(
-                modifier = modifier.padding(top = 8.dp, start = 8.dp, end = 8.dp),
+                modifier = modifier.padding(top = 6.dp, start = 6.dp, end = 6.dp),
                 replyToDetails = composerMode.replyToDetails,
                 hideImage = composerMode.hideImage,
                 onResetComposerMode = onResetComposerMode,
@@ -145,19 +145,14 @@ private fun ReplyToModeView(
 
     val contentHasErrors = currentValidationState.hasError()
 
-    Box(
+    // The same quote block as in bubbles, at the top of the composer pill, with the close button after it so it never covers the quote.
+    Row(
         modifier
             .clip(shape)
             .background(
-                color = if (contentHasErrors) ElementTheme.colors.bgCriticalSubtle else ElementTheme.colors.bgCanvasDefault,
+                color = if (contentHasErrors) ElementTheme.colors.bgCriticalSubtle else ElementTheme.colors.quoteOverlay,
                 shape = shape,
             )
-            .border(
-                width = 1.dp,
-                color = if (contentHasErrors) ElementTheme.colors.borderCriticalSubtle else ElementTheme.colors.separatorPrimary,
-                shape = shape,
-            )
-            .padding(4.dp)
     ) {
         // Larger density DPI and font scale means less space to display the content, so we limit it to 1 line to avoid overflow issues
         val currentDensity = LocalDensity.current
@@ -169,23 +164,16 @@ private fun ReplyToModeView(
             hideImage = hideImage,
             contentValidationValue = currentValidationState,
             maxLines = maxReplyContentLines,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
         )
-        Icon(
-            imageVector = CompoundIcons.Close(),
-            contentDescription = stringResource(CommonStrings.action_close),
-            tint = if (contentHasErrors) ElementTheme.colors.iconCriticalPrimary else ElementTheme.colors.iconSecondary,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 4.dp, top = 4.dp, start = 8.dp, bottom = 16.dp)
-                .size(16.dp)
-                .clickable(
-                    enabled = true,
-                    onClick = onResetComposerMode,
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(bounded = false)
-                ),
-        )
+        IconButton(onClick = onResetComposerMode) {
+            Icon(
+                imageVector = CompoundIcons.Close(),
+                contentDescription = stringResource(CommonStrings.action_close),
+                tint = if (contentHasErrors) ElementTheme.colors.iconCriticalPrimary else ElementTheme.colors.iconSecondary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
     }
 }
 

@@ -74,7 +74,8 @@ internal fun EmojiItem(
     contentDescription: @Composable (emoji: Emoji, isSelected: Boolean) -> String = { emoji, _ -> emoji.unicode },
 ) {
     val backgroundColor = when {
-        isSelected -> ElementTheme.colors.bgActionPrimaryRest
+        // Selection is a tonal green, never the solid action green.
+        isSelected -> ElementTheme.colors.bgAccentSelected
         hasSelectedSkin -> ElementTheme.colors.bgActionTertiarySelected
         else -> Color.Transparent
     }

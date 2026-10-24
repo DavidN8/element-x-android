@@ -20,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
+import io.element.android.features.messages.impl.timeline.components.SystemPill
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemDaySeparatorModel
 import io.element.android.features.messages.impl.timeline.model.virtual.TimelineItemDaySeparatorModelPreviewParam
 import io.element.android.libraries.designsystem.preview.ElementPreview
@@ -35,18 +36,20 @@ internal fun TimelineItemDaySeparatorView(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight()
-            .padding(16.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            modifier = Modifier
-                .semantics {
-                    heading()
-                },
-            text = model.formattedDate,
-            style = ElementTheme.typography.fontBodyMdMedium,
-            color = ElementTheme.colors.textPrimary,
-        )
+        SystemPill {
+            Text(
+                modifier = Modifier
+                    .semantics {
+                        heading()
+                    },
+                text = model.formattedDate,
+                style = ElementTheme.typography.fontBodySmRegular,
+                color = ElementTheme.colors.textSecondary,
+            )
+        }
     }
 }
 

@@ -13,48 +13,43 @@ import io.element.android.features.home.impl.filters.RoomListFilter
 import io.element.android.libraries.di.SessionScope
 import kotlinx.coroutines.flow.MutableStateFlow
 
+/**
+ * Single-select, like WhatsApp's chat list chips: selecting a filter replaces the previous one,
+ * and the filters always keep the order of [RoomListFilter].
+ */
 @ContributesBinding(SessionScope::class)
 class DefaultFilterSelectionStrategy : FilterSelectionStrategy {
-    private val selectedFilters = LinkedHashSet<RoomListFilter>()
-    private val availableFilters
-        get() = RoomListFilter.entries.toSet()
+    private var selectedFilter: RoomListFilter? = null
 
     override val filterSelectionStates = MutableStateFlow(buildFilters())
 
     override fun select(filter: RoomListFilter) {
-        if (selectedFilters.any { it in filter.incompatibleFilters }) return
-        selectedFilters.add(filter)
+        selectedFilter = filter
         filterSelectionStates.value = buildFilters()
     }
 
     override fun deselect(filter: RoomListFilter) {
-        selectedFilters.remove(filter)
-        filterSelectionStates.value = buildFilters()
+        if (selectedFilter == filter) {
+            selectedFilter = null
+            filterSelectionStates.value = buildFilters()
+        }
     }
 
     override fun isSelected(filter: RoomListFilter): Boolean {
-        return selectedFilters.contains(filter)
+        return selectedFilter == filter
     }
 
     override fun clear() {
-        selectedFilters.clear()
+        selectedFilter = null
         filterSelectionStates.value = buildFilters()
     }
 
     private fun buildFilters(): Set<FilterSelectionState> {
-        val selectedFilterStates = selectedFilters.map {
+        return RoomListFilter.entries.mapTo(LinkedHashSet()) { filter ->
             FilterSelectionState(
-                filter = it,
-                isSelected = true
+                filter = filter,
+                isSelected = filter == selectedFilter,
             )
         }
-        val unselectedFilters = availableFilters - selectedFilters - selectedFilters.flatMap { it.incompatibleFilters }.toSet()
-        val unselectedFilterStates = unselectedFilters.map {
-            FilterSelectionState(
-                filter = it,
-                isSelected = false
-            )
-        }
-        return (selectedFilterStates + unselectedFilterStates).toSet()
     }
 }

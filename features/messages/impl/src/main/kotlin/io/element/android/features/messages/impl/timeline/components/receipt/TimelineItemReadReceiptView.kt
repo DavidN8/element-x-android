@@ -43,6 +43,7 @@ import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.components.avatar.getBestName
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
+import io.element.android.libraries.designsystem.theme.chatWallpaper
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.matrix.api.timeline.item.event.LocalEventSendState
@@ -143,7 +144,8 @@ private fun ReadReceiptsAvatars(
 ) {
     val avatarSize = AvatarSize.TimelineReadReceipt.dp
     val avatarStrokeSize = 1.dp
-    val avatarStrokeColor = ElementTheme.colors.bgCanvasDefault
+    // The receipts sit on the chat wallpaper
+    val avatarStrokeColor = ElementTheme.colors.chatWallpaper
     val receiptDescription = computeReceiptDescription(receipts)
     Row(
         modifier = modifier

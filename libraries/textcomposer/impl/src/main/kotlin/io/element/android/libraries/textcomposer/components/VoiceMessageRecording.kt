@@ -23,12 +23,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.designsystem.preview.ElementPreview
@@ -46,14 +46,11 @@ internal fun VoiceMessageRecording(
     duration: Duration,
     modifier: Modifier = Modifier,
 ) {
+    // Drawn inside the composer pill, after the delete button.
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(
-                color = ElementTheme.colors.bgSubtleSecondary,
-                shape = MaterialTheme.shapes.medium,
-            )
-            .padding(start = 12.dp, end = 20.dp, top = 8.dp, bottom = 8.dp)
+            .padding(end = 16.dp, top = 8.dp, bottom = 8.dp)
             .heightIn(26.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -64,8 +61,8 @@ internal fun VoiceMessageRecording(
         // Timer
         Text(
             text = duration.formatShort(),
-            color = ElementTheme.colors.textSecondary,
-            style = ElementTheme.typography.fontBodySmMedium
+            color = ElementTheme.colors.textPrimary,
+            style = ElementTheme.typography.fontBodyMdRegular,
         )
 
         Spacer(Modifier.size(20.dp))
@@ -75,6 +72,7 @@ internal fun VoiceMessageRecording(
                 .height(26.dp)
                 .weight(1f),
             levels = levels,
+            brush = SolidColor(ElementTheme.colors.iconSecondary),
         )
     }
 }

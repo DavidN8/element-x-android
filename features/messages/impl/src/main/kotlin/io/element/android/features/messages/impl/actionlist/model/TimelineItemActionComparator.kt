@@ -11,7 +11,8 @@ package io.element.android.features.messages.impl.actionlist.model
 import androidx.annotation.VisibleForTesting
 
 class TimelineItemActionComparator : Comparator<TimelineItemAction> {
-    // See order in https://www.figma.com/design/ux3tYoZV9WghC7hHT9Fhk0/Compound-iOS-Components?node-id=2946-2392
+    // WhatsApp's order (WHATSAPP_DESIGN.md §3.3 "Long-press"): replies first, then sharing and copying, then changes to the message,
+    // with the destructive actions last.
     @VisibleForTesting
     val orderedList = listOf(
         TimelineItemAction.EndPoll,
@@ -19,17 +20,19 @@ class TimelineItemActionComparator : Comparator<TimelineItemAction> {
         TimelineItemAction.Reply,
         TimelineItemAction.ReplyInThread,
         TimelineItemAction.Forward,
+        TimelineItemAction.CopyText,
+        TimelineItemAction.CopyCaption,
+        TimelineItemAction.CopyLink,
+        TimelineItemAction.Pin,
+        TimelineItemAction.Unpin,
+        TimelineItemAction.RemindMe,
         TimelineItemAction.Edit,
         TimelineItemAction.EditPoll,
         TimelineItemAction.AddCaption,
         TimelineItemAction.EditCaption,
-        TimelineItemAction.CopyLink,
-        TimelineItemAction.Pin,
-        TimelineItemAction.Unpin,
-        TimelineItemAction.CopyText,
-        TimelineItemAction.CopyCaption,
-        TimelineItemAction.RemoveCaption,
+        TimelineItemAction.ReadBy,
         TimelineItemAction.ViewSource,
+        TimelineItemAction.RemoveCaption,
         TimelineItemAction.ReportContent,
         TimelineItemAction.Redact,
         // Not rendered in the action list, but have to be listed here for exhaustiveness.

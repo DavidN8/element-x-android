@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -56,22 +55,8 @@ fun ComposerAlertMolecule(
     Column(
         modifier.fillMaxWidth()
     ) {
-        val lineColor = when (level) {
-            ComposerAlertLevel.Info -> ElementTheme.colors.borderInfoSubtle
-            ComposerAlertLevel.Critical -> ElementTheme.colors.borderCriticalSubtle
-        }
-
-        val textColor = when (level) {
-            ComposerAlertLevel.Info -> ElementTheme.colors.textPrimary
-            ComposerAlertLevel.Critical -> ElementTheme.colors.textCriticalPrimary
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(1.dp)
-                .background(lineColor)
-        )
+        // The Matcha palette gives both stops one tone, so this is a flat strip with no top line. The tint carries the level;
+        // the text stays textPrimary because red text fails contrast on the critical tint.
         val gradientColors = when (level) {
             ComposerAlertLevel.Info -> gradientInfoColors()
             ComposerAlertLevel.Critical -> gradientCriticalColors()
@@ -111,7 +96,7 @@ fun ComposerAlertMolecule(
                         text = content,
                         modifier = Modifier.weight(1f),
                         style = ElementTheme.typography.fontBodyMdRegular,
-                        color = textColor,
+                        color = ElementTheme.colors.textPrimary,
                         textAlign = TextAlign.Start,
                     )
                 }

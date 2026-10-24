@@ -30,6 +30,9 @@ import dev.zacsweers.metro.AssistedInject
 import io.element.android.annotations.ContributesNode
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.features.knockrequests.api.banner.KnockRequestsBannerRenderer
+import io.element.android.features.matcha.api.MatchaChatBarActions
+import io.element.android.features.matcha.api.MatchaChatBarRenderer
+import io.element.android.features.matcha.api.MatchaReminderRenderer
 import io.element.android.features.messages.impl.actionlist.ActionListPresenter
 import io.element.android.features.messages.impl.actionlist.model.TimelineItemActionPostProcessor
 import io.element.android.features.messages.impl.attachments.Attachment
@@ -107,6 +110,9 @@ class MessagesNode(
     private val eventContentValidationCache: EventContentValidationCache,
     private val emojiPickerRenderer: EmojiPickerRenderer,
     private val dispatchers: CoroutineDispatchers,
+    // Lazy: the chip bar reads the room's Matcha data as soon as it exists, which only the Matcha workspaces need.
+    private val matchaChatBarRenderer: Lazy<MatchaChatBarRenderer>,
+    private val matchaReminderRenderer: Lazy<MatchaReminderRenderer>,
 ) : Node(buildContext, plugins = plugins), MessagesNavigator, TimelineSelectionOwner {
     data class Inputs(
         val focusedEventId: EventId?,
@@ -156,6 +162,9 @@ class MessagesNode(
         fun navigateToThreadsList()
 
         fun navigateToAvatarPreview(username: String, avatarUrl: String)
+
+        /** Where the Matcha chip bar navigates to. */
+        val matchaChatBarActions: MatchaChatBarActions
     }
 
     override fun onBuilt() {
@@ -352,10 +361,21 @@ class MessagesNode(
                         onSelectEmoji = { uniqueId, emoji ->
                             state.eventSink(MessagesEvent.ToggleReaction(emoji.unicode, uniqueId))
                         },
+                        onInsertEmoji = { emoji ->
+                            state.composerState.eventSink(MessageComposerEvent.InsertEmoji(emoji.unicode))
+                        },
+                        onComposerPickerDismiss = {
+                            state.composerState.eventSink(MessageComposerEvent.RequestFocus)
+                        },
                         emojiPickerRenderer = emojiPickerRenderer,
                     )
                 },
                 onThreadsListClick = callback::navigateToThreadsList,
+                matchaChatBar = { selection ->
+                    matchaChatBarRenderer.value.Render(selection = selection, actions = callback.matchaChatBarActions, modifier = Modifier)
+                },
+                matchaReminderSheet = { target, onDismiss -> matchaReminderRenderer.value.Render(target = target, onDismiss = onDismiss) },
+                matchaActions = callback.matchaChatBarActions,
             )
             roomMemberModerationRenderer.Render(
                 state = state.roomMemberModerationState,

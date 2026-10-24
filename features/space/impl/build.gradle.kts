@@ -42,6 +42,8 @@ dependencies {
     implementation(projects.features.securityandprivacy.api)
     implementation(projects.features.rolesandpermissions.api)
     implementation(projects.features.roomdetailsedit.api)
+    implementation(projects.features.matcha.api)
+    implementation(projects.libraries.featureflag.api)
     api(projects.features.space.api)
 
     testCommonDependencies(libs, true)
@@ -50,4 +52,6 @@ dependencies {
     testImplementation(projects.features.createroom.test)
     testImplementation(projects.features.invite.test)
     testImplementation(projects.features.rolesandpermissions.test)
+    testImplementation(projects.libraries.featureflag.test)
+    testImplementation(projects.features.matcha.test)
 }

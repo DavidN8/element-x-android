@@ -14,6 +14,7 @@ import io.element.android.features.home.impl.roomlist.RoomListStatePreviewParam
 import io.element.android.features.home.impl.roomlist.aRoomListState
 import io.element.android.features.home.impl.roomlist.aRoomsContentState
 import io.element.android.features.home.impl.roomlist.generateRoomListRoomSummaryList
+import io.element.android.features.home.impl.spaces.ChannelsHomeSpacesStatePreviewParam
 import io.element.android.features.home.impl.spaces.HomeSpacesState
 import io.element.android.features.home.impl.spaces.aHomeSpacesState
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
@@ -50,6 +51,22 @@ open class HomeStatePreviewParam : PreviewParameterProvider<HomeState> {
             ),
         ) + aHomeState(
             showMultiAccountAnnouncement = true,
+        ) + aHomeState(
+            // The unread count badge on the Chats tab
+            totalUnreadCount = 5,
+        ) + aHomeState(
+            // The Matcha bar: Chats · Tasks · Notes · Channels
+            isMatchaWorkspacesEnabled = true,
+        ) + aHomeState(
+            isMatchaWorkspacesEnabled = true,
+            currentHomeNavigationBarItem = HomeNavigationBarItem.Tasks,
+        ) + aHomeState(
+            isMatchaWorkspacesEnabled = true,
+            currentHomeNavigationBarItem = HomeNavigationBarItem.Notes,
+        ) + aHomeState(
+            isMatchaWorkspacesEnabled = true,
+            currentHomeNavigationBarItem = HomeNavigationBarItem.Channels,
+            homeSpacesState = ChannelsHomeSpacesStatePreviewParam().values.first(),
         )
 }
 
@@ -65,6 +82,7 @@ internal fun aHomeState(
     canReportBug: Boolean = true,
     showMultiAccountAnnouncement: Boolean = false,
     totalUnreadCount: Int = 0,
+    isMatchaWorkspacesEnabled: Boolean = false,
     eventSink: (HomeEvent) -> Unit = {}
 ) = HomeState(
     currentUserAndNeighbors = currentUserAndNeighbors.toImmutableList(),
@@ -77,5 +95,6 @@ internal fun aHomeState(
     roomListState = roomListState,
     homeSpacesState = homeSpacesState,
     totalUnreadCount = totalUnreadCount,
+    isMatchaWorkspacesEnabled = isMatchaWorkspacesEnabled,
     eventSink = eventSink,
 )

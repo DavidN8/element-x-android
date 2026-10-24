@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -32,7 +34,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,11 +64,12 @@ import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
+import io.element.android.libraries.designsystem.theme.mutedBadge
 import io.element.android.libraries.designsystem.theme.roomListRoomMessage
 import io.element.android.libraries.designsystem.theme.roomListRoomMessageDate
 import io.element.android.libraries.designsystem.theme.roomListRoomName
+import io.element.android.libraries.designsystem.theme.rowSelected
 import io.element.android.libraries.matrix.api.notification.CallIntent
-import io.element.android.libraries.matrix.api.room.RoomNotificationMode
 import io.element.android.libraries.matrix.api.user.DisplayedStatus
 import io.element.android.libraries.matrix.ui.components.DisplayNameWithStatus
 import io.element.android.libraries.matrix.ui.components.InviteSenderView
@@ -71,7 +77,9 @@ import io.element.android.libraries.matrix.ui.model.InviteSender
 import io.element.android.libraries.ui.strings.CommonStrings
 import timber.log.Timber
 
-internal val minHeight = 84.dp
+internal val minHeight = 76.dp
+private val compactMinHeight = 64.dp
+private val compactAvatarSize = 40.dp
 
 @Composable
 internal fun RoomSummaryRow(
@@ -83,9 +91,11 @@ internal fun RoomSummaryRow(
     modifier: Modifier = Modifier,
     showUnreadCount: Boolean = false,
     showAllActivity: Boolean = false,
+    /** A smaller avatar and less padding, for the channels listed under their space. */
+    isCompact: Boolean = false,
     eventSink: (RoomListEvent) -> Unit,
 ) {
-    val background = if (isSelected) Modifier.background(ElementTheme.colors.bgSubtleSecondary) else Modifier
+    val background = if (isSelected) Modifier.background(ElementTheme.colors.rowSelected) else Modifier
     Box(modifier = modifier.then(background)) {
         when (room.displayType) {
             RoomSummaryDisplayType.PLACEHOLDER -> {
@@ -94,6 +104,8 @@ internal fun RoomSummaryRow(
             RoomSummaryDisplayType.INVITE -> {
                 RoomSummaryScaffoldRow(
                     room = room,
+                    isSelected = isSelected,
+                    isCompact = isCompact,
                     hideAvatarImage = hideInviteAvatars,
                     onClick = onClick,
                     onLongClick = {
@@ -124,6 +136,8 @@ internal fun RoomSummaryRow(
             RoomSummaryDisplayType.ROOM -> {
                 RoomSummaryScaffoldRow(
                     room = room,
+                    isSelected = isSelected,
+                    isCompact = isCompact,
                     onClick = onClick,
                     onLongClick = {
                         eventSink(RoomListEvent.ShowContextMenu(room))
@@ -132,7 +146,7 @@ internal fun RoomSummaryRow(
                     NameAndTimestampRow(
                         name = room.name,
                         timestamp = room.timestamp,
-                        isHighlighted = room.isHighlighted,
+                        isUnread = room.hasHighlightedTimestamp(showAllActivity = showAllActivity),
                         dmUserStatus = room.dmUserStatus,
                     )
                     MessagePreviewAndIndicatorRow(room = room, showUnreadCount = showUnreadCount, showAllActivity = showAllActivity)
@@ -141,6 +155,8 @@ internal fun RoomSummaryRow(
             RoomSummaryDisplayType.KNOCKED -> {
                 RoomSummaryScaffoldRow(
                     room = room,
+                    isSelected = isSelected,
+                    isCompact = isCompact,
                     onClick = onClick,
                     onLongClick = {
                         Timber.d("Long click on knocked room")
@@ -149,7 +165,7 @@ internal fun RoomSummaryRow(
                     NameAndTimestampRow(
                         name = room.name,
                         timestamp = null,
-                        isHighlighted = room.isHighlighted,
+                        isUnread = false,
                         dmUserStatus = null,
                     )
                     if (room.canonicalAlias != null) {
@@ -178,9 +194,11 @@ internal fun RoomSummaryRow(
 @Composable
 private fun RoomSummaryScaffoldRow(
     room: RoomListRoomSummary,
+    isSelected: Boolean,
     onClick: (RoomListRoomSummary) -> Unit,
     onLongClick: (RoomListRoomSummary) -> Unit,
     modifier: Modifier = Modifier,
+    isCompact: Boolean = false,
     hideAvatarImage: Boolean = false,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -193,12 +211,14 @@ private fun RoomSummaryScaffoldRow(
             interactionSource = remember { MutableInteractionSource() }
         )
         .onKeyboardContextMenuAction { onLongClick(room) }
+        // On the clickable node, which is the one TalkBack focuses: the open chat of the two-pane list is announced as selected.
+        .then(if (isSelected) Modifier.semantics { selected = true } else Modifier)
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = minHeight)
+            .heightIn(min = if (isCompact) compactMinHeight else minHeight)
             .then(clickModifier)
-            .padding(horizontal = 16.dp, vertical = 11.dp)
+            .padding(horizontal = 16.dp, vertical = if (isCompact) 8.dp else 12.dp)
             .height(IntrinsicSize.Min),
     ) {
         Avatar(
@@ -211,6 +231,7 @@ private fun RoomSummaryScaffoldRow(
                     isTombstoned = room.isTombstoned,
                 )
             },
+            forcedAvatarSize = compactAvatarSize.takeIf { isCompact },
             hideImage = hideAvatarImage,
         )
         Spacer(modifier = Modifier.width(16.dp))
@@ -225,7 +246,7 @@ private fun RoomSummaryScaffoldRow(
 private fun NameAndTimestampRow(
     name: String?,
     timestamp: String?,
-    isHighlighted: Boolean,
+    isUnread: Boolean,
     dmUserStatus: DisplayedStatus?,
     modifier: Modifier = Modifier
 ) {
@@ -242,11 +263,11 @@ private fun NameAndTimestampRow(
             nameColor = ElementTheme.colors.roomListRoomName,
             nameFontStyle = FontStyle.Italic.takeIf { name == null },
         )
-        // Timestamp
+        // Timestamp, green while the chat has unread messages, like the badge
         Text(
             text = timestamp ?: "",
-            style = ElementTheme.typography.fontBodySmMedium,
-            color = if (isHighlighted) {
+            style = if (isUnread) ElementTheme.typography.fontBodySmMedium else ElementTheme.typography.fontBodySmRegular,
+            color = if (isUnread) {
                 ElementTheme.colors.textActionAccent
             } else {
                 ElementTheme.colors.roomListRoomMessageDate
@@ -294,8 +315,7 @@ private fun MessagePreviewAndIndicatorRow(
                 text = stringResource(R.string.screen_roomlist_tombstoned_room_description),
                 color = ElementTheme.colors.roomListRoomMessage,
                 style = ElementTheme.typography.fontBodyMdRegular,
-                minLines = 2,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         } else {
@@ -315,8 +335,7 @@ private fun MessagePreviewAndIndicatorRow(
                     text = stringResource(CommonStrings.common_message_failed_to_send),
                     color = ElementTheme.colors.textCriticalPrimary,
                     style = ElementTheme.typography.fontBodyMdRegular,
-                    minLines = 2,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
@@ -340,8 +359,7 @@ private fun MessagePreviewAndIndicatorRow(
                     text = annotatedMessagePreview,
                     color = ElementTheme.colors.roomListRoomMessage,
                     style = ElementTheme.typography.fontBodyMdRegular,
-                    minLines = 2,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -355,29 +373,57 @@ private fun MessagePreviewAndIndicatorRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val tint = if (room.isHighlighted) ElementTheme.colors.textActionAccent else ElementTheme.colors.iconQuaternary
             if (room.hasRoomCall) {
                 OnGoingCallIcon(
-                    color = tint,
+                    color = if (room.isHighlighted) ElementTheme.colors.textActionAccent else ElementTheme.colors.iconQuaternary,
                     isAudio = room.activeCallIntent == CallIntent.AUDIO
                 )
             }
-            val isMuted = room.userDefinedNotificationMode == RoomNotificationMode.MUTE
-            if (isMuted) {
+            if (room.isMuted) {
                 NotificationOffIndicatorAtom()
-            } else if (room.numberOfUnreadMentions > 0) {
+            }
+            if (room.numberOfUnreadMentions > 0) {
                 MentionIndicatorAtom()
             }
             if (room.hasNewContent) {
-                val contentDescription = stringResource(CommonStrings.a11y_notifications_new_messages)
-                UnreadIndicatorAtom(
-                    color = tint,
+                UnreadBadge(
                     count = room.unreadIndicatorCount(showUnreadCount = showUnreadCount, showAllActivity = showAllActivity),
-                    contentDescription = contentDescription,
+                    isMuted = room.isMuted,
                 )
             }
         }
     }
+}
+
+/**
+ * The unread count pill: green, or grey for a muted chat, like WhatsApp.
+ */
+@Composable
+private fun UnreadBadge(
+    count: Long?,
+    isMuted: Boolean,
+) {
+    // A count is at least a 20dp pill, a dot keeps its own size.
+    val sizeModifier = if (count != null && count > 0) Modifier.sizeIn(minWidth = 20.dp, minHeight = 20.dp) else Modifier
+    UnreadIndicatorAtom(
+        modifier = sizeModifier,
+        count = count,
+        color = if (isMuted) ElementTheme.colors.mutedBadge else ElementTheme.colors.iconAccentPrimary,
+        contentColor = if (isMuted) ElementTheme.colors.textSecondary else ElementTheme.colors.textOnSolidPrimary,
+        contentDescription = if (count != null && count > 0) {
+            pluralStringResource(R.plurals.a11y_matcha_unread_messages, count.toInt(), count.toInt())
+        } else {
+            stringResource(CommonStrings.a11y_notifications_new_messages)
+        },
+    )
+}
+
+/**
+ * Whether the timestamp is green: only when the room is not muted and shows a green indicator (unread badge or @ badge),
+ * so that the time and the badge always agree. A room marked as unread keeps its green time, as upstream.
+ */
+internal fun RoomListRoomSummary.hasHighlightedTimestamp(showAllActivity: Boolean): Boolean {
+    return !isMuted && (isHighlighted || unreadIndicatorCount(showUnreadCount = false, showAllActivity = showAllActivity) != null)
 }
 
 /**
@@ -390,10 +436,11 @@ internal fun RoomListRoomSummary.unreadIndicatorCount(
     showUnreadCount: Boolean,
     showAllActivity: Boolean,
 ): Long? {
-    val isMuted = userDefinedNotificationMode == RoomNotificationMode.MUTE
     return when {
         // Show only unread notifications when the room is not muted and there are unread notifications
         !isMuted && numberOfUnreadNotifications > 0 -> if (showUnreadCount) numberOfUnreadNotifications else 0
+        // A muted room does not notify, so it counts its unread messages instead, on a grey badge
+        isMuted && showAllActivity && numberOfUnreadMessages > 0 -> if (showUnreadCount) numberOfUnreadMessages else 0
         // Otherwise, show a dot for unread messages when showAllActivity is true and there are unread messages
         showAllActivity -> if (numberOfUnreadMessages > 0) 0 else null
         // Or don't display anything
@@ -454,12 +501,19 @@ private fun NotificationOffIndicatorAtom() {
 
 @Composable
 private fun MentionIndicatorAtom() {
-    Icon(
-        modifier = Modifier.size(16.dp),
-        contentDescription = stringResource(CommonStrings.a11y_notifications_new_mentions),
-        imageVector = CompoundIcons.Mention(),
-        tint = ElementTheme.colors.iconAccentPrimary,
-    )
+    Box(
+        modifier = Modifier
+            .size(20.dp)
+            .background(ElementTheme.colors.iconAccentPrimary, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            modifier = Modifier.size(14.dp),
+            contentDescription = stringResource(R.string.a11y_matcha_mentioned),
+            imageVector = CompoundIcons.Mention(),
+            tint = ElementTheme.colors.iconOnSolidPrimary,
+        )
+    }
 }
 
 @PreviewsDayNight

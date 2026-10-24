@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
@@ -60,6 +60,7 @@ import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.designsystem.theme.components.TextButton
 import io.element.android.libraries.designsystem.theme.components.TopAppBar
 import io.element.android.libraries.designsystem.utils.CommonDrawables
+import io.element.android.libraries.designsystem.utils.screenSystemBarsInsets
 import io.element.android.libraries.matrix.api.core.UserId
 import io.element.android.libraries.matrix.api.room.RoomMember
 import io.element.android.libraries.matrix.api.room.RoomMembershipState
@@ -83,7 +84,7 @@ fun ChangeRolesView(
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .systemBarsPadding(),
+                .windowInsetsPadding(screenSystemBarsInsets),
             topBar = {
                 AnimatedVisibility(visible = !state.isSearchActive) {
                     TopAppBar(

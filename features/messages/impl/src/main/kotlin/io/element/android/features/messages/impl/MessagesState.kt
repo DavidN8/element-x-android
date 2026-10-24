@@ -12,6 +12,7 @@ import io.element.android.features.messages.api.timeline.voicemessages.composer.
 import io.element.android.features.messages.impl.actionlist.ActionListState
 import io.element.android.features.messages.impl.crypto.identity.IdentityChangeState
 import io.element.android.features.messages.impl.link.LinkState
+import io.element.android.features.messages.impl.matcha.MatchaChatState
 import io.element.android.features.messages.impl.messagecomposer.MessageComposerState
 import io.element.android.features.messages.impl.pinned.banner.PinnedMessagesBannerState
 import io.element.android.features.messages.impl.timeline.TimelineState
@@ -37,6 +38,8 @@ data class MessagesState(
     val roomName: String?,
     val roomAvatar: AvatarData,
     val heroes: ImmutableList<AvatarData>,
+    /** The number of joined members, shown under the name of a group in the top bar. */
+    val joinedMemberCount: Long,
     val userEventPermissions: UserEventPermissions,
     val composerState: MessageComposerState,
     val voiceMessageComposerState: VoiceMessageComposerState,
@@ -64,6 +67,8 @@ data class MessagesState(
     val threads: Threads,
     val showLiveLocationShareBanner: Boolean,
     val redactEventAction: AsyncAction<Unit>,
+    /** The Matcha workspace features of this chat, or null while they are off. */
+    val matcha: MatchaChatState?,
     val eventSink: (MessagesEvent) -> Unit
 ) {
     val isTombstoned = successorRoom != null
