@@ -16,7 +16,7 @@ published SDK. Without the patch the Matcha screens show a "history unavailable"
 found only through the stored state or the history the app reads. New events
 still arrive live through the published `subscribeToMessageLikeEvents`.
 
-## Build the patched AAR (arm64 only, ~25 min on an M-series Mac)
+## Build the patched AAR (arm64 only, ~4 min cold on a 14-core M-series Mac)
 
 ```bash
 rustup target add aarch64-linux-android
@@ -27,9 +27,23 @@ git fetch --depth 1 origin 56bc59112822e7eb25943a95e02502855cdeef2d   # the comm
 git checkout FETCH_HEAD && git apply /path/to/element-x-android/docs/matcha/rust-sdk/matcha-ffi-relations-json.patch
 cd .. && git clone --depth 1 --branch sdk-v26.10.20 https://github.com/matrix-org/matrix-rust-components-kotlin.git
 cd matrix-rust-components-kotlin
-ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264 ./scripts/build.sh -p ../matrix-rust-sdk -m sdk -t aarch64-linux-android \
-  -o /path/to/element-x-android/libraries/rustsdk/matrix-rust-sdk.aar
+AAR=/path/to/element-x-android/libraries/rustsdk/matrix-rust-sdk.aar
+NDK=$ANDROID_HOME/ndk/26.3.11579264
+ANDROID_NDK_HOME=$NDK ./scripts/build.sh -r -p ../matrix-rust-sdk -m sdk -t aarch64-linux-android -o $AAR
+# Strip the symbol table (58 MB) from the library inside the AAR.
+cd "$(mktemp -d)" && unzip -q $AAR jni/arm64-v8a/libmatrix_sdk_ffi.so \
+  && $NDK/toolchains/llvm/prebuilt/darwin-x86_64/bin/llvm-strip --strip-unneeded jni/arm64-v8a/libmatrix_sdk_ffi.so \
+  && zip -q $AAR jni/arm64-v8a/libmatrix_sdk_ffi.so
 ```
+
+`-r` builds with `small-release-stripped`, the profile the published SDK uses: no debug assertions or overflow checks,
+and with the strip step the library is 65 MB instead of 162 MB. While iterating on the patch itself, drop `-r`: the
+`reldev` profile rebuilds in about a minute, but keeps debug assertions on and makes the library about 40 MB bigger.
+
+The strip step is needed because the AAR keeps the symbol table for the app to strip, and AGP only strips with the NDK
+version it expects (28.2), so with only 26.3 installed it packages the library as it is. Cargo cannot strip earlier:
+uniffi reads the symbol table to generate the Kotlin bindings. The unstripped library stays at
+`matrix-rust-sdk/target/aarch64-linux-android/small-release-stripped/libmatrix_sdk_ffi.so` for `ndk-stack`.
 
 With `libraries/rustsdk/matrix-rust-sdk.aar` present, debug builds use it automatically (see
 `libraries/matrix/impl/build.gradle.kts`). The AAR only contains arm64-v8a, so install the arm64 APK. Release builds keep
