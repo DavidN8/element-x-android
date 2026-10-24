@@ -623,6 +623,12 @@ class JoinedRustRoom(
         }
     }
 
+    override suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?> = withContext(roomDispatcher) {
+        runCatchingExceptions {
+            innerRoom.fetchServerStateContentJson(eventType, stateKey)
+        }
+    }
+
     override fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String> = eventTypes
         .map { type ->
             mxCallbackFlow {

@@ -1,8 +1,8 @@
 diff --git a/bindings/matrix-sdk-ffi/src/room/mod.rs b/bindings/matrix-sdk-ffi/src/room/mod.rs
-index c018a38..a80b661 100644
+index c018a38..6ce521b 100644
 --- a/bindings/matrix-sdk-ffi/src/room/mod.rs
 +++ b/bindings/matrix-sdk-ffi/src/room/mod.rs
-@@ -1433,6 +1433,48 @@ impl Room {
+@@ -1433,6 +1433,74 @@ impl Room {
                  .collect::<Result<Vec<_>, _>>()?,
          })
      }
@@ -37,6 +37,32 @@ index c018a38..a80b661 100644
 +                .collect(),
 +            next_batch: relations.next_batch_token,
 +        })
++    }
++
++    /// Matcha fork: fetches the content of one state event from the
++    /// homeserver as raw JSON, or `None` when the room has no such state.
++    /// Unlike [`Room::state_events`], this reads custom state types that the
++    /// sync doesn't store.
++    pub async fn fetch_state_event_content_json(
++        &self,
++        event_type: String,
++        state_key: String,
++    ) -> Result<Option<String>, ClientError> {
++        let request = ruma::api::client::state::get_state_event_for_key::v3::Request::new(
++            self.inner.room_id().to_owned(),
++            StateEventType::from(event_type.as_str()),
++            state_key,
++        );
++        match self.inner.client().send(request).await {
++            Ok(response) => Ok(Some(response.event_or_content.get().to_owned())),
++            Err(error)
++                if error.client_api_error_kind()
++                    == Some(&ruma::api::error::ErrorKind::NotFound) =>
++            {
++                Ok(None)
++            }
++            Err(error) => Err(error.into()),
++        }
 +    }
 +}
 +

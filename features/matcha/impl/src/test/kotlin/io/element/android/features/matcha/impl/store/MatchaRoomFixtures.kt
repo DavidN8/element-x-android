@@ -87,6 +87,8 @@ internal fun aMatchaJoinedRoom(
     paginateResult: () -> Result<Unit> = { Result.success(Unit) },
     /** Overrides opening the Matcha timeline; by default it opens on [items]. */
     createTimelineResult: (() -> Result<Timeline>)? = null,
+    /** How the homeserver answers a board pointer read; by default the SDK can't ask, like the published SDK. */
+    serverPointerResult: () -> Result<String?> = { Result.failure(UnsupportedOperationException("No Matcha SDK patch")) },
 ): FakeJoinedRoom {
     val timeline = aMatchaTimeline(items, olderPages, paginateResult)
     return FakeJoinedRoom(
@@ -112,6 +114,9 @@ internal fun aMatchaJoinedRoom(
                 boardRoot != null -> Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}"""))
                 else -> Result.success(emptyMap())
             }
+        },
+        fetchStateEventContentJsonResult = { type, key ->
+            if (type == MatchaConfig.STATE_KANBAN && key.isEmpty()) serverPointerResult() else Result.success(null)
         },
     )
 }

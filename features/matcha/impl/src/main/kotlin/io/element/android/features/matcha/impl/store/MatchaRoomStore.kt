@@ -173,7 +173,9 @@ class MatchaRoomStore(
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
-    private val storedState = MutableStateFlow(StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false))
+    private val storedState = MutableStateFlow(
+        StoredState(boardPointer = null, legacyArchive = emptyMap(), createdBoardRoot = null, isRead = false),
+    )
     private val utdCauses = MutableStateFlow<Map<String, UtdCause>>(emptyMap())
     private val loadFailed = MutableStateFlow(false)
     private val readFailed = MutableStateFlow(false)
@@ -201,6 +203,10 @@ class MatchaRoomStore(
         val createdBoardRoot: String?,
         /** The stored state was read at least once, successfully or not. */
         val isRead: Boolean,
+        /** The board pointer the homeserver returned, which the sync doesn't store; null when it has none or wasn't asked. */
+        val serverPointer: String? = null,
+        /** The homeserver answered whether the room has a board pointer, so a missing board is really missing. */
+        val isServerRead: Boolean = false,
     )
 
     init {
@@ -241,11 +247,13 @@ class MatchaRoomStore(
     /** Opens the Matcha timeline again after it [MatchaRoomSnapshot.loadFailed]. */
     fun retryLoad() {
         if (loadFailed.value && timeline == null) openTimeline()
+        if (!storedState.value.isServerRead) coroutineScope.launch { readServerPointer() }
     }
 
     @OptIn(FlowPreview::class)
     private fun start() {
         openTimeline()
+        coroutineScope.launch { readServerPointer() }
         room.subscribeToRawMessageLikeEvents(MatchaConfig.MESSAGE_LIKE_EVENT_TYPES)
             .onEach { json ->
                 val event = RawEvent.parse(json) ?: return@onEach
@@ -436,11 +444,39 @@ class MatchaRoomStore(
     }
 
     /**
-     * Reads the board pointer from the stored room state again, right before creating a board. Returns the root id, null when the
-     * stored state holds none (which doesn't prove the room has no board, see [MatchaRoomSnapshot.isBoardResolved]), or the
-     * failure of this read.
+     * Reads the board pointer again, right before creating a board: from the stored room state, then from the homeserver when the
+     * stored state holds none, so a board made elsewhere is never replaced. Returns the root id, null when there is none (when the
+     * SDK can't ask the homeserver, null doesn't prove the room has no board, see [MatchaRoomSnapshot.isBoardResolved]), or the
+     * failure of the read.
      */
-    suspend fun readBoardPointer(): Result<String?> = readStoredState()
+    suspend fun readBoardPointer(): Result<String?> {
+        val stored = readStoredState()
+        if (stored.getOrNull() != null) return stored
+        return fetchServerPointer()?.onSuccess(::recordServerPointer) ?: stored
+    }
+
+    /** Asks the homeserver for the board pointer and records the answer; does nothing when this SDK can't ask. */
+    private suspend fun readServerPointer() {
+        fetchServerPointer()?.onSuccess(::recordServerPointer)
+    }
+
+    private fun recordServerPointer(pointer: String?) = storedState.update { it.copy(serverPointer = pointer, isServerRead = true) }
+
+    /**
+     * The board pointer from the homeserver: the root id, or null when the room has none. Returns null itself when the Rust SDK
+     * in use can't fetch state from the homeserver (it needs the Matcha SDK patch).
+     */
+    private suspend fun fetchServerPointer(): Result<String?>? {
+        val read = room.fetchStateEventContentJson(MatchaConfig.STATE_KANBAN, "")
+        if (read.exceptionOrNull() is UnsupportedOperationException) return null
+        return read
+            .onFailure { Timber.w(it, "Could not fetch the board pointer from the homeserver") }
+            .map { content ->
+                content
+                    ?.let { runCatchingExceptions { json.parseToJsonElement(it).jsonObject }.getOrNull() }
+                    ?.let(KanbanProtocol::parseBoardPointer)
+            }
+    }
 
     private fun merge(scan: List<RawEvent>, optimistic: List<RawEvent>): List<RawEvent> {
         if (optimistic.isEmpty()) return scan
@@ -461,9 +497,11 @@ class MatchaRoomStore(
         // Only a pointer makes a board, as on the web client. A root without one is never a board: it is left behind by a create
         // whose pointer failed, and the pointer of a real board is newer than its root, so the scan holds it whenever it holds the
         // root. Cards are newer than the pointer, so the board they refer to stands in for a pointer older than the scan.
+        // The homeserver's answer, read when the store opened, comes after the stored state and the scan, which can be newer.
         val boardRootId = state.boardPointer
             ?: events.firstOrNull { it.type == MatchaConfig.STATE_KANBAN && it.stateKey == "" }
                 ?.let { KanbanProtocol.parseBoardPointer(it.content) }
+            ?: state.serverPointer
             ?: state.createdBoardRoot
             ?: events.firstOrNull { it.type == MatchaConfig.EVENT_KANBAN_CARD }?.content?.referenceTarget()
         val revisions = boardRootId?.let { root -> events.mapNotNull { KanbanProtocol.parseCard(it, root) } }.orEmpty()
@@ -526,7 +564,7 @@ class MatchaRoomStore(
             unreadable = unreadableCauses.isNotEmpty(),
             warning = warning,
             // ponytail: history hidden from a member who joined later may hide an older pointer too; Path B reads it from the server.
-            isBoardResolved = boardRootId != null || !status.pagination.hasMoreToLoad,
+            isBoardResolved = boardRootId != null || state.isServerRead || !status.pagination.hasMoreToLoad,
             loadFailed = health.loadFailed,
         )
     }

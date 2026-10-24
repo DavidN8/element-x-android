@@ -43,6 +43,27 @@ internal suspend fun Room.fetchRelatedEventsJson(eventId: String, relation: RawR
     return RawEventsPage(events = events, nextBatch = nextBatch)
 }
 
+/**
+ * Calls `Room.fetchStateEventContentJson`, which only the Matcha-patched Rust SDK has, by reflection like
+ * [fetchRelatedEventsJson]; the name differs from the SDK method's so a patched build doesn't shadow it.
+ */
+internal suspend fun Room.fetchServerStateContentJson(eventType: String, stateKey: String): String? {
+    val method = fetchStateEventContentJsonMethod
+        ?: throw UnsupportedOperationException("This Rust SDK can't fetch room state from the server; build with the Matcha SDK patch")
+    val content = try {
+        suspendCoroutineUninterceptedOrReturn<Any?> { continuation ->
+            method.invoke(this, eventType, stateKey, continuation)
+        }
+    } catch (e: InvocationTargetException) {
+        throw e.cause ?: e
+    }
+    return content as? String
+}
+
+private val fetchStateEventContentJsonMethod by lazy {
+    Room::class.java.methods.firstOrNull { it.name == "fetchStateEventContentJson" }
+}
+
 private val fetchRelationsJsonMethod by lazy {
     Room::class.java.methods.firstOrNull { it.name == "fetchRelationsJson" || it.name.startsWith("fetchRelationsJson-") }
 }

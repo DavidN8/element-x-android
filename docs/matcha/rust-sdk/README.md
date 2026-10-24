@@ -1,13 +1,19 @@
 # Matcha Rust SDK patch
 
 The Rust SDK's timelines (sdk-android 26.10.20) drop custom message-like events, so Element X cannot read the Matcha
-cards, thread names and document updates through a timeline. `matcha-ffi-relations-json.patch` adds one FFI method,
-`Room.fetchRelationsJson(eventId, relationType, from, limit)`, which wraps the SDK's `Room::relations` (a homeserver
-request whose events the SDK decrypts) and returns each related event as raw JSON. That is the same read the Matcha web
-client does with `fetchRelations`.
+cards, thread names and document updates through a timeline. `matcha-ffi-relations-json.patch` adds two FFI methods:
 
-Element X calls it by reflection (`libraries/matrix/impl/.../room/RawRelations.kt`), so the app still builds against the
-published SDK; without the patch the Matcha screens show a "history unavailable" warning instead of data. New events
+- `Room.fetchRelationsJson(eventId, relationType, from, limit)` wraps the SDK's `Room::relations` (a homeserver request
+  whose events the SDK decrypts) and returns each related event as raw JSON. That is the same read the Matcha web client
+  does with `fetchRelations`.
+- `Room.fetchStateEventContentJson(eventType, stateKey)` reads one state event's content from the homeserver
+  (`GET /rooms/{roomId}/state/{eventType}/{stateKey}`), or `null` when the room has none. The sync only stores the state
+  it asks for, so this is how the app learns whether a chat has a task board (`com.matchahoneylatte.kanban`) without
+  reading its whole history.
+
+Element X calls both by reflection (`libraries/matrix/impl/.../room/RawRelations.kt`), so the app still builds against the
+published SDK. Without the patch the Matcha screens show a "history unavailable" warning instead of data, and boards are
+found only through the stored state or the history the app reads. New events
 still arrive live through the published `subscribeToMessageLikeEvents`.
 
 ## Build the patched AAR (arm64 only, ~25 min on an M-series Mac)

@@ -14,6 +14,7 @@ import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.libraries.core.extensions.runCatchingExceptions
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.core.SessionId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.StateEventType
@@ -43,6 +44,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
 /** A chat with a board, held open by the Tasks tab. */
@@ -88,7 +91,10 @@ internal data class TabChats(
  * every chat with a board stays open while the tab is shown, and a chat without one is only checked again the next time.
  * A session-wide cache of board presence and stores, and reading the pointer from the server (Path B), would lift these ceilings.
  */
-internal class TasksTabRooms(private val client: MatrixClient) {
+internal class TasksTabRooms(
+    private val client: MatrixClient,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
     private sealed interface Check {
         data object Pending : Check
 
@@ -188,10 +194,16 @@ internal class TasksTabRooms(private val client: MatrixClient) {
                 .getOrNull()
                 ?.get("")
                 ?.let(::boardRootId) != null
+            // The sync doesn't store the pointer, so ask the homeserver; a chat without a board is then skipped unread.
+            val serverPointer = if (hasStoredPointer) ServerPointer.Unknown else readServerPointer(room) ?: return
+            if (serverPointer == ServerPointer.Absent) {
+                record(roomId, Check.NoBoard)
+                return
+            }
             val store = MatchaRoomStore(room, room.roomCoroutineScope)
             fun keep() = record(roomId, Check.Board(TabRoom(room, store, newWriteScope())))
             // Either way, keep the permit while the store reads the chat's history, so only a few chats read at once.
-            if (hasStoredPointer) {
+            if (hasStoredPointer || serverPointer == ServerPointer.Present) {
                 isKept = keep()
                 if (isKept) withTimeoutOrNull(STORE_LOAD_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed } }
                 return
@@ -204,6 +216,39 @@ internal class TasksTabRooms(private val client: MatrixClient) {
             }
         } finally {
             if (!isKept) room.destroy()
+        }
+    }
+
+    /** What the homeserver says about a chat's board pointer. */
+    private enum class ServerPointer {
+        Present,
+        Absent,
+
+        /** The Rust SDK in use can't ask (it needs the Matcha SDK patch), so the store reads the chat's history instead. */
+        Unknown,
+    }
+
+    /**
+     * Asks the homeserver whether [room] has a board pointer; returns null after recording a failed check. A recent "no board"
+     * answer is reused for [NO_BOARD_ANSWER_LIFETIME], so showing the tab again doesn't ask every chat again.
+     */
+    private suspend fun readServerPointer(room: JoinedRoom): ServerPointer? {
+        val key = room.sessionId to room.roomId
+        val answeredAt = recentlyWithoutBoard[key]
+        if (answeredAt != null && clock() - answeredAt < NO_BOARD_ANSWER_LIFETIME.inWholeMilliseconds) return ServerPointer.Absent
+        val read = room.fetchStateEventContentJson(MatchaConfig.STATE_KANBAN, "")
+        return when {
+            read.exceptionOrNull() is UnsupportedOperationException -> ServerPointer.Unknown
+            read.isFailure -> {
+                Timber.w(read.exceptionOrNull(), "Could not fetch the board pointer of %s", room.roomId)
+                record(room.roomId, Check.Failed)
+                null
+            }
+            else -> {
+                val hasPointer = read.getOrNull()?.let(::boardRootId) != null
+                if (hasPointer) recentlyWithoutBoard.remove(key) else recentlyWithoutBoard[key] = clock()
+                if (hasPointer) ServerPointer.Present else ServerPointer.Absent
+            }
         }
     }
 
@@ -242,5 +287,13 @@ internal class TasksTabRooms(private val client: MatrixClient) {
     companion object {
         const val MAX_CONCURRENT_CHECKS = 4
         private val STORE_LOAD_TIMEOUT = 30.seconds
+        private val NO_BOARD_ANSWER_LIFETIME = 10.minutes
+
+        /**
+         * When the homeserver last said a chat has no board, per session and chat.
+         *
+         * ponytail: a process-wide map keyed by session; move it to a SessionScope binding if more than the Tasks tab needs it.
+         */
+        private val recentlyWithoutBoard = ConcurrentHashMap<Pair<SessionId, RoomId>, Long>()
     }
 }

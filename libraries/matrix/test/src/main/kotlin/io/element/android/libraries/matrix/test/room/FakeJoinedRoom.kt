@@ -104,6 +104,10 @@ class FakeJoinedRoom(
         Result.success(RawEventsPage(emptyList(), null))
     },
     private val rawMessageLikeEvents: Flow<String> = MutableSharedFlow(),
+    /** By default the SDK can't read state from the server, like the published SDK. */
+    private val fetchStateEventContentJsonResult: (String, String) -> Result<String?> = { _, _ ->
+        Result.failure(UnsupportedOperationException("No Matcha SDK patch"))
+    },
 ) : JoinedRoom, BaseRoom by baseRoom {
     private val sendQueueUpdates = MutableSharedFlow<SendQueueUpdate>(extraBufferCapacity = 10)
 
@@ -289,6 +293,10 @@ class FakeJoinedRoom(
 
     override suspend fun fetchRelatedEventsJson(eventId: EventId, relation: RawRelationType, from: String?, limit: Int): Result<RawEventsPage> {
         return fetchRelatedEventsJsonResult(eventId, relation, from)
+    }
+
+    override suspend fun fetchStateEventContentJson(eventType: String, stateKey: String): Result<String?> {
+        return fetchStateEventContentJsonResult(eventType, stateKey)
     }
 
     override fun subscribeToRawMessageLikeEvents(eventTypes: Set<String>): Flow<String> = rawMessageLikeEvents
