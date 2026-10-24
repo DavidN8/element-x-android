@@ -9,8 +9,8 @@ package io.element.android.features.matcha.impl.taskstab
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.store.FakePointerRoom
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.store.PointerRoom
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.BaseRoom
@@ -48,7 +48,7 @@ class TasksTabRoomsTest {
     ).apply {
         rooms.forEach { (roomId, room) ->
             givenGetRoomResult(roomId, room)
-            if (room is FakeJoinedRoom) givenGetBaseRoomResult(roomId, FakePointerRoom(room))
+            if (room is FakeJoinedRoom) givenGetBaseRoomResult(roomId, PointerRoom(room))
         }
     }
 
@@ -83,7 +83,7 @@ class TasksTabRoomsTest {
         assertThat(chats.boards.map { it.roomId }).containsExactly(boardId)
         assertThat(chats.failedCount).isEqualTo(0)
         plain.assertDestroyed()
-        assertThat((client.getRoom(boardId) as FakePointerRoom).isDestroyed).isTrue()
+        assertThat((client.getRoom(boardId) as PointerRoom).isDestroyed).isTrue()
     }
 
     @Test

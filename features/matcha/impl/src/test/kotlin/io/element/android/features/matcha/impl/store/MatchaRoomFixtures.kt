@@ -144,7 +144,7 @@ internal fun aMatchaJoinedRoom(
  * The room [io.element.android.libraries.matrix.api.MatrixClient.getRoom] gives for [room]: like the SDK's, it has no timeline, reads
  * the same state, and is destroyed on its own.
  */
-internal class FakePointerRoom(room: FakeJoinedRoom) : BaseRoom by room {
+internal class PointerRoom(room: FakeJoinedRoom) : BaseRoom by room {
     var isDestroyed = false
         private set
 
