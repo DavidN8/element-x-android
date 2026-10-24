@@ -115,10 +115,14 @@ class DocsRoomFixture(
         timelineItems = timelineItems,
         backwardPaginationStatus = MutableStateFlow(Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = hasMoreHistory)),
     ).apply { paginateLambda = { paginateResult() } }
+    private val stateEventsJson = { type: StateEventType -> Result.success(this.stateEvents[type]?.let { mapOf("" to it) }.orEmpty()) }
+
+    /** The room without a timeline, as [io.element.android.libraries.matrix.api.MatrixClient.getRoom] gives it. */
     val baseRoom = FakeBaseRoom(
         roomId = roomId,
         initialRoomInfo = roomInfo,
         roomPermissions = FakeRoomPermissions(canSendMessage = { canSend }, canSendState = { canSendState }),
+        getStateEventsJsonResult = stateEventsJson,
     )
     val room = FakeJoinedRoom(
         baseRoom = baseRoom,
@@ -130,7 +134,7 @@ class DocsRoomFixture(
         sendRawStateEventResult = { type, key, content ->
             sendStateResult(type, key, content).onSuccess { sentState += Triple(type, key, content) }
         },
-        getStateEventsJsonResult = { type -> Result.success(this.stateEvents[type]?.let { mapOf("" to it) }.orEmpty()) },
+        getStateEventsJsonResult = stateEventsJson,
         getStateEventIdResult = { type, key -> Result.success(createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId)) },
         enableEncryptionResult = enableEncryptionResult,
         fetchRelatedEventsJsonResult = fetchRelatedEventsJsonResult,

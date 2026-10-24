@@ -13,7 +13,7 @@ import io.element.android.features.matcha.impl.docs.SpaceDocsContext
 import io.element.android.features.matcha.impl.docs.SpaceDocsContextFactory
 import io.element.android.features.matcha.impl.docs.list.CATALOG_LOAD_ERRORS
 import io.element.android.features.matcha.impl.docs.list.lastEdits
-import io.element.android.features.matcha.impl.docs.setup.SpaceDocsSetup
+import io.element.android.features.matcha.impl.docs.setup.readSpaceDocsStatus
 import io.element.android.features.matcha.impl.docs.transport.CatalogState
 import io.element.android.features.matcha.impl.docs.transport.DocumentCatalog
 import io.element.android.features.matcha.impl.docs.transport.DocumentSync
@@ -166,10 +166,11 @@ class NotesTabReader(
 
     /** Whether the space has notes on, from its stored state. A space that can't be checked is left out until the next run. */
     private suspend fun check(spaceId: RoomId) {
-        val room = client.getJoinedRoom(spaceId)
+        // Only the stored state is read, so a room without a timeline will do.
+        val room = client.getRoom(spaceId)
         val status = try {
-            room?.let { joinedRoom ->
-                runCatchingExceptions { SpaceDocsSetup(joinedRoom).status() }
+            room?.let { baseRoom ->
+                runCatchingExceptions { readSpaceDocsStatus(baseRoom) }
                     .onFailure { Timber.w(it, "Could not check the notes of %s", spaceId) }
                     .getOrNull()
             }

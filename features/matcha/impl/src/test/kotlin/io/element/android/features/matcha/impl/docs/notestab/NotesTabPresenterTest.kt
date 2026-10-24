@@ -98,6 +98,21 @@ class NotesTabPresenterTest {
     }
 
     @Test
+    fun `whether a space has notes is read from a room without a timeline, which is then let go`() = runTest {
+        val space = aNotesSpace(design)
+        // Only the room without a timeline is there to read.
+        val client = aClient(listOf(space)).apply {
+            givenGetRoomResult(design, null)
+            givenGetBaseRoomResult(design, space.baseRoom)
+        }
+        aTab(client).test {
+            assertThat(awaitUntil { it.sections().isNotEmpty() }.sections().single().content).isEqualTo(NotesSectionContent.Loading)
+            space.baseRoom.assertDestroyed()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `without a space, or without a space with notes, the tab says where notes live`() = runTest {
         aTab(aClient(emptyList())).test {
             assertThat(awaitUntil { it.content is NotesTabContent.Empty }.content).isEqualTo(NotesTabContent.Empty(hasSpaces = false))
