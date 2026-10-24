@@ -12,6 +12,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
@@ -73,6 +75,7 @@ import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.FloatingActionButton
 import io.element.android.libraries.designsystem.theme.components.Icon
+import io.element.android.libraries.designsystem.theme.components.IconButton
 import io.element.android.libraries.designsystem.theme.components.ModalBottomSheet
 import io.element.android.libraries.designsystem.theme.components.SearchField
 import io.element.android.libraries.designsystem.theme.components.Text
@@ -100,7 +103,10 @@ fun TasksTabView(
     val layoutDirection = LocalLayoutDirection.current
     val startPadding = contentPadding.calculateStartPadding(layoutDirection)
     val endPadding = contentPadding.calculateEndPadding(layoutDirection)
-    Box(modifier = modifier.fillMaxSize()) {
+    // The table's header and rows scroll sideways together.
+    val tableScroll = rememberScrollState()
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isWideTable = maxWidth - startPadding - endPadding >= WIDE_TABLE_MIN_WIDTH
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
@@ -116,6 +122,7 @@ fun TasksTabView(
                 TasksTabContent.Loading -> item(key = "loading") { TaskPlaceholders() }
                 TasksTabContent.Empty -> item(key = "empty") { EmptyTasksTab(modifier = Modifier.fillParentMaxWidth()) }
                 is TasksTabContent.Tasks -> taskGroups(content, state.filter, eventSink)
+                is TasksTabContent.Table -> taskTable(content, state.filter, isWideTable, tableScroll, eventSink)
             }
             footer(state)
         }
@@ -164,15 +171,25 @@ fun TasksTabView(
     state.editor?.let { TaskEditorSheet(it) }
 }
 
-/** All · To do · In progress · Done · Archived, then Chat ▾ and People ▾. */
+/** All · To do · In progress · Done · Archived, then Chat ▾ and People ▾, and the list or table switch at the end. */
 @Composable
 private fun TasksTabChips(state: TasksTabState) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        FilterChips(state, modifier = Modifier.weight(1f))
+        val description = stringResource(if (state.isTable) R.string.a11y_matcha_tasks_show_list else R.string.a11y_matcha_tasks_show_table)
+        IconButton(onClick = { state.eventSink(TasksTabEvent.ToggleTable) }, modifier = Modifier.padding(end = 4.dp)) {
+            Icon(imageVector = if (state.isTable) CompoundIcons.ListView() else CompoundIcons.Grid(), contentDescription = description)
+        }
+    }
+}
+
+@Composable
+private fun FilterChips(state: TasksTabState, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
             .horizontalScroll(rememberScrollState())
             .selectableGroup()
-            .padding(horizontal = 16.dp),
+            .padding(start = 16.dp, end = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -269,6 +286,13 @@ private fun TabTaskRow(task: TabTask, eventSink: (TasksTabEvent) -> Unit) {
 private fun TabTask.peopleLine(): String = when {
     people.isEmpty() -> stringResource(R.string.screen_matcha_tasks_just_you)
     else -> stringResource(R.string.screen_matcha_tasks_with_people, people.joinToString())
+}
+
+/** The task's other people in a table cell: "Bob, Carol", or "Just you". */
+@Composable
+internal fun TabTask.peopleCell(): String = when {
+    people.isEmpty() -> stringResource(R.string.screen_matcha_tasks_just_you)
+    else -> people.joinToString()
 }
 
 @Composable
@@ -551,4 +575,18 @@ private fun TaskSection.label(): String = when (this) {
 @Composable
 internal fun TasksTabViewPreview(@PreviewParameter(TasksTabStatePreviewParam::class) state: TasksTabState) = ElementPreview {
     TasksTabView(state = state, contentPadding = PaddingValues())
+}
+
+/** The Tasks tab on a screen wide enough for the table to fit. */
+@Composable
+private fun WideTasksTabView(state: TasksTabState) {
+    Box(modifier = Modifier.width(720.dp)) {
+        TasksTabView(state = state, contentPadding = PaddingValues())
+    }
+}
+
+@PreviewsDayNight
+@Composable
+internal fun WideTasksTabViewPreview() = ElementPreview {
+    WideTasksTabView(aTasksTabState(isTable = true, content = aTableContent()))
 }

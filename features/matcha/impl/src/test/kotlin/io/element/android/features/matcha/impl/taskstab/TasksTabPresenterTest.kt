@@ -22,9 +22,12 @@ import io.element.android.features.matcha.impl.store.aMatchaTimeline
 import io.element.android.features.matcha.impl.store.aThreadListItem
 import io.element.android.features.matcha.impl.tasks.A_NOW
 import io.element.android.features.matcha.impl.tasks.TaskEditorEvent
+import io.element.android.features.matcha.impl.tasks.TaskItem
 import io.element.android.features.matcha.impl.tasks.aDeadlineFormatter
 import io.element.android.features.matcha.impl.tasks.aFixedClock
 import io.element.android.features.matcha.impl.tasks.aTaskEditorPresenterFactory
+import io.element.android.libraries.designsystem.components.avatar.AvatarData
+import io.element.android.libraries.designsystem.components.avatar.AvatarSize
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
@@ -52,6 +55,7 @@ import io.element.android.services.appnavstate.test.FakeAppNavigationStateServic
 import io.element.android.services.appnavstate.test.aNavigationState
 import io.element.android.services.appnavstate.test.anAppNavigationState
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -469,6 +473,83 @@ class TasksTabPresenterTest {
         }
     }
 
+    @Test
+    fun `the table holds the tasks the chips select and sorts by the tapped column`() = runTest {
+        val client = aClient(
+            listOf(
+                design to aBoardRoom(
+                    design,
+                    linkedCard(1, "\$t1", "Book the venue", dueAt = A_NOW + 2_000),
+                    linkedCard(2, "\$t2", "Archive me", archived = true),
+                    linkedCard(3, "\$t3", "Call the caterer"),
+                    linkedCard(4, "\$t4", "Draft the release", status = TaskStatus.Done, dueAt = A_NOW + 1_000),
+                ),
+                launch to aBoardRoom(launch, linkedCard(1, "\$t5", "Order the banners", status = TaskStatus.Doing, dueAt = A_NOW + 3_000)),
+            )
+        )
+        aPresenter(client).test {
+            awaitUntil { it.checkingCount == 0 && it.titles().size == 3 }.eventSink(TasksTabEvent.ToggleTable)
+            val table = awaitUntil { it.content is TasksTabContent.Table }
+            assertThat(table.isTable).isTrue()
+            // By deadline, soonest first and none last, done tasks included under All.
+            assertThat(table.rowTitles()).containsExactly("Draft the release", "Book the venue", "Order the banners", "Call the caterer").inOrder()
+            assertThat(table.tableSort()).isEqualTo(TaskTableSort(TaskTableColumn.Due, isAscending = true))
+            table.eventSink(TasksTabEvent.SortTable(TaskTableColumn.Due))
+            // The other way round, still with the tasks without a deadline last.
+            assertThat(awaitUntil { it.tableSort()?.isAscending == false }.rowTitles())
+                .containsExactly("Order the banners", "Book the venue", "Draft the release", "Call the caterer")
+                .inOrder()
+            table.eventSink(TasksTabEvent.SortTable(TaskTableColumn.Status))
+            assertThat(awaitUntil { it.tableSort()?.column == TaskTableColumn.Status }.rowTitles())
+                .containsExactly("Book the venue", "Call the caterer", "Order the banners", "Draft the release")
+                .inOrder()
+            table.eventSink(TasksTabEvent.SortTable(TaskTableColumn.Chat))
+            assertThat(awaitUntil { it.tableSort()?.column == TaskTableColumn.Chat }.rowTitles().first()).isNotEqualTo("Order the banners")
+            table.eventSink(TasksTabEvent.SortTable(TaskTableColumn.Chat))
+            assertThat(awaitUntil { it.tableSort()?.let { sort -> sort.column == TaskTableColumn.Chat && !sort.isAscending } == true }.rowTitles().first())
+                .isEqualTo("Order the banners")
+            table.eventSink(TasksTabEvent.SetFilter(TasksTabFilter.Archived))
+            assertThat(awaitUntil { it.filter == TasksTabFilter.Archived }.rowTitles()).containsExactly("Archive me")
+            table.eventSink(TasksTabEvent.SetFilter(TasksTabFilter.Done))
+            assertThat(awaitUntil { it.filter == TasksTabFilter.Done }.rowTitles()).containsExactly("Draft the release")
+            table.eventSink(TasksTabEvent.ToggleTable)
+            assertThat(awaitUntil { !it.isTable }.content).isInstanceOf(TasksTabContent.Tasks::class.java)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `the table puts rows without a value in the sorted column last either way`() {
+        fun row(title: String?, people: List<String>, chat: String?) = TabTask(
+            chat = TasksTabChat(design, chat, AvatarData(design.value, chat, size = AvatarSize.RoomListItem)),
+            task = TaskItem(
+                id = title ?: "untitled",
+                title = title,
+                summary = "",
+                status = TaskStatus.Todo,
+                isArchived = false,
+                threadId = null,
+                dueAt = null,
+                deadline = null,
+                isOverdue = false,
+                replyCount = null,
+                hasReminder = false,
+                isSharedWithChat = false,
+                participants = emptySet(),
+            ),
+            createdAt = 0,
+            isSelected = false,
+            people = people.toImmutableList(),
+        )
+        val rows = listOf(row("b", emptyList(), null), row(null, listOf("Carol"), "Alpha"), row("A", listOf("bob"), "beta"))
+        fun titles(column: TaskTableColumn, isAscending: Boolean) = rows.sortedFor(TaskTableSort(column, isAscending)).map { it.task.title }
+        assertThat(titles(TaskTableColumn.Task, isAscending = true)).containsExactly("A", "b", null).inOrder()
+        assertThat(titles(TaskTableColumn.Task, isAscending = false)).containsExactly("b", "A", null).inOrder()
+        assertThat(titles(TaskTableColumn.People, isAscending = true)).containsExactly("A", null, "b").inOrder()
+        assertThat(titles(TaskTableColumn.People, isAscending = false)).containsExactly(null, "A", "b").inOrder()
+        assertThat(titles(TaskTableColumn.Chat, isAscending = false)).containsExactly("A", null, "b").inOrder()
+    }
+
     private data class TestCard(
         val index: Int,
         val id: String,
@@ -595,6 +676,10 @@ class TasksTabPresenterTest {
     }.orEmpty()
 
     private fun TasksTabState.titles() = tasks().map { it.task.title }
+
+    private fun TasksTabState.tableSort() = (content as? TasksTabContent.Table)?.sort
+
+    private fun TasksTabState.rowTitles() = (content as? TasksTabContent.Table)?.rows.orEmpty().map { it.task.title }
 
     private suspend fun TurbineTestContext<TasksTabState>.awaitUntil(predicate: (TasksTabState) -> Boolean): TasksTabState =
         consumeItemsUntilPredicate(predicate = predicate).last()

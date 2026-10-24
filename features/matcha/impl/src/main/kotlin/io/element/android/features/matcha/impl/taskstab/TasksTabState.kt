@@ -26,6 +26,8 @@ data class TasksTabState(
     val personFilter: TasksTabPerson?,
     /** The user's tasks involve someone else, so People ▾ is offered. */
     val hasPeople: Boolean,
+    /** The tasks are shown as a table rather than grouped by deadline. */
+    val isTable: Boolean,
     val content: TasksTabContent,
     /** Chats still being checked or read, for "Checking N more chats…". */
     val checkingCount: Int,
@@ -73,6 +75,16 @@ data class TabTask(
     val people: ImmutableList<String>,
 )
 
+/** The columns of the table of tasks, in their order. */
+enum class TaskTableColumn { Task, Chat, Status, Due, People }
+
+/** How the table of tasks is sorted: by deadline, soonest first, until a header is tapped. */
+@Immutable
+data class TaskTableSort(
+    val column: TaskTableColumn = TaskTableColumn.Due,
+    val isAscending: Boolean = true,
+)
+
 /** The headers that group the tasks by deadline, in their order. */
 enum class TaskSection { Overdue, Today, Tomorrow, Upcoming, NoDeadline }
 
@@ -97,6 +109,12 @@ sealed interface TasksTabContent {
         /** With All, the done tasks, listed in a collapsed "Done · N" row. */
         val done: ImmutableList<TabTask>,
         val isDoneExpanded: Boolean,
+    ) : TasksTabContent
+
+    /** The tasks the chips select, one row each, sorted by [sort]; tasks without a value in the sorted column come last. */
+    data class Table(
+        val rows: ImmutableList<TabTask>,
+        val sort: TaskTableSort,
     ) : TasksTabContent
 }
 

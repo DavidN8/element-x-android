@@ -51,6 +51,9 @@ open class TasksTabStatePreviewParam : PreviewParameterProvider<TasksTabState> {
             aTasksTabState(personFilter = aBob),
             aTasksTabState(sheet = TasksTabSheet.ChoosePerson(persistentListOf(aBob, aCarol), selectedUserId = null)),
             aTasksTabState(personFilter = aCarol, sheet = TasksTabSheet.ChoosePerson(persistentListOf(aBob, aCarol), selectedUserId = aCarol.userId)),
+            aTasksTabState(isTable = true, content = aTableContent()),
+            aTasksTabState(isTable = true, content = aTableContent(sort = TaskTableSort(TaskTableColumn.Task, isAscending = false))),
+            aTasksTabState(isTable = true, filter = TasksTabFilter.Archived, content = TasksTabContent.Table(persistentListOf(), TaskTableSort())),
         )
 }
 
@@ -66,12 +69,14 @@ internal fun aTasksTabState(
     sheet: TasksTabSheet? = null,
     personFilter: TasksTabPerson? = null,
     hasPeople: Boolean = true,
+    isTable: Boolean = false,
 ) = TasksTabState(
     isVisible = true,
     filter = filter,
     chatFilter = chatFilter,
     personFilter = personFilter,
     hasPeople = hasPeople,
+    isTable = isTable,
     content = content,
     checkingCount = checkingCount,
     failedCount = failedCount,
@@ -100,6 +105,20 @@ private fun aTabTask(task: TaskItem, chat: TasksTabChat = aDesignChat, isSelecte
 private fun aDoneTasks() = persistentListOf(
     aTabTask(aTaskItem(id = "d1", title = "Pick the date", status = TaskStatus.Done, replyCount = 12)),
     aTabTask(aTaskItem(id = "d2", title = "Send the invites", status = TaskStatus.Done), chat = aLaunchChat),
+)
+
+internal fun aTableContent(sort: TaskTableSort = TaskTableSort()) = TasksTabContent.Table(
+    rows = listOf(
+        aTabTask(
+            aTaskItem(id = "t1", title = "Book the venue", deadline = "Yesterday", isOverdue = true, isSharedWithChat = true),
+            people = listOf("Bob", "Carol"),
+        ),
+        aTabTask(aTaskItem(id = "t2", title = "Draft the press release", deadline = "Today 17:00"), chat = aLaunchChat, isSelected = true),
+        aTabTask(aTaskItem(id = "t3", title = "Order the banners", status = TaskStatus.Doing, deadline = "Tue 17:00"), people = listOf("Bob")),
+        aTabTask(aTaskItem(id = "t4", title = null), people = listOf("Carol")),
+        aTabTask(aTaskItem(id = "d1", title = "Pick the date", status = TaskStatus.Done), chat = aLaunchChat, people = listOf("Bob", "Carol", "Dan")),
+    ).toImmutableList(),
+    sort = sort,
 )
 
 private fun aTasksContent(isDoneExpanded: Boolean = false) = TasksTabContent.Tasks(

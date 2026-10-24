@@ -26,6 +26,12 @@ sealed interface TasksTabEvent {
     /** A person picked in the Filter by person sheet, or null for everyone the user works with. */
     data class ChoosePerson(val userId: String?) : TasksTabEvent
 
+    /** Switches between the list grouped by deadline and the table. */
+    data object ToggleTable : TasksTabEvent
+
+    /** A tapped table header: sorts by its column, or the other way round when it already does. */
+    data class SortTable(val column: TaskTableColumn) : TasksTabEvent
+
     /** Tap on a task: its thread, or its chat for an older standalone card. */
     data class OpenTask(val roomId: RoomId, val taskId: String) : TasksTabEvent
 

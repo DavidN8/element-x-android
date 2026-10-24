@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Inject
 import io.element.android.features.matcha.impl.protocol.TaskStatus
@@ -95,6 +96,8 @@ class TasksTabPresenter(
         var filter by remember { mutableStateOf(TasksTabFilter.All) }
         var chatFilterId by remember { mutableStateOf<RoomId?>(null) }
         var personFilterId by remember { mutableStateOf<String?>(null) }
+        var isTable by rememberSaveable { mutableStateOf(false) }
+        var tableSort by remember { mutableStateOf(TaskTableSort()) }
         var isDoneExpanded by remember { mutableStateOf(false) }
         var sheetTarget by remember { mutableStateOf<SheetTarget?>(null) }
         var editorTarget by remember { mutableStateOf<EditorTarget?>(null) }
@@ -117,6 +120,7 @@ class TasksTabPresenter(
         val content = when {
             tasks.isEmpty() && (!chats.isRoomListLoaded || loadingCount > 0) -> TasksTabContent.Loading
             tasks.isEmpty() -> TasksTabContent.Empty
+            isTable -> tableContent(visibleTasks, filter, tableSort)
             else -> tasksContent(visibleTasks, filter, isDoneExpanded)
         }
 
@@ -167,6 +171,8 @@ class TasksTabPresenter(
                     sheetTarget = null
                     personFilterId = event.userId
                 }
+                TasksTabEvent.ToggleTable -> isTable = !isTable
+                is TasksTabEvent.SortTable -> tableSort = tableSort.toggled(event.column)
                 is TasksTabEvent.OpenTask -> {
                     sheetTarget = null
                     val task = find(event.roomId, event.taskId)?.task ?: return
@@ -231,6 +237,7 @@ class TasksTabPresenter(
             chatFilter = chatFilter?.toTasksTabChat(),
             personFilter = personFilter,
             hasPeople = people.isNotEmpty(),
+            isTable = isTable,
             content = content,
             checkingCount = loadingCount,
             failedCount = chats.failedCount + chats.boards.count { it.snapshot.loadFailed },
@@ -263,6 +270,21 @@ class TasksTabPresenter(
                 }
             }
             .sortedWith(compareBy<TabTask> { it.task.dueAt ?: Long.MAX_VALUE }.thenByDescending { it.createdAt })
+    }
+
+    /** The table's rows: the active tasks of the chosen status (any with All), or the archived ones. */
+    private fun tableContent(tasks: List<TabTask>, filter: TasksTabFilter, sort: TaskTableSort): TasksTabContent.Table {
+        val rows = tasks.filter { tabTask ->
+            val task = tabTask.task
+            when (filter) {
+                TasksTabFilter.All -> !task.isArchived
+                TasksTabFilter.Todo -> !task.isArchived && task.status == TaskStatus.Todo
+                TasksTabFilter.Doing -> !task.isArchived && task.status == TaskStatus.Doing
+                TasksTabFilter.Done -> !task.isArchived && task.status == TaskStatus.Done
+                TasksTabFilter.Archived -> task.isArchived
+            }
+        }
+        return TasksTabContent.Table(rows = rows.sortedFor(sort).toImmutableList(), sort = sort)
     }
 
     private fun tasksContent(tasks: List<TabTask>, filter: TasksTabFilter, isDoneExpanded: Boolean): TasksTabContent.Tasks {
@@ -331,6 +353,27 @@ private fun List<TabTask>.people(me: String, names: Map<String, String>): List<T
         .minus(me)
         .map { TasksTabPerson(userId = it, name = names[it] ?: it) }
         .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER, TasksTabPerson::name).thenBy(TasksTabPerson::userId))
+
+/** Sorting by [column]: the other way round when the table already is, otherwise ascending. */
+private fun TaskTableSort.toggled(column: TaskTableColumn) =
+    if (this.column == column) copy(isAscending = !isAscending) else TaskTableSort(column, isAscending = true)
+
+/**
+ * Sorted by the column of [sort], keeping the current order between equal rows; rows without a value in that column (no deadline,
+ * an untitled thread, "Just you") come last either way.
+ */
+internal fun List<TabTask>.sortedFor(sort: TaskTableSort): List<TabTask> {
+    fun <K : Any> ordered(order: Comparator<K>, key: (TabTask) -> K?): Comparator<TabTask> =
+        compareBy(nullsLast(if (sort.isAscending) order else order.reversed()), key)
+    val comparator = when (sort.column) {
+        TaskTableColumn.Task -> ordered(String.CASE_INSENSITIVE_ORDER) { it.task.title }
+        TaskTableColumn.Chat -> ordered(String.CASE_INSENSITIVE_ORDER) { it.chat.name }
+        TaskTableColumn.Status -> ordered(naturalOrder()) { it.task.status }
+        TaskTableColumn.Due -> ordered(naturalOrder()) { it.task.dueAt }
+        TaskTableColumn.People -> ordered(String.CASE_INSENSITIVE_ORDER) { task -> task.people.joinToString().takeIf { it.isNotEmpty() } }
+    }
+    return sortedWith(comparator)
+}
 
 /** A new task starts in the status the chips show, and in To do anywhere else. */
 private fun TasksTabFilter.newTaskStatus() = when (this) {
