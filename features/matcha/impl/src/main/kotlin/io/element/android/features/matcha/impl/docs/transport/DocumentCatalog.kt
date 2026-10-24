@@ -57,13 +57,7 @@ class DocumentCatalog(
     ) { state, isEncrypted -> catalogState(state, isEncrypted) }
 
     private fun catalogState(state: DocumentSessionState, isEncrypted: Boolean): CatalogState {
-        var isInvalid = false
-        val documents = state.entries.mapNotNull { (id, value) ->
-            parseEntry(id, value as? JsonObject).also { if (it == null) isInvalid = true }
-        }.toMutableList()
-        // Existing spaces already have this document; it never needs a migration.
-        if (documents.none { it.id == DocsProtocol.MAIN_DOCUMENT_ID }) documents += SpaceDocument(DocsProtocol.MAIN_DOCUMENT_ID, title = null, createdAt = 0)
-        documents.sortWith(compareBy<SpaceDocument> { it.createdAt }.thenBy { it.id })
+        val (documents, isInvalid) = catalogDocuments(state.entries)
         return CatalogState(
             documents = documents,
             isReady = state.isReady && !isInvalid,
@@ -72,13 +66,6 @@ class DocumentCatalog(
             pendingUpdates = state.pendingUpdates,
             error = if (isInvalid) DocumentError.InvalidUpdate else state.error,
         )
-    }
-
-    private fun parseEntry(id: String, metadata: JsonObject?): SpaceDocument? {
-        if (!DocsProtocol.isDocumentId(id)) return null
-        val title = metadata?.stringOrNull("title")?.takeIf(DocsProtocol::isValidName) ?: return null
-        val createdAt = metadata.longOrNull("createdAt")?.takeIf { it in 0..MAX_SAFE_INTEGER } ?: return null
-        return SpaceDocument(id = id, title = title, createdAt = createdAt)
     }
 
     private fun current() = catalogState(session.state.value, room.info().isEncrypted == true)
@@ -134,11 +121,31 @@ class DocumentCatalog(
         val state = current()
         return if (state.canEdit) null else CatalogException(state.error ?: DocumentError.PermissionError)
     }
+}
 
-    private companion object {
-        /** JavaScript's Number.MAX_SAFE_INTEGER, as the web client requires. */
-        const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L
-    }
+/** The documents a catalog names, with [isInvalid] when an entry is malformed, which makes the whole catalog untrustworthy. */
+data class CatalogDocuments(val documents: List<SpaceDocument>, val isInvalid: Boolean)
+
+/** Reads a catalog's "documents" map like the web client: valid entries plus the main document, oldest first. */
+fun catalogDocuments(entries: JsonObject): CatalogDocuments {
+    var isInvalid = false
+    val documents = entries.mapNotNull { (id, value) ->
+        parseCatalogEntry(id, value as? JsonObject).also { if (it == null) isInvalid = true }
+    }.toMutableList()
+    // Existing spaces already have this document; it never needs a migration.
+    if (documents.none { it.id == DocsProtocol.MAIN_DOCUMENT_ID }) documents += SpaceDocument(DocsProtocol.MAIN_DOCUMENT_ID, title = null, createdAt = 0)
+    documents.sortWith(compareBy<SpaceDocument> { it.createdAt }.thenBy { it.id })
+    return CatalogDocuments(documents, isInvalid)
+}
+
+/** JavaScript's Number.MAX_SAFE_INTEGER, as the web client requires. */
+private const val MAX_SAFE_INTEGER = 9_007_199_254_740_991L
+
+private fun parseCatalogEntry(id: String, metadata: JsonObject?): SpaceDocument? {
+    if (!DocsProtocol.isDocumentId(id)) return null
+    val title = metadata?.stringOrNull("title")?.takeIf(DocsProtocol::isValidName) ?: return null
+    val createdAt = metadata.longOrNull("createdAt")?.takeIf { it in 0..MAX_SAFE_INTEGER } ?: return null
+    return SpaceDocument(id = id, title = title, createdAt = createdAt)
 }
 
 class CatalogException(

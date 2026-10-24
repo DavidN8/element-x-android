@@ -23,6 +23,11 @@ android {
 
 setupDependencyInjection()
 
+// MatchaFixturesTest runs the conformance fixtures shared with the web and iOS clients: a changed fixture runs the tests again.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootDir.resolve("docs/matcha/fixtures")).withPropertyName("matchaFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 dependencies {
     api(projects.features.matcha.api)
     implementation(projects.appconfig)

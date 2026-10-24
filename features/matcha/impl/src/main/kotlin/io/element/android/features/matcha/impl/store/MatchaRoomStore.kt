@@ -11,7 +11,6 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.ProjectedCard
-import io.element.android.features.matcha.impl.protocol.REL_TYPE_THREAD
 import io.element.android.features.matcha.impl.protocol.RawEvent
 import io.element.android.features.matcha.impl.protocol.TaskParticipants
 import io.element.android.features.matcha.impl.protocol.ThreadMetadata
@@ -20,7 +19,6 @@ import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
 import io.element.android.features.matcha.impl.protocol.ThreadNameSource
 import io.element.android.features.matcha.impl.protocol.booleanOrNull
 import io.element.android.features.matcha.impl.protocol.referenceTarget
-import io.element.android.features.matcha.impl.protocol.relationTarget
 import io.element.android.features.matcha.impl.protocol.toJsonObjectOrNull
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
@@ -672,7 +670,7 @@ class MatchaRoomStore(
             ThreadMetadataProtocol.parsePatch(event, root)?.let { patchesByRoot.getOrPut(root) { mutableListOf() } += it }
         }
         val listed = threadList.associateBy { it.threadId.value }
-        val bootstrapped = events.mapNotNullTo(HashSet()) { it.bootstrapRootId() }
+        val bootstrapped = events.mapNotNullTo(HashSet(), ThreadMetadataProtocol::bootstrapRootId)
         // The hidden replies this client sent are among the Matcha events before the thread's replies are read again.
         val eventRepliers = TaskParticipants.repliers(events)
         val threadIds = LinkedHashSet<String>().apply {
@@ -861,6 +859,3 @@ private fun warningFor(cause: UtdCause?): MatchaWarning = when (cause) {
     UtdCause.HistoricalMessageAndDeviceIsUnverified -> MatchaWarning.HistoryUnavailable
     else -> MatchaWarning.Undecryptable
 }
-
-/** The thread root of a hidden first reply sent when a named thread is created, or null for any other event. */
-private fun RawEvent.bootstrapRootId(): String? = content.takeIf { type == MatchaConfig.EVENT_THREAD_METADATA }?.relationTarget(REL_TYPE_THREAD)
