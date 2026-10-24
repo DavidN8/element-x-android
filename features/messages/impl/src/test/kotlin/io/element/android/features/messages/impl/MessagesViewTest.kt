@@ -772,7 +772,8 @@ class MessagesViewTest : RobolectricTest() {
         openAllThreads.assertions().isCalledOnce()
         onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_tasks) + ", 3 open tasks").performClick()
         openTasks.assertions().isCalledOnce()
-        onNodeWithText("3").assertExists()
+        // The badge's digits are read in the button's label only.
+        onNodeWithText("3").assertDoesNotExist()
     }
 
     @Test

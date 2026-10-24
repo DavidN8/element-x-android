@@ -17,10 +17,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -29,13 +31,13 @@ import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.timeline.components.CallMenuItem
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roomcall.api.aStandByCallState
+import io.element.android.libraries.designsystem.atomic.atoms.CounterAtom
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.DropdownMenu
 import io.element.android.libraries.designsystem.theme.components.DropdownMenuItem
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.IconButton
-import io.element.android.libraries.designsystem.theme.components.NavigationBarIcon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.ui.strings.CommonPlurals
 import io.element.android.libraries.ui.strings.CommonStrings
@@ -70,12 +72,23 @@ internal fun RowScope.MatchaMenuActions(
     } else {
         tasksLabel
     }
-    IconButton(
-        onClick = onTasksClick,
-        modifier = Modifier.semantics { contentDescription = tasksDescription },
-    ) {
-        // The navigation bar's badged icon: the same green count badge as the Chats tab.
-        NavigationBarIcon(imageVector = CompoundIcons.CheckCircle(), count = openTaskCount)
+    Box {
+        IconButton(
+            onClick = onTasksClick,
+            modifier = Modifier.semantics { contentDescription = tasksDescription },
+        ) {
+            Icon(imageVector = CompoundIcons.CheckCircle(), contentDescription = null)
+        }
+        // The Chats tab's green count badge, drawn outside the button: its round clip would cut a count of 10 or more.
+        if (openTaskCount > 0) {
+            CounterAtom(
+                count = openTaskCount,
+                textStyle = ElementTheme.typography.fontBodySmMedium,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .clearAndSetSemantics {},
+            )
+        }
     }
     if (roomCallState is RoomCallState.OnGoing) {
         CallMenuItem(roomCallState = roomCallState, onJoinCallClick = onJoinCallClick)
