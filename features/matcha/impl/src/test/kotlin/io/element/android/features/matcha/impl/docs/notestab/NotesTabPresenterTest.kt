@@ -14,6 +14,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.matcha.impl.docs.ANCHOR
 import io.element.android.features.matcha.impl.docs.CONFIGURED_STATE
+import io.element.android.features.matcha.impl.docs.DocNameError
 import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.docs.DocsRoomFixture
 import io.element.android.features.matcha.impl.docs.FakeYjsEngine
@@ -27,6 +28,7 @@ import io.element.android.features.networkmonitor.test.FakeNetworkMonitor
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.featureflag.test.FakeFeatureFlagService
+import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.spaces.SpaceService
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
@@ -207,6 +209,67 @@ class NotesTabPresenterTest {
             choosing.eventSink(NotesTabEvent.DismissSheet)
             awaitUntil { it.sheet == null }
             assertThat(opened).isEmpty()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a note whose sheet is dismissed while it saves is still created once and opened, and its catalog is closed after`() = runTest {
+        val space = aNotesSpace(design)
+        val engine = FakeYjsEngine()
+        aTab(aClient(listOf(space)), engine).test {
+            awaitUntil { it.canCreate }.eventSink(NotesTabEvent.NewNote)
+            val naming = awaitUntil { it.sheet is NotesTabSheet.Name }
+            naming.eventSink(NotesTabEvent.UpdateName("Trip plans"))
+            naming.eventSink(NotesTabEvent.SubmitName)
+            // Back, a swipe, the scrim or the close button, while the note saves.
+            naming.eventSink(NotesTabEvent.DismissSheet)
+            awaitUntil { it.sheet == null }
+            // New note shows the sheet of the note still saving rather than starting another.
+            naming.eventSink(NotesTabEvent.NewNote)
+            assertThat((awaitUntil { it.sheet != null }.sheet as NotesTabSheet.Name).state.isSaving).isTrue()
+            naming.eventSink(NotesTabEvent.DismissSheet)
+            awaitUntil { it.sheet == null }
+            settle()
+
+            val (spaceId, documentId) = opened.single()
+            assertThat(spaceId).isEqualTo(design)
+            assertThat(space.sent.single().second).contains("\"doc\":\"catalog\"")
+            val catalog = engine.documents.single()
+            assertThat(catalog.snapshot().entries.keys).containsExactly(documentId)
+            assertThat(catalog.isClosed).isTrue()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `a save that fails after its sheet was dismissed shows the sheet again with the error, and Create saves the same note`() = runTest {
+        val space = aNotesSpace(design).apply { sendResult = { _, _ -> Result.failure(IllegalStateException("offline")) } }
+        val engine = FakeYjsEngine()
+        aTab(aClient(listOf(space)), engine).test {
+            awaitUntil { it.canCreate }.eventSink(NotesTabEvent.NewNote)
+            val naming = awaitUntil { it.sheet is NotesTabSheet.Name }
+            naming.eventSink(NotesTabEvent.UpdateName("Trip plans"))
+            naming.eventSink(NotesTabEvent.SubmitName)
+            naming.eventSink(NotesTabEvent.DismissSheet)
+            awaitUntil { it.sheet == null }
+            val failed = awaitUntil { (it.sheet as? NotesTabSheet.Name)?.state?.error == DocNameError.SaveFailed }
+            val sheet = (failed.sheet as NotesTabSheet.Name).state
+            assertThat(sheet.name).isEqualTo("Trip plans")
+            assertThat(sheet.unsavedDocumentId).isNotNull()
+            assertThat(opened).isEmpty()
+            // The sheet's catalog stays open for Create.
+            assertThat(engine.documents.single().isClosed).isFalse()
+
+            space.sendResult = { _, _ -> Result.success(EventId("\$ok")) }
+            failed.eventSink(NotesTabEvent.SubmitName)
+            awaitUntil { it.sheet == null }
+            settle()
+            assertThat(opened).containsExactly(design to sheet.unsavedDocumentId)
+            assertThat(space.sent.single().second).contains("\"doc\":\"catalog\"")
+            val catalog = engine.documents.single()
+            assertThat(catalog.snapshot().entries.keys).containsExactly(sheet.unsavedDocumentId)
+            assertThat(catalog.isClosed).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
     }
