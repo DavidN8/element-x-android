@@ -210,4 +210,7 @@
     <string name="screen_matcha_notes_tab_empty_title">No notes yet</string>
     <string name="screen_matcha_notes_tab_empty_body">Notes live in spaces. Join or create a space to write notes together.</string>
     <string name="screen_matcha_notes_tab_none_on_body">None of your spaces has notes turned on yet. Ask a space admin to turn them on.</string>
+    <!-- All boards of a space, opened from the Channels tab: the title above the space's name. -->
+    <string name="screen_matcha_space_boards_title">Boards</string>
+    <string name="screen_matcha_space_boards_empty_body">Tasks from this space\'s channels show up here.</string>
 </resources>

@@ -21,12 +21,12 @@ import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.featureflag.api.FeatureFlagService
 import io.element.android.libraries.featureflag.api.FeatureFlags
 import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomSummary
 import io.element.android.libraries.matrix.api.spaces.SpaceRoom
 import io.element.android.libraries.matrix.api.spaces.SpaceServiceFilter
+import io.element.android.libraries.matrix.api.spaces.topLevelSpaceTrees
 import io.element.android.libraries.matrix.ui.safety.rememberHideInvitesAvatar
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentSetOf
@@ -123,13 +123,7 @@ class HomeSpacesPresenter(
     }
 
     private fun groupChannels(spaces: List<SpaceRoom>, filters: List<SpaceServiceFilter>, channels: List<RoomListRoomSummary>): HomeChannels {
-        // A level 0 filter holds the direct children of a top level space, and the level 1 filters that follow it hold the rest of its tree.
-        val trees = mutableMapOf<RoomId, MutableSet<RoomId>>()
-        var topLevelSpaceId: RoomId? = null
-        for (filter in filters) {
-            if (filter.level == 0) topLevelSpaceId = filter.spaceRoom.roomId
-            topLevelSpaceId?.let { trees.getOrPut(it) { mutableSetOf() } += filter.descendants }
-        }
+        val trees = filters.topLevelSpaceTrees()
         val inAnySpace = filters.flatMapTo(mutableSetOf()) { it.descendants }
         return HomeChannels(
             spaces = spaces

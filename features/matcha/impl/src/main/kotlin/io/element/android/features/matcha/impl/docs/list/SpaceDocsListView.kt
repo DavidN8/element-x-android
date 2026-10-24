@@ -51,7 +51,7 @@ fun SpaceDocsListView(
         topBar = {
             TopAppBar(
                 navigationIcon = { BackButton(onClick = onBackClick) },
-                title = { DocsListTitle(spaceName = state.spaceName) },
+                title = { SpaceScreenTitle(title = stringResource(CommonStrings.common_matcha_docs), spaceName = state.spaceName) },
             )
         },
         floatingActionButton = {
@@ -96,11 +96,12 @@ fun SpaceDocsListView(
     }
 }
 
+/** A space's screen title: [title], with the space's name under it once known. */
 @Composable
-private fun DocsListTitle(spaceName: String?) {
+internal fun SpaceScreenTitle(title: String, spaceName: String?) {
     Column {
         Text(
-            text = stringResource(CommonStrings.common_matcha_docs),
+            text = title,
             style = ElementTheme.typography.aliasScreenTitle,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

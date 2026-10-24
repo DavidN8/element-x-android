@@ -37,12 +37,15 @@ import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.ThreadId
 import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.libraries.matrix.api.room.BaseRoom
 import io.element.android.libraries.matrix.api.room.CurrentUserMembership
 import io.element.android.libraries.matrix.api.room.MessageEventType
 import io.element.android.libraries.matrix.api.room.RoomInfo
+import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.roomlist.RoomList
 import io.element.android.libraries.matrix.api.roomlist.RoomSummary
+import io.element.android.libraries.matrix.api.spaces.SpaceServiceFilter
 import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.api.user.MatrixUser
 import io.element.android.libraries.matrix.test.A_SESSION_ID
@@ -52,12 +55,16 @@ import io.element.android.libraries.matrix.test.room.aRoomInfo
 import io.element.android.libraries.matrix.test.room.aRoomSummary
 import io.element.android.libraries.matrix.test.roomlist.FakeDynamicRoomList
 import io.element.android.libraries.matrix.test.roomlist.FakeRoomListService
+import io.element.android.libraries.matrix.test.spaces.FakeSpaceService
+import io.element.android.libraries.previewutils.room.aSpaceRoom
 import io.element.android.libraries.ui.strings.CommonStrings
 import io.element.android.services.appnavstate.test.FakeAppNavigationStateService
 import io.element.android.services.appnavstate.test.aNavigationState
 import io.element.android.services.appnavstate.test.anAppNavigationState
 import io.element.android.tests.testutils.consumeItemsUntilPredicate
+import io.element.android.tests.testutils.consumeItemsUntilTimeout
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
@@ -75,6 +82,9 @@ class TasksTabPresenterTest {
     private val design = RoomId("!design:matrix.org")
     private val launch = RoomId("!launch:matrix.org")
     private val chat = RoomId("!chat:matrix.org")
+    private val dm = RoomId("!dm:matrix.org")
+    private val acme = RoomId("!acme:matrix.org")
+    private val acmeSub = RoomId("!acme-sub:matrix.org")
     private val boardRoot = A_BOARD_ROOT
 
     private val zone = ZoneId.systemDefault()
@@ -550,6 +560,113 @@ class TasksTabPresenterTest {
         assertThat(titles(TaskTableColumn.Chat, isAscending = false)).containsExactly("A", null, "b").inOrder()
     }
 
+    @Test
+    fun `with a space, the boards of its channels are listed with what each board shows`() = runTest {
+        val spaceService = FakeSpaceService()
+        val client = aClient(
+            listOf(
+                design to aBoardRoom(
+                    design,
+                    linkedCard(1, "\$shared", "Bob's shared task", startedBy = bob),
+                    linkedCard(2, "\$private", "Bob's private task", startedBy = bob, showToRoom = false),
+                ),
+                launch to aBoardRoom(launch, linkedCard(1, "\$launch", "My launch task")),
+                chat to aBoardRoom(chat, linkedCard(1, "\$chat", "My task elsewhere")),
+                dm to aBoardRoom(dm, linkedCard(1, "\$dm", "My task in a direct chat"), roomInfo = aDmInfo(dm)),
+            ),
+            summaries = MutableStateFlow(listOf(aSummary(design), aSummary(launch), aSummary(chat), aRoomSummary(aDmInfo(dm)))),
+            spaceService = spaceService,
+        )
+        aPresenter(client, spaceId = acme).test {
+            assertThat(awaitItem().content).isEqualTo(TasksTabContent.Loading)
+            settle()
+            spaceService.emitSpaceFilters(acmeFilters(listOf(design, dm), subSpaceChats = listOf(launch)))
+            val state = awaitUntil { it.checkingCount == 0 && it.titles().size == 2 }
+            // Shared with the chat, so on its board, though it doesn't involve the user; a direct chat is no channel.
+            assertThat(state.titles()).containsExactly("Bob's shared task", "My launch task")
+            assertThat(state.spaceName).isEqualTo("Acme")
+            state.eventSink(TasksTabEvent.ToggleChatFilter)
+            val sheet = awaitUntil { it.sheet != null }.sheet as TasksTabSheet.ChooseChat
+            assertThat(sheet.chats.map { it.roomId }).containsExactly(design, launch)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `with a space, Loading and Checking only wait for the space's chats`() = runTest {
+        val spaceService = FakeSpaceService()
+        val chatRoom = aMatchaJoinedRoom(chat, backgroundScope)
+        val client = aClient(listOf(design to aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue")), chat to chatRoom), spaceService = spaceService)
+        // The chat outside the space is never done being checked.
+        client.givenGetBaseRoomResult(chat, SilentPointerRoom(chatRoom))
+        aPresenter(client, spaceId = acme).test {
+            awaitItem()
+            settle()
+            spaceService.emitSpaceFilters(acmeFilters(listOf(design)))
+            val state = awaitUntil { it.content is TasksTabContent.Tasks && it.checkingCount == 0 }
+            assertThat(state.titles()).containsExactly("Book the venue")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `with a space, the list loads until the space's filters arrive`() = runTest {
+        val spaceService = FakeSpaceService()
+        val client = aClient(listOf(design to aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue"))), spaceService = spaceService)
+        aPresenter(client, spaceId = acme).test {
+            val first = awaitItem()
+            settle()
+            // The boards wait for the space's chats, so no other chat's board shows meanwhile.
+            assertThat((listOf(first) + consumeItemsUntilTimeout()).map { it.content }.toSet()).containsExactly(TasksTabContent.Loading)
+            spaceService.emitSpaceFilters(acmeFilters(listOf(design)))
+            assertThat(awaitUntil { it.content is TasksTabContent.Tasks }.titles()).containsExactly("Book the venue")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `with a space the user is in no channel of, the boards are empty`() = runTest {
+        val spaceService = FakeSpaceService()
+        val client = aClient(listOf(design to aBoardRoom(design, linkedCard(1, "\$t1", "Book the venue"))), spaceService = spaceService)
+        aPresenter(client, spaceId = acme).test {
+            awaitItem()
+            settle()
+            spaceService.emitSpaceFilters(acmeFilters(listOf(RoomId("!not-joined:matrix.org"))))
+            val state = awaitUntil { it.content == TasksTabContent.Empty }
+            assertThat(state.spaceName).isEqualTo("Acme")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `with a space, its chats are checked before the others`() = runTest {
+        val timelines = mutableListOf<RoomId>()
+        val rooms = (1..6).map { index ->
+            val roomId = RoomId("!room$index:matrix.org")
+            // The thread list never finishes loading, so each chat holds its turn until the screen stops waiting for it.
+            roomId to aMatchaJoinedRoom(
+                roomId = roomId,
+                roomCoroutineScope = backgroundScope,
+                boardRoot = boardRoot,
+                threadsPaginationStatus = ThreadListPaginationStatus.Loading,
+                onCreateTimeline = { timelines += roomId },
+            )
+        }
+        val spaceService = FakeSpaceService()
+        // Last in the room list, so they would be checked last without the space.
+        val spaceChats = rooms.takeLast(2).map { it.first }
+        aPresenter(aClient(rooms, spaceService = spaceService), spaceId = acme).test {
+            awaitItem()
+            settle()
+            spaceService.emitSpaceFilters(acmeFilters(spaceChats))
+            testScheduler.advanceTimeBy(10_000)
+            testScheduler.runCurrent()
+            assertThat(timelines).hasSize(TasksTabRooms.MAX_CONCURRENT_CHECKS)
+            assertThat(timelines).containsAtLeastElementsIn(spaceChats)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     private data class TestCard(
         val index: Int,
         val id: String,
@@ -609,14 +726,24 @@ class TasksTabPresenterTest {
         """{"type": "m.room.message", "event_id": "${'$'}reply$index", "sender": "$sender", "origin_server_ts": $index, """ +
             """"content": {"msgtype": "m.text", "body": "Reply", "m.relates_to": {"rel_type": "m.thread", "event_id": "$threadId"}}}"""
 
+    private fun aDmInfo(roomId: RoomId) = aRoomInfo(id = roomId, name = "dm", isDirect = true, isDm = true, activeMembersCount = 2)
+
+    /** Acme holds [chats], and its sub-space the [subSpaceChats], as the SDK lists a top level space's tree. */
+    private fun acmeFilters(chats: List<RoomId>, subSpaceChats: List<RoomId> = emptyList()) = listOf(
+        SpaceServiceFilter(aSpaceRoom(roomId = acme, displayName = "Acme"), level = 0, descendants = chats + acmeSub),
+        SpaceServiceFilter(aSpaceRoom(roomId = acmeSub, displayName = "Launch team"), level = 1, descendants = subSpaceChats),
+    )
+
     private fun aSummary(roomId: RoomId, membership: CurrentUserMembership = CurrentUserMembership.JOINED): RoomSummary =
         aRoomSummary(roomId = roomId, name = roomId.value.removePrefix("!").substringBefore(":"), currentUserMembership = membership)
 
     private fun TestScope.aClient(
         rooms: List<Pair<RoomId, FakeJoinedRoom>>,
         summaries: MutableStateFlow<List<RoomSummary>> = MutableStateFlow(rooms.map { aSummary(it.first) }),
+        spaceService: FakeSpaceService = FakeSpaceService(),
     ): FakeMatrixClient = FakeMatrixClient(
         sessionCoroutineScope = backgroundScope,
+        spaceService = spaceService,
         roomListService = FakeRoomListService(
             allRooms = FakeDynamicRoomList(summaries = summaries, loadingState = MutableStateFlow(RoomList.LoadingState.Loaded(rooms.size))),
         ),
@@ -635,6 +762,7 @@ class TasksTabPresenterTest {
         onOpenRoom: (RoomId) -> Unit = {},
         onOpenThread: (RoomId, ThreadId) -> Unit = { _, _ -> },
         snackbarDispatcher: SnackbarDispatcher = SnackbarDispatcher(),
+        spaceId: RoomId? = null,
     ): PresenterUnderTest {
         val presenter = TasksTabPresenter(
             client = client,
@@ -646,16 +774,22 @@ class TasksTabPresenterTest {
             clock = aFixedClock,
             editorPresenterFactory = aTaskEditorPresenterFactory(),
         )
-        return PresenterUnderTest(presenter, onOpenRoom, onOpenThread)
+        return PresenterUnderTest(presenter, onOpenRoom, onOpenThread, spaceId)
     }
 
     private class PresenterUnderTest(
         val presenter: TasksTabPresenter,
         val onOpenRoom: (RoomId) -> Unit,
         val onOpenThread: (RoomId, ThreadId) -> Unit,
+        val spaceId: RoomId?,
     ) {
         suspend fun test(block: suspend TurbineTestContext<TasksTabState>.() -> Unit) =
-            moleculeFlow(RecompositionMode.Immediate) { presenter.present(onOpenRoom, onOpenThread) }.test(validate = block)
+            moleculeFlow(RecompositionMode.Immediate) { presenter.present(onOpenRoom, onOpenThread, spaceId) }.test(validate = block)
+    }
+
+    /** The room [client.getRoom] gives for [room], whose board pointer read never answers. */
+    private class SilentPointerRoom(room: FakeJoinedRoom) : BaseRoom by room {
+        override suspend fun getStateEventsJson(eventType: StateEventType): Result<Map<String, String>> = awaitCancellation()
     }
 
     private fun TasksTabState.tasksContent() = content as? TasksTabContent.Tasks

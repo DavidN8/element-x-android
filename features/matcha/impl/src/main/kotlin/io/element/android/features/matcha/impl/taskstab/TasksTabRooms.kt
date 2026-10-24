@@ -69,6 +69,7 @@ internal data class TabChat(
     val roomId: RoomId,
     val name: String?,
     val avatarUrl: String?,
+    val isDm: Boolean,
     val room: TabRoom,
     val snapshot: MatchaRoomSnapshot,
 )
@@ -78,12 +79,15 @@ internal data class TabChats(
     /** The joined chats with a board, in the room list's order. */
     val boards: List<TabChat> = emptyList(),
     /** Chats still being checked for a board. */
-    val checkingCount: Int = 0,
+    val checking: Set<RoomId> = emptySet(),
     /** Chats that could not be checked. */
-    val failedCount: Int = 0,
+    val failed: Set<RoomId> = emptySet(),
     /** False until the room list has loaded, so a chat that isn't listed isn't known to be absent yet. */
     val isRoomListLoaded: Boolean = false,
-)
+) {
+    val checkingCount get() = checking.size
+    val failedCount get() = failed.size
+}
 
 /**
  * The chats the Tasks tab reads, one per session. [run] checks every joined chat that isn't a space for a task board, a few at a
@@ -124,7 +128,7 @@ internal class TasksTabRooms(
         data class Board(val room: TabRoom) : Check
     }
 
-    private data class ChatInfo(val name: String?, val avatarUrl: String?)
+    private data class ChatInfo(val name: String?, val avatarUrl: String?, val isDm: Boolean)
 
     private val checks = MutableStateFlow<Map<RoomId, Check>>(emptyMap())
 
@@ -140,12 +144,12 @@ internal class TasksTabRooms(
     val chats: Flow<TabChats> = combine(checks, joinedChats, ::Pair).flatMapLatest { (checks, joined) ->
         val boards = joined.orEmpty().mapNotNull { (roomId, info) ->
             val room = (checks[roomId] as? Check.Board)?.room ?: return@mapNotNull null
-            room.store.snapshot.map { TabChat(roomId, info.name, info.avatarUrl, room, it) }
+            room.store.snapshot.map { TabChat(roomId, info.name, info.avatarUrl, info.isDm, room, it) }
         }
-        val checking = checks.values.count { it == Check.Pending }
-        val failed = checks.values.count { it == Check.Failed }
+        val checking = checks.filterValues { it == Check.Pending }.keys
+        val failed = checks.filterValues { it == Check.Failed }.keys
         val snapshots = if (boards.isEmpty()) flowOf(emptyList()) else combine(boards) { it.toList() }
-        snapshots.map { TabChats(boards = it, checkingCount = checking, failedCount = failed, isRoomListLoaded = joined != null) }
+        snapshots.map { TabChats(boards = it, checking = checking, failed = failed, isRoomListLoaded = joined != null) }
     }
 
     /** Checks the chats again that could not be checked, and opens again the boards that failed to open. */
@@ -160,8 +164,11 @@ internal class TasksTabRooms(
     /** Lets go of a hold taken by [acquire]; safe from any thread. */
     fun release(room: TabRoom) = room.holders.update { it - 1 }
 
-    /** Follows the user's joined chats until cancelled, then destroys every room it opened once [KEEP_ALIVE] passes without another run. */
-    suspend fun run() = runLock.withLock {
+    /**
+     * Follows the user's joined chats until cancelled, then destroys every room it opened once [KEEP_ALIVE] passes without another run.
+     * The chats in [first], such as a space's, are checked before the others.
+     */
+    suspend fun run(first: Set<RoomId> = emptySet()) = runLock.withLock {
         closeJob?.cancel()
         closeJob = null
         // A chat found without a board that this client has given one since is checked again.
@@ -183,7 +190,8 @@ internal class TasksTabRooms(
                         jobs.remove(roomId)?.cancel()
                         close(roomId)
                     }
-                    for (roomId in joined.keys - checks.value.keys) startCheck(roomId)
+                    // The checks take their turns in the order they start; sorting is stable, so the rest keep the room list's order.
+                    for (roomId in (joined.keys - checks.value.keys).sortedBy { it !in first }) startCheck(roomId)
                     if (retry != handledRetries) {
                         handledRetries = retry
                         for ((roomId, check) in checks.value) {
@@ -217,7 +225,7 @@ internal class TasksTabRooms(
             .map { summaries ->
                 summaries
                     .filter { it.info.currentUserMembership == CurrentUserMembership.JOINED && !it.info.isSpace }
-                    .associate { it.roomId to ChatInfo(name = it.info.name, avatarUrl = it.info.avatarUrl) }
+                    .associate { it.roomId to ChatInfo(name = it.info.name, avatarUrl = it.info.avatarUrl, isDm = it.isDm) }
             }
             .distinctUntilChanged()
     }

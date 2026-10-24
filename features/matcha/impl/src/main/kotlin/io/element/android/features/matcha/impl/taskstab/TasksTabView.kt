@@ -120,7 +120,7 @@ fun TasksTabView(
             item(key = "chips") { TasksTabChips(state) }
             when (val content = state.content) {
                 TasksTabContent.Loading -> item(key = "loading") { TaskPlaceholders() }
-                TasksTabContent.Empty -> item(key = "empty") { EmptyTasksTab(modifier = Modifier.fillParentMaxWidth()) }
+                TasksTabContent.Empty -> item(key = "empty") { EmptyTasksTab(isSpace = state.spaceName != null, modifier = Modifier.fillParentMaxWidth()) }
                 is TasksTabContent.Tasks -> taskGroups(content, state.filter, eventSink)
                 is TasksTabContent.Table -> taskTable(content, state.filter, isWideTable, tableScroll, eventSink)
             }
@@ -387,8 +387,9 @@ private fun CheckFailedRow(count: Int, onRetry: () -> Unit) {
     }
 }
 
+/** No task yet, on the Tasks tab or in a space's boards ([isSpace]). */
 @Composable
-private fun EmptyTasksTab(modifier: Modifier = Modifier) {
+private fun EmptyTasksTab(isSpace: Boolean, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.padding(horizontal = 24.dp, vertical = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -397,7 +398,7 @@ private fun EmptyTasksTab(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(16.dp))
         CenteredMessage(
             title = stringResource(R.string.screen_matcha_tasks_tab_empty_title),
-            body = stringResource(R.string.screen_matcha_tasks_tab_empty_body),
+            body = stringResource(if (isSpace) R.string.screen_matcha_space_boards_empty_body else R.string.screen_matcha_tasks_tab_empty_body),
         )
     }
 }
