@@ -125,8 +125,8 @@ class MatchaRoomStoreParticipantsTest {
         assertThat(reads).isEqualTo(2)
         assertThat(store.snapshot.value.isLoaded).isTrue()
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@gina:x", "@erin:x", me)
-        // The first read takes a full page; the next only the two replies counted since, added to what was read.
-        assertThat(limits).containsExactly(100, 2).inOrder()
+        // The first read takes a full page; the next only the two replies counted since and the newest one read, added to what was read.
+        assertThat(limits).containsExactly(100, 3).inOrder()
 
         // The same count isn't read again.
         threads.value = listOf(aThreadListItem(thread, timestamp = 11).withLatestReply(sender = "@gina:x", count = 3))
@@ -136,7 +136,7 @@ class MatchaRoomStoreParticipantsTest {
         // A redaction lowers the count; the newest reply is still read.
         threads.value = listOf(aThreadListItem(thread, timestamp = 12).withLatestReply(sender = "@gina:x", count = 2))
         settle()
-        assertThat(limits).containsExactly(100, 2, 1).inOrder()
+        assertThat(limits).containsExactly(100, 3, 2).inOrder()
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@gina:x", "@erin:x", me)
     }
 
@@ -175,7 +175,7 @@ class MatchaRoomStoreParticipantsTest {
     }
 
     @Test
-    fun `a later read pages until it has the replies counted since, or reaches a reply read before`() = runTest {
+    fun `a later read pages through the replies counted since until it reaches a reply read before`() = runTest {
         val requests = mutableListOf<Pair<String?, Int>>()
         var replies = (250 downTo 1).map { reply(it, "@erin:x") }
         val threads = MutableStateFlow(listOf(aThreadListItem(thread, numberOfReplies = 250)))
@@ -187,7 +187,8 @@ class MatchaRoomStoreParticipantsTest {
         replies = (400 downTo 251).map { reply(it, if (it == 260) "@late:x" else "@gina:x") } + replies
         threads.value = listOf(aThreadListItem(thread, numberOfReplies = 400))
         settle()
-        assertThat(requests).containsExactly(null to 100, "100" to 50).inOrder()
+        // The 150 counted and the newest reply read before.
+        assertThat(requests).containsExactly(null to 100, "100" to 51).inOrder()
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@erin:x", "@gina:x", "@late:x")
 
         // A count ahead of the replies served stops at the first page holding a reply read before.
@@ -197,6 +198,38 @@ class MatchaRoomStoreParticipantsTest {
         settle()
         assertThat(requests).containsExactly(null to 100)
         assertThat(store.snapshot.value.threads.single().participants).contains("@hal:x")
+    }
+
+    @Test
+    fun `a later read reaches the replies counted since when newer ones were sent before it ran`() = runTest {
+        val requests = mutableListOf<Pair<String?, Int>>()
+        var replies = (250 downTo 1).map { reply(it, "@erin:x") }
+        val threads = MutableStateFlow(listOf(aThreadListItem(thread, numberOfReplies = 250)))
+        val store = aPagedStore(threads, page = pagesOf(requests) { replies })
+        settle()
+
+        // The thread list counts one new reply, but another one was sent before the read ran, so the counted one is second.
+        replies = listOf(reply(252, "@gina:x"), reply(251, "@late:x")) + replies
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 251))
+        settle()
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 252))
+        settle()
+        assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@erin:x", "@gina:x", "@late:x")
+    }
+
+    @Test
+    fun `a later read after the newest reply read was redacted stops at the next one read before`() = runTest {
+        val requests = mutableListOf<Pair<String?, Int>>()
+        var replies = (250 downTo 1).map { reply(it, "@erin:x") }
+        val threads = MutableStateFlow(listOf(aThreadListItem(thread, numberOfReplies = 250)))
+        aPagedStore(threads, page = pagesOf(requests) { replies })
+        settle()
+        requests.clear()
+
+        replies = replies.drop(1)
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 249))
+        settle()
+        assertThat(requests).containsExactly(null to 2)
     }
 
     @Test
@@ -234,7 +267,7 @@ class MatchaRoomStoreParticipantsTest {
         replies = (400 downTo 251).map { reply(it, "@gina:x") } + replies
         threads.value = listOf(aThreadListItem(thread, numberOfReplies = 400))
         settle()
-        assertThat(requests).containsExactly(null to 100, "100" to 50).inOrder()
+        assertThat(requests).containsExactly(null to 100, "100" to 51).inOrder()
         assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.Network)
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@erin:x", "@early:x")
 
@@ -244,7 +277,7 @@ class MatchaRoomStoreParticipantsTest {
         replies = listOf(reply(401, "@hal:x")) + replies
         threads.value = listOf(aThreadListItem(thread, numberOfReplies = 401))
         settle()
-        assertThat(requests).containsExactly(null to 100, "100" to 51).inOrder()
+        assertThat(requests).containsExactly(null to 100, "100" to 52).inOrder()
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@erin:x", "@early:x", "@hal:x", "@gina:x")
     }
 
@@ -263,8 +296,8 @@ class MatchaRoomStoreParticipantsTest {
 
         reads.release()
         settle()
-        // The first read finds all 260; the next asks only for the 10 counted since and stops at the newest reply it had.
-        assertThat(requests).containsExactly(null to 100, "100" to 100, "200" to 100, null to 10).inOrder()
+        // The first read finds all 260; the next asks only for the 10 counted since and one more, and stops at the newest reply it had.
+        assertThat(requests).containsExactly(null to 100, "100" to 100, "200" to 100, null to 11).inOrder()
         assertThat(store.snapshot.value.isLoaded).isTrue()
         assertThat(store.snapshot.value.threads.single().participants).containsExactly("@bob:x", "@gina:x", "@erin:x")
     }
