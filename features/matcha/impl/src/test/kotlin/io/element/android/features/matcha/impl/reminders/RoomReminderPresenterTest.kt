@@ -18,6 +18,7 @@ import io.element.android.features.matcha.impl.protocol.RawEvent
 import io.element.android.features.matcha.impl.protocol.ReminderRequestRef
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.tasks.aDeadlineFormatter
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.ThreadId
@@ -54,6 +55,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 
 class RoomReminderPresenterTest {
@@ -65,6 +67,7 @@ class RoomReminderPresenterTest {
     /** Saturday; clocks go forward at 02:00 on Sunday 29 March 2026 in Amsterdam. */
     private val now = ZonedDateTime.of(2026, 3, 28, 12, 0, 0, 0, zone)
     private val nowMillis = now.toInstant().toEpochMilli()
+    private val hourMillis = 3_600_000L
     private val messageId = EventId("\$message")
     private val threadId = ThreadId("\$thread")
     private val link = "https://matrix.to/#/!room:x/\$message"
@@ -136,7 +139,7 @@ class RoomReminderPresenterTest {
         // The store reads in the background scope, which the presenter's test does not drive.
         testScheduler.advanceTimeBy(1_000)
         testScheduler.runCurrent()
-        return RoomReminderPresenter(target, room, store, clock, snackbarDispatcher)
+        return RoomReminderPresenter(target, room, store, clock, snackbarDispatcher, aDeadlineFormatter)
     }
 
     private suspend fun TurbineTestContext<RoomReminderState>.awaitBotState(predicate: (RoomReminderBotState) -> Boolean): RoomReminderState =
@@ -161,6 +164,16 @@ class RoomReminderPresenterTest {
             assertThat(state.step).isEqualTo(RoomReminderStep.Options)
             assertThat(state.customDate).isEqualTo(LocalDate.of(2026, 3, 29))
             assertThat(state.customTime).isEqualTo(LocalTime.of(9, 0))
+            // Labelled like task deadlines; 09:00 on Sunday is after the change to summer time, UTC+2.
+            val customMillis = ZonedDateTime.of(2026, 3, 29, 7, 0, 0, 0, ZoneOffset.UTC).toInstant().toEpochMilli()
+            assertThat(state.optionLabels).containsExactlyEntriesIn(
+                mapOf(
+                    RoomReminderOption.InHours(2) to aDeadlineFormatter.format(nowMillis + 2 * hourMillis),
+                    RoomReminderOption.InHours(8) to aDeadlineFormatter.format(nowMillis + 8 * hourMillis),
+                    RoomReminderOption.InHours(24) to aDeadlineFormatter.format(nowMillis + 24 * hourMillis),
+                    RoomReminderOption.Custom to aDeadlineFormatter.format(customMillis),
+                )
+            )
         }
     }
 
@@ -270,6 +283,8 @@ class RoomReminderPresenterTest {
                 joined.eventSink(RoomReminderEvent.SetTime(time))
                 val state = consumeItemsUntilPredicate { it.customDate == date && it.customTime == time }.last()
                 assertThat(state.customError).isEqualTo(error)
+                // A time summer time skips has no label.
+                assertThat(state.optionLabels.containsKey(RoomReminderOption.Custom)).isEqualTo(error != RoomReminderError.NonexistentTime)
                 state.eventSink(RoomReminderEvent.Send(RoomReminderOption.Custom))
             }
             // Exactly one year ahead is still accepted.

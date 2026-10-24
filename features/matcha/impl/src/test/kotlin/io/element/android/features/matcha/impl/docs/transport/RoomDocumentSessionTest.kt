@@ -10,18 +10,24 @@ package io.element.android.features.matcha.impl.docs.transport
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.docs.ANCHOR
+import io.element.android.features.matcha.impl.docs.BOB
 import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.docs.DocsRoomFixture
 import io.element.android.features.matcha.impl.docs.FakeYjsEngine.Companion.operation
 import io.element.android.features.matcha.impl.docs.FakeYjsEngine.Companion.update
 import io.element.android.features.matcha.impl.docs.aCreateItem
 import io.element.android.features.matcha.impl.docs.aFrameItem
+import io.element.android.features.matcha.impl.docs.anItem
 import io.element.android.features.matcha.impl.docs.engine.YjsEngineException
 import io.element.android.features.matcha.impl.docs.frameItems
 import io.element.android.features.matcha.impl.docs.settle
+import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
+import io.element.android.libraries.matrix.api.timeline.Timeline
 import io.element.android.libraries.matrix.test.room.aRoomInfo
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -58,6 +64,57 @@ class RoomDocumentSessionTest {
         assertThat(state.sync).isEqualTo(DocumentSync.Saved)
         assertThat(state.text).isEqualTo("Hello")
         assertThat(fixture.engine.documents.single().applyCount).isEqualTo(1)
+        // The replay crosses the bridge once.
+        assertThat(fixture.engine.documents.single().applyAllCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `an update the engine refuses stops the replay there, and reading the document again stops there again`() = runTest {
+        val fixture = DocsRoomFixture(
+            listOf(
+                aCreateItem(),
+                aFrameItem("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single()),
+                aFrameItem("\$bad", DocsProtocol.frames("garbage".toByteArray(), ANCHOR, "u2", "main").single()),
+                aFrameItem("\$f3", DocsProtocol.frames(update(operation("c", text = "After", deps = listOf("a"))), ANCHOR, "u3", "main").single()),
+            ),
+        )
+        val session = fixture.session(backgroundScope)
+        settle()
+        val document = fixture.engine.documents.single()
+        assertThat(session.state.value.error).isEqualTo(DocumentError.InvalidUpdate)
+        assertThat(document.snapshot().text).isEqualTo("Hello")
+        session.retry()
+        settle()
+        assertThat(session.state.value.error).isEqualTo(DocumentError.InvalidUpdate)
+        assertThat(document.snapshot().text).isEqualTo("Hello")
+        assertThat(document.applyCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `the frames come from the anchor's relations, which hold what reading the whole history finds`() = runTest {
+        val frames = listOf(
+            "\$f1" to DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single(),
+            "\$f2" to DocsProtocol.frames(update(operation("b", text = "Hello again", deps = listOf("a"))), ANCHOR, "u2", "main").single(),
+        )
+        val undecryptable = "\$enc" to """{"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "…", "m.relates_to": $RELATION}"""
+        listOf(frames, frames + undecryptable).forEach { events ->
+            fun json(event: Pair<String, String>) = frameJson(event.first, event.second, isEncrypted = event == undecryptable)
+            // Without the SDK's relations the whole history is read; this timeline holds the frames there, as older pages would.
+            val history = LongHistoryRoom(listOf(aCreateItem()) + events.map { anItem(json(it), it.first) }, related = null)
+            // With them the frames come with the relations, and the history holds none.
+            val relations = LongHistoryRoom(listOf(aCreateItem()), related = events.map(::json))
+            val fromHistory = history.fixture.session(backgroundScope)
+            val fromRelations = relations.fixture.session(backgroundScope)
+            settle()
+            assertThat(fromRelations.state.value).isEqualTo(fromHistory.state.value)
+            assertThat(history.pagesRead).isEqualTo(LongHistoryRoom.PAGES)
+            assertThat(relations.pagesRead).isEqualTo(MatchaRoomStore.INITIAL_HISTORY_PAGES)
+            if (undecryptable in events) {
+                assertThat(fromRelations.state.value.error).isEqualTo(DocumentError.DecryptError)
+            } else {
+                assertThat(fromRelations.state.value.text).isEqualTo("Hello again")
+            }
+        }
     }
 
     @Test
@@ -276,6 +333,31 @@ class RoomDocumentSessionTest {
     }
 
     @Test
+    fun `the text is read back from the engine only when an update was applied`() = runTest {
+        val fixture = DocsRoomFixture(listOf(aCreateItem(), aFrameItem("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single())))
+        val session = fixture.session(backgroundScope)
+        settle()
+        backgroundScope.launch { session.edit("Hello", "Hello!") }
+        settle()
+        val document = fixture.engine.documents.single()
+        val reads = document.snapshotCount
+        // The echo of our own frame, a frame of another document and a duplicate are skipped without reading the text back.
+        fixture.timelineItems.value += listOf(
+            aFrameItem("\$echo", fixture.sent.single().second, sender = fixture.room.sessionId.value),
+            aFrameItem("\$f2", DocsProtocol.frames(update(operation("x", text = "Other")), ANCHOR, "u2", DocsProtocol.CATALOG_DOCUMENT_ID).single()),
+            aFrameItem("\$f3", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single()),
+        )
+        settle()
+        assertThat(document.snapshotCount).isEqualTo(reads)
+        assertThat(session.state.value.text).isEqualTo("Hello!")
+        val remote = update(operation("b", text = "Hi", deps = listOf("a")))
+        fixture.timelineItems.value += aFrameItem("\$f4", DocsProtocol.frames(remote, ANCHOR, "u4", "main").single())
+        settle()
+        assertThat(document.snapshotCount).isEqualTo(reads + 1)
+        assertThat(session.state.value.text).isEqualTo("Hi")
+    }
+
+    @Test
     fun `without permission the document is view only`() = runTest {
         val fixture = DocsRoomFixture(listOf(aCreateItem()), canSend = false)
         val session = fixture.session(backgroundScope)
@@ -412,7 +494,37 @@ class RoomDocumentSessionTest {
         assertThat(plainState!!.documents.map { it.id }).containsExactly("main")
     }
 
+    /** A room whose history takes [PAGES] pages to read, and whose anchor's relations are [related], or can't be read when null. */
+    private class LongHistoryRoom(items: List<MatrixTimelineItem>, related: List<String>?) {
+        var pagesRead = 0
+        val fixture: DocsRoomFixture = DocsRoomFixture(
+            items,
+            hasMoreHistory = true,
+            paginateResult = {
+                pagesRead++
+                if (pagesRead == PAGES) fixture.timeline.backwardPaginationStatus.value = Timeline.PaginationStatus(isPaginating = false, hasMoreToLoad = false)
+                Result.success(pagesRead < PAGES)
+            },
+            fetchRelatedEventsJsonResult = { eventId, _, _ ->
+                if (related == null) {
+                    Result.failure(UnsupportedOperationException("No Matcha SDK patch"))
+                } else {
+                    Result.success(RawEventsPage(if (eventId.value == ANCHOR) related else emptyList(), null))
+                }
+            },
+        )
+
+        companion object {
+            const val PAGES = 60
+        }
+    }
+
     private companion object {
         const val RELATION = """{"rel_type": "m.reference", "event_id": "$ANCHOR"}"""
+
+        fun frameJson(eventId: String, content: String, isEncrypted: Boolean): String {
+            val type = if (isEncrypted) DocsProtocol.EVENT_ROOM_ENCRYPTED else MatchaConfig.EVENT_DOCS_UPDATE
+            return """{"type": "$type", "event_id": "$eventId", "sender": "$BOB", "origin_server_ts": 2, "content": $content}"""
+        }
     }
 }

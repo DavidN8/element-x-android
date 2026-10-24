@@ -21,15 +21,17 @@ import androidx.compose.runtime.setValue
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
-import io.element.android.features.matcha.impl.docs.DocNameError
 import io.element.android.features.matcha.impl.docs.DocNameSheetState
 import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.docs.SpaceDocsContext
 import io.element.android.features.matcha.impl.docs.docNameError
+import io.element.android.features.matcha.impl.docs.saveFailed
+import io.element.android.features.matcha.impl.docs.saveIn
 import io.element.android.features.matcha.impl.docs.transport.CatalogState
 import io.element.android.features.matcha.impl.docs.transport.DocumentError
 import io.element.android.features.matcha.impl.docs.transport.DocumentSessionState
 import io.element.android.features.matcha.impl.docs.transport.DocumentSync
+import io.element.android.features.matcha.impl.docs.withNameError
 import io.element.android.features.networkmonitor.api.NetworkMonitor
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.libraries.architecture.Presenter
@@ -93,18 +95,17 @@ class DocEditorPresenter(
 
         fun submitName() = coroutineScope.launch {
             val sheet = nameSheet?.takeIf { !it.isSaving } ?: return@launch
-            val error = if (sheet.name.isBlank()) DocNameError.Empty else docNameError(sheet.name)
-            if (error != null) {
-                nameSheet = sheet.copy(error = error)
+            val catalog = context.catalog ?: return@launch
+            sheet.withNameError()?.let {
+                nameSheet = it
                 return@launch
             }
             nameSheet = sheet.copy(isSaving = true, error = null)
-            val result = context.catalog?.rename(documentId, sheet.name) ?: return@launch
-            nameSheet = result.fold(
+            nameSheet = sheet.saveIn(catalog).fold(
                 onSuccess = { null },
                 onFailure = {
                     Timber.w(it, "Could not rename a doc")
-                    sheet.copy(isSaving = false, error = DocNameError.SaveFailed)
+                    sheet.saveFailed(it)
                 },
             )
         }

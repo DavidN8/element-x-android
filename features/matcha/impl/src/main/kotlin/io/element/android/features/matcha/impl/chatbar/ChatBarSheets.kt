@@ -185,7 +185,7 @@ internal fun ThreadActionsSheet(
 }
 
 /**
- * A sheet's 56dp header: an optional ✕ at the start, the centred title, and an optional line under it.
+ * A sheet's 56dp header: an optional ✕ at the start, or ← with [isBack], the centred title, and an optional line under it.
  *
  * ponytail: stands in for DS/components/SheetHeader.kt (WHATSAPP_DESIGN.md §2.5) until the design system has it.
  */
@@ -195,6 +195,7 @@ internal fun SheetHeader(
     modifier: Modifier = Modifier,
     onClose: (() -> Unit)? = null,
     subtitle: String? = null,
+    isBack: Boolean = false,
 ) {
     Box(
         modifier = modifier
@@ -204,7 +205,10 @@ internal fun SheetHeader(
     ) {
         if (onClose != null) {
             IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterStart).padding(start = 4.dp)) {
-                Icon(imageVector = CompoundIcons.Close(), contentDescription = stringResource(CommonStrings.action_close))
+                Icon(
+                    imageVector = if (isBack) CompoundIcons.ArrowLeft() else CompoundIcons.Close(),
+                    contentDescription = stringResource(if (isBack) CommonStrings.action_back else CommonStrings.action_close),
+                )
             }
         }
         Column(

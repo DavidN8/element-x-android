@@ -10,6 +10,7 @@ package io.element.android.features.matcha.impl.reminders
 import androidx.compose.runtime.Immutable
 import io.element.android.libraries.matrix.api.core.UserId
 import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZonedDateTime
@@ -28,6 +29,8 @@ data class RoomReminderState(
     /** When the sheet last read the clock; the quick options are shown relative to it. */
     val now: ZonedDateTime,
     val quickOptions: ImmutableList<RoomReminderOption>,
+    /** When each quick option and the custom date and time remind, like "Today 14:05"; none for a custom time that doesn't exist. */
+    val optionLabels: ImmutableMap<RoomReminderOption, String>,
     /** The quick option the confirm button sends; nothing is chosen at first, so a single tap never posts. */
     val selected: RoomReminderOption?,
     /** The option being sent, if any; the other options are disabled meanwhile. */

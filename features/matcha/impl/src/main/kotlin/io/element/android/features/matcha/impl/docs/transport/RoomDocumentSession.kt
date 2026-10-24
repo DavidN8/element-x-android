@@ -47,11 +47,13 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** Failures that must never be shown as an empty or saved document. Same codes as the web client. */
 enum class DocumentError {
@@ -84,7 +86,7 @@ private class DocumentException(val error: DocumentError, cause: Throwable? = nu
 
 /**
  * One shared document of a room, synced like the web client's `RoomDocumentSession`: every `com.matchahoneylatte.docs.update`
- * frame related to the room's `m.room.create` event is replayed from the store (whose whole history is read first) before
+ * frame related to the room's `m.room.create` event is replayed from the store (once it has read that event's relations) before
  * editing is allowed; complete updates are deduplicated by sender and update id and checked by the engine before they apply;
  * local edits are debounced for 500 ms, merged, split into frames and only count as saved once the server accepted every frame.
  * Unsent edits live in memory only.
@@ -238,18 +240,13 @@ class RoomDocumentSession(
 
     private suspend fun load() {
         try {
-            // Read all of the history, so no frame is missed. ponytail: cheap for a space, which has little history; a chat's
-            // earlier doc pages through the whole chat, which is what an SDK call listing the anchor's relations would avoid.
-            var hasMoreHistory = true
-            while (hasMoreHistory) hasMoreHistory = store.loadMore().getOrElse { throw DocumentException(DocumentError.LoadError, it) }
-            // The timeline delivers its items a little after a page is read: wait for the store to see the start of the room.
-            store.snapshot.first { !it.hasMoreHistory }
+            awaitFrames()
             val anchor = anchor ?: findAnchor() ?: throw DocumentException(DocumentError.AnchorError)
             lock.withLock {
                 val events = store.snapshot.value.events.asReversed()
                 this.anchor = anchor
                 val document = document ?: openDocument()
-                events.forEach { ingest(document, anchor, it) }
+                ingestAll(document, anchor, events)
                 refresh(document)
                 isReady = true
             }
@@ -264,6 +261,17 @@ class RoomDocumentSession(
         // Frames that arrived while loading, then the edits kept from before.
         onEvents(store.snapshot.value.events)
         if (isReady && hasPending()) startFlush()
+    }
+
+    /**
+     * Waits until the store holds every frame it can read. Frames relate to the anchor, whose relations the store reads in full when
+     * it opens; this SDK's timelines drop custom events, so older history would only add undecryptable copies of frames the relations
+     * hold too. Without the SDK's relations, or after a failed read, the store shows a warning and the whole history is read instead.
+     */
+    private suspend fun awaitFrames() {
+        // Bounded: a failed read cleared by a later one leaves the store unloaded without a warning.
+        withTimeoutOrNull(STORE_READ_TIMEOUT) { store.snapshot.first { it.isLoaded || it.loadFailed || it.warning != null } }
+        store.loadHistoryUntil { it.isLoaded && it.warning == null }.getOrElse { throw DocumentException(DocumentError.LoadError, it) }
     }
 
     private suspend fun onEvents(events: List<RawEvent>) {
@@ -282,8 +290,8 @@ class RoomDocumentSession(
                 else -> Unit
             }
             try {
-                events.asReversed().forEach { ingest(document, anchor, it) }
-                refresh(document)
+                // Only an applied update changes the text, the entries or what is missing; edits update them locally.
+                if (ingestAll(document, anchor, events.asReversed())) refresh(document)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -294,7 +302,37 @@ class RoomDocumentSession(
         if (needsReload) retry()
     }
 
-    private suspend fun ingest(document: YjsDocument, anchor: String, event: RawEvent) {
+    /**
+     * Ingests [events], oldest first, and applies the updates they complete in one engine call. Returns whether an update was
+     * applied. Fails like ingesting the events one at a time would: on the same event, with the same events seen.
+     */
+    private suspend fun ingestAll(document: YjsDocument, anchor: String, events: List<RawEvent>): Boolean {
+        val seenBefore = HashSet(seen)
+        val appliedBefore = HashSet(applied)
+        val incomingBefore = HashMap(incoming)
+        val updates = mutableListOf<ByteArray>()
+        val failure = try {
+            events.forEach { event -> ingest(anchor, event, updates::add) }
+            null
+        } catch (e: Exception) {
+            e
+        }
+        val count = if (updates.isEmpty()) 0 else document.applyAll(updates)
+        if (count < updates.size) {
+            // An update was malformed: go through the events again as if each update had been applied on its own, which fails on it.
+            seen.retainAll(seenBefore)
+            applied.retainAll(appliedBefore)
+            incoming.clear()
+            incoming.putAll(incomingBefore)
+            var index = 0
+            events.forEach { event -> ingest(anchor, event) { index++ < count } }
+        }
+        failure?.let { throw it }
+        return count > 0
+    }
+
+    /** Hands the update [event] completes, if any, to [apply], which returns false when the engine refused it. */
+    private fun ingest(anchor: String, event: RawEvent, apply: (ByteArray) -> Boolean) {
         val eventId = event.eventId ?: return
         if (eventId in seen) return
         // Not marked as seen: once decrypted, the same event comes back as a frame.
@@ -302,12 +340,12 @@ class RoomDocumentSession(
         when (val result = DocsProtocol.parseFrame(event, anchor, documentId)) {
             DocFrameResult.Unrelated -> Unit
             DocFrameResult.Invalid -> throw DocumentException(DocumentError.InvalidUpdate)
-            is DocFrameResult.Frame -> ingestFrame(document, result)
+            is DocFrameResult.Frame -> ingestFrame(result, apply)
         }
         seen += eventId
     }
 
-    private suspend fun ingestFrame(document: YjsDocument, result: DocFrameResult.Frame) {
+    private fun ingestFrame(result: DocFrameResult.Frame, apply: (ByteArray) -> Boolean) {
         val frame = result.frame
         val key = "${result.senderId}:${frame.updateId}"
         if (key in applied) return
@@ -325,7 +363,7 @@ class RoomDocumentSession(
             return
         }
         val update = ByteArrayOutputStream().apply { for (index in 0 until packet.count) write(packet.parts.getValue(index)) }.toByteArray()
-        if (!document.apply(update)) throw DocumentException(DocumentError.InvalidUpdate)
+        if (!apply(update)) throw DocumentException(DocumentError.InvalidUpdate)
         applied += key
         incoming -= key
     }
@@ -471,6 +509,7 @@ class RoomDocumentSession(
 
     private companion object {
         val DEBOUNCE = 500.milliseconds
+        val STORE_READ_TIMEOUT = 10.seconds
         val SEND_ERRORS = setOf(DocumentError.SendError, DocumentError.PermissionError, DocumentError.TooLargeError)
     }
 }

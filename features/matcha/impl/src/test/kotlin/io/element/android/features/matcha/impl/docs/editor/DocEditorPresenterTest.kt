@@ -213,4 +213,20 @@ class DocEditorPresenterTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    @Test
+    fun `a rename that can't be saved keeps the sheet open with the error`() = runTest {
+        val fixture = DocsRoomFixture(items(), stateEvents = CONFIGURED_STATE)
+        aPresenter(fixture).test {
+            val ready = consumeItemsUntilPredicate { it.canRename }.last()
+            fixture.sendResult = { _, _ -> Result.failure(IllegalStateException("offline")) }
+            ready.eventSink(DocEditorEvent.Rename)
+            ready.eventSink(DocEditorEvent.UpdateName("Plans 2027"))
+            ready.eventSink(DocEditorEvent.SubmitName)
+            val sheet = consumeItemsUntilPredicate { it.nameSheet?.error == DocNameError.SaveFailed }.last().nameSheet!!
+            assertThat(sheet.isSaving).isFalse()
+            assertThat(sheet.name).isEqualTo("Plans 2027")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 }

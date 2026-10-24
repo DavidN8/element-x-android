@@ -15,6 +15,8 @@ import io.element.android.features.networkmonitor.test.FakeNetworkMonitor
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.UniqueId
+import io.element.android.libraries.matrix.api.room.RawEventsPage
+import io.element.android.libraries.matrix.api.room.RawRelationType
 import io.element.android.libraries.matrix.api.room.RoomInfo
 import io.element.android.libraries.matrix.api.room.StateEventType
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
@@ -98,6 +100,9 @@ class DocsRoomFixture(
     enableEncryptionResult: () -> Result<Unit> = { Result.success(Unit) },
     /** The id of the room's `m.room.create` event in the room state, if the SDK has it. */
     createEventId: String? = ANCHOR,
+    fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?) -> Result<RawEventsPage> = { _, _, _ ->
+        Result.success(RawEventsPage(emptyList(), null))
+    },
 ) {
     val timelineItems = MutableStateFlow(items)
     val sent = mutableListOf<Pair<String, String>>()
@@ -128,6 +133,7 @@ class DocsRoomFixture(
         getStateEventsJsonResult = { type -> Result.success(this.stateEvents[type]?.let { mapOf("" to it) }.orEmpty()) },
         getStateEventIdResult = { type, key -> Result.success(createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId)) },
         enableEncryptionResult = enableEncryptionResult,
+        fetchRelatedEventsJsonResult = fetchRelatedEventsJsonResult,
     )
 
     fun store(scope: CoroutineScope) = MatchaRoomStore(room, scope, setOf(DocsProtocol.EVENT_ROOM_ENCRYPTED))

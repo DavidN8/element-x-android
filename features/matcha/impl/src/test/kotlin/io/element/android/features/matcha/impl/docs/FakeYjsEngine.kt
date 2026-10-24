@@ -57,6 +57,8 @@ class FakeYjsDocument : YjsDocument {
     private val pending = mutableListOf<JsonObject>()
     var isClosed = false
     var applyCount = 0
+    var applyAllCount = 0
+    var snapshotCount = 0
     private var localCount = 0
 
     override suspend fun apply(update: ByteArray): Boolean {
@@ -78,6 +80,11 @@ class FakeYjsDocument : YjsDocument {
         return true
     }
 
+    override suspend fun applyAll(updates: List<ByteArray>): Int {
+        applyAllCount++
+        return updates.takeWhile { apply(it) }.size
+    }
+
     private fun integrate(operation: JsonObject) {
         val id = operation["id"]!!.jsonPrimitive.content
         if (id in appliedIds) return
@@ -86,7 +93,10 @@ class FakeYjsDocument : YjsDocument {
         operation["key"]?.jsonPrimitive?.contentOrNull?.let { entries[it] = operation["value"]!!.jsonObject }
     }
 
-    override suspend fun snapshot() = YjsSnapshot(text = text, entries = JsonObject(entries), isMissingUpdates = pending.isNotEmpty())
+    override suspend fun snapshot(): YjsSnapshot {
+        snapshotCount++
+        return YjsSnapshot(text = text, entries = JsonObject(entries), isMissingUpdates = pending.isNotEmpty())
+    }
 
     override suspend fun edit(changes: List<TextChange>): ByteArray? {
         if (changes.isEmpty()) return null
