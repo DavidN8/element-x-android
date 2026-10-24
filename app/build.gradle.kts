@@ -204,6 +204,12 @@ android {
             useLegacyPackaging = project.findProperty("useLegacyPackaging")?.toString()?.toBoolean()
         }
     }
+
+    androidResources {
+        // aapt's default ignore list (a custom list replaces it), plus the Element Call source maps (5 MB compressed),
+        // which a WebView only fetches when DevTools is attached.
+        ignoreAssetsPatterns += listOf("!.svn", "!.git", "!.ds_store", "!*.scc", ".*", "<dir>_*", "!CVS", "!thumbs.db", "!picasa.ini", "!*~", "!*.map")
+    }
 }
 
 androidComponents {
