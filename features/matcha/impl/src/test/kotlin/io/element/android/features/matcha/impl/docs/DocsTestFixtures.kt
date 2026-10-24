@@ -34,18 +34,11 @@ import io.element.android.libraries.matrix.test.timeline.aTimelineItemDebugInfo
 import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.TestScope
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 
 const val ANCHOR = "\$create"
 const val BOB = "@bob:x"
-
-/** The store and sessions run in the background scope, which advanceUntilIdle() does not drive. */
-fun TestScope.settle(millis: Long = 1_000) {
-    testScheduler.advanceTimeBy(millis)
-    testScheduler.runCurrent()
-}
 
 private var itemCounter = 0
 

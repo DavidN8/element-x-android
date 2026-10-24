@@ -25,30 +25,20 @@ import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomInfo
 import io.element.android.libraries.matrix.test.room.threads.FakeThreadsListService
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 class MatchaRoomStoreParticipantsTest {
-    private val boardRoot = "\$board"
+    private val boardRoot = A_BOARD_ROOT
     private val thread = "\$thread"
     private val me = A_SESSION_ID.value
-
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
 
     private fun reply(index: Int, sender: String, type: String = "m.room.message", relation: String = "m.thread", unsigned: String = "") =
         """{"type": "$type", "event_id": "${'$'}r$index", "sender": "$sender", "origin_server_ts": $index$unsigned, """ +
             """"content": {"m.relates_to": {"rel_type": "$relation", "event_id": "$thread"}}}"""
 
-    private fun card(index: Int, cardId: String, threadId: String?, sender: String) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_KANBAN_CARD,
-        KanbanProtocol.cardContent(CardRevision(cardId, "Card $index", "", TaskStatus.Todo, false, threadId, null, null, false), boardRoot),
-        sender = sender,
-    )
+    private fun card(index: Int, cardId: String, threadId: String?, sender: String) =
+        aCardItem(index, cardId, "Card $index", threadId = threadId, showToRoom = false, sender = sender)
 
     @Test
     fun `a thread involves its root sender and its repliers, and an older card the authors of its revisions`() = runTest {

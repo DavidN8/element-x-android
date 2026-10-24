@@ -8,6 +8,9 @@
 package io.element.android.features.matcha.impl.store
 
 import io.element.android.appconfig.MatchaConfig
+import io.element.android.features.matcha.impl.protocol.CardRevision
+import io.element.android.features.matcha.impl.protocol.KanbanProtocol
+import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId
 import io.element.android.libraries.matrix.api.core.UniqueId
@@ -39,6 +42,15 @@ import io.element.android.libraries.matrix.test.timeline.anEventTimelineItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
+
+/** The root of the board in board tests. */
+internal const val A_BOARD_ROOT = "\$board"
+
+/** Stores, sessions and presenters run in the background scope, which advanceUntilIdle() does not drive. */
+internal fun TestScope.settle(millis: Long = 1_000) {
+    testScheduler.advanceTimeBy(millis)
+    testScheduler.runCurrent()
+}
 
 /** Builds a [MatchaRoomStore] over fakes for presenter tests; everything the store reads is already loaded. */
 internal fun aMatchaRoomStore(
@@ -188,6 +200,49 @@ internal fun aMatchaEventItem(index: Int, type: String, content: String, stateKe
     ),
 )
 
+/** A timeline item carrying one revision of a card of the board at [boardRoot], sent by [sender]. */
+internal fun aCardItem(
+    index: Int,
+    cardId: String,
+    title: String,
+    status: TaskStatus = TaskStatus.Todo,
+    threadId: String? = null,
+    description: String = "",
+    dueAt: Long? = null,
+    archived: Boolean = false,
+    showToRoom: Boolean = true,
+    sender: String = "@bob:x",
+    boardRoot: String = A_BOARD_ROOT,
+) = aMatchaEventItem(
+    index,
+    MatchaConfig.EVENT_KANBAN_CARD,
+    KanbanProtocol.cardContent(
+        CardRevision(
+            cardId = cardId,
+            title = title,
+            description = description,
+            status = status,
+            archived = archived,
+            threadId = threadId,
+            dueAt = dueAt,
+            reminderRequested = null,
+            showToRoom = showToRoom,
+        ),
+        boardRoot,
+    ),
+    sender = sender,
+)
+
+/** A timeline item carrying a patch of the shared name or archived flag of the thread [threadId]. */
+internal fun aThreadPatchItem(index: Int, threadId: String, name: String? = null, archived: Boolean? = null): MatrixTimelineItem.Event {
+    val fields = listOfNotNull(name?.let { """"name": "$it", """ }, archived?.let { """"archived": $it, """ }).joinToString("")
+    return aMatchaEventItem(
+        index,
+        MatchaConfig.EVENT_THREAD_METADATA,
+        """{"version": 1, $fields"m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
+    )
+}
+
 /** A timeline item carrying the board pointer state event, pointing at [rootId]. */
 internal fun aBoardPointerItem(index: Int, rootId: String) =
     aMatchaEventItem(index, MatchaConfig.STATE_KANBAN, """{"version": 1, "event_id": "$rootId"}""", stateKey = "")
@@ -198,6 +253,7 @@ internal fun aThreadListItem(
     timestamp: Long = 10,
     content: EventContent? = aMessageContent(body = body),
     senderId: UserId = UserId("@bob:x"),
+    numberOfReplies: Long = 1,
 ) = ThreadListItem(
     rootEvent = ThreadListItemEvent(
         eventId = EventId(id),
@@ -208,5 +264,5 @@ internal fun aThreadListItem(
         timestamp = timestamp,
     ),
     latestEvent = null,
-    numberOfReplies = 1,
+    numberOfReplies = numberOfReplies,
 )

@@ -20,8 +20,8 @@ import io.element.android.features.matcha.impl.docs.aFrameItem
 import io.element.android.features.matcha.impl.docs.anItem
 import io.element.android.features.matcha.impl.docs.engine.YjsEngineException
 import io.element.android.features.matcha.impl.docs.frameItems
-import io.element.android.features.matcha.impl.docs.settle
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.features.networkmonitor.api.NetworkStatus
 import io.element.android.libraries.matrix.api.core.EventId
 import io.element.android.libraries.matrix.api.core.RoomId

@@ -11,7 +11,6 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.features.matcha.impl.docs.ANCHOR
 import io.element.android.features.matcha.impl.docs.DocsRoomFixture
 import io.element.android.features.matcha.impl.docs.aCreateItem
-import io.element.android.features.matcha.impl.docs.settle
 import io.element.android.libraries.matrix.api.room.RawEventsPage
 import io.element.android.libraries.matrix.api.timeline.TimelineException
 import kotlinx.coroutines.CoroutineScope

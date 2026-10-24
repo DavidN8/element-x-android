@@ -13,14 +13,15 @@ import app.cash.turbine.TurbineTestContext
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.store.A_BOARD_ROOT
 import io.element.android.features.matcha.impl.store.PointerRoom
-import io.element.android.features.matcha.impl.store.aMatchaEventItem
+import io.element.android.features.matcha.impl.store.aCardItem
 import io.element.android.features.matcha.impl.store.aMatchaJoinedRoom
 import io.element.android.features.matcha.impl.store.aMatchaTimeline
 import io.element.android.features.matcha.impl.store.aThreadListItem
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.features.matcha.impl.tasks.A_NOW
 import io.element.android.features.matcha.impl.tasks.TaskEditorEvent
 import io.element.android.features.matcha.impl.tasks.TaskItem
@@ -74,18 +75,12 @@ class TasksTabPresenterTest {
     private val design = RoomId("!design:matrix.org")
     private val launch = RoomId("!launch:matrix.org")
     private val chat = RoomId("!chat:matrix.org")
-    private val boardRoot = "\$board"
+    private val boardRoot = A_BOARD_ROOT
 
     private val zone = ZoneId.systemDefault()
     private val today = Instant.ofEpochMilli(A_NOW).atZone(zone).toLocalDate()
 
     private fun at(date: LocalDate, hour: Int, minute: Int = 0) = date.atTime(hour, minute).atZone(zone).toInstant().toEpochMilli()
-
-    /** Runs the work launched in the session scope, which is the test's background scope. */
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
 
     @Test
     fun `nothing is shown and no chat is read when the feature is off`() = runTest {
@@ -607,25 +602,7 @@ class TasksTabPresenterTest {
     private fun legacyCard(index: Int, title: String, id: String = "legacy", writtenBy: String = me) =
         TestCard(index, id, title, TaskStatus.Todo, threadId = null, dueAt = null, archived = false, author = writtenBy, showToRoom = true)
 
-    private fun TestCard.item() = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_KANBAN_CARD,
-        KanbanProtocol.cardContent(
-            CardRevision(
-                cardId = id,
-                title = title,
-                description = "",
-                status = status,
-                archived = archived,
-                threadId = threadId,
-                dueAt = dueAt,
-                reminderRequested = null,
-                showToRoom = showToRoom,
-            ),
-            boardRoot,
-        ),
-        sender = author,
-    )
+    private fun TestCard.item() = aCardItem(index, id, title, status, threadId, dueAt = dueAt, archived = archived, showToRoom = showToRoom, sender = author)
 
     /** A reply in [threadId] by [sender], as the homeserver returns it. */
     private fun reply(index: Int, threadId: String, sender: String) =

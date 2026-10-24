@@ -22,7 +22,7 @@ import io.element.android.features.matcha.impl.docs.aCatalogEntry
 import io.element.android.features.matcha.impl.docs.aCreateItem
 import io.element.android.features.matcha.impl.docs.aFrameItem
 import io.element.android.features.matcha.impl.docs.frameItems
-import io.element.android.features.matcha.impl.docs.settle
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.features.networkmonitor.test.FakeNetworkMonitor
 import io.element.android.libraries.dateformatter.test.FakeDateFormatter
 import io.element.android.libraries.featureflag.api.FeatureFlags

@@ -9,13 +9,14 @@ package io.element.android.features.matcha.impl.chatbar
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.protocol.CardRevision
-import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
 import io.element.android.features.matcha.impl.protocol.ThreadMetadataProtocol
-import io.element.android.features.matcha.impl.store.aMatchaEventItem
+import io.element.android.features.matcha.impl.store.A_BOARD_ROOT
+import io.element.android.features.matcha.impl.store.aCardItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
+import io.element.android.features.matcha.impl.store.aThreadPatchItem
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.libraries.matrix.api.room.threads.ThreadListPaginationStatus
 import io.element.android.libraries.matrix.api.timeline.MatrixTimelineItem
 import kotlinx.coroutines.flow.first
@@ -24,11 +25,11 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 class DefaultMatchaRoomControllerTest {
-    private val boardRoot = "\$board"
+    private val boardRoot = A_BOARD_ROOT
 
     @Test
     fun `the chat has a chip bar once an active thread is named`() = runTest {
-        assertThat(hasChatBar(threads = listOf("\$t1"), items = listOf(namePatch(1, "\$t1", "Launch plan")))).isTrue()
+        assertThat(hasChatBar(threads = listOf("\$t1"), items = listOf(aThreadPatchItem(1, "\$t1", name = "Launch plan")))).isTrue()
     }
 
     @Test
@@ -54,7 +55,7 @@ class DefaultMatchaRoomControllerTest {
         assertThat(
             hasChatBar(
                 threads = listOf("\$t1"),
-                items = listOf(namePatch(1, "\$t1", "Launch plan"), metadataPatch(2, "\$t1", """"archived": true""")),
+                items = listOf(aThreadPatchItem(1, "\$t1", name = "Launch plan"), aThreadPatchItem(2, "\$t1", archived = true)),
             )
         ).isFalse()
     }
@@ -66,7 +67,7 @@ class DefaultMatchaRoomControllerTest {
             boardRoot = boardRoot,
             threads = listOf(aThreadListItem("\$t1")),
             threadsPaginationStatus = ThreadListPaginationStatus.Loading,
-            items = listOf(namePatch(1, "\$t1", "Launch plan")),
+            items = listOf(aThreadPatchItem(1, "\$t1", name = "Launch plan")),
         )
         val controller = DefaultMatchaRoomController(store, backgroundScope)
         settle()
@@ -119,12 +120,6 @@ class DefaultMatchaRoomControllerTest {
         assertThat(controller.openTaskCount.value).isEqualTo(0)
     }
 
-    /** Runs the work launched in the room scope, which is the test's background scope. */
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
-
     private suspend fun TestScope.hasChatBar(
         threads: List<String> = emptyList(),
         items: List<MatrixTimelineItem> = emptyList(),
@@ -137,30 +132,6 @@ class DefaultMatchaRoomControllerTest {
         return controller.hasChatBar.value
     }
 
-    private fun namePatch(index: Int, threadId: String, name: String) = metadataPatch(index, threadId, """"name": "$name"""")
-
-    private fun metadataPatch(index: Int, threadId: String, field: String) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_THREAD_METADATA,
-        """{"version": 1, $field, "m.relates_to": {"rel_type": "m.reference", "event_id": "$threadId"}}""",
-    )
-
-    private fun card(index: Int, id: String, status: TaskStatus, archived: Boolean = false, showToRoom: Boolean = true) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_KANBAN_CARD,
-        KanbanProtocol.cardContent(
-            CardRevision(
-                cardId = id,
-                title = "Task $id",
-                description = "",
-                status = status,
-                archived = archived,
-                threadId = null,
-                dueAt = null,
-                reminderRequested = null,
-                showToRoom = showToRoom,
-            ),
-            boardRoot,
-        ),
-    )
+    private fun card(index: Int, id: String, status: TaskStatus, archived: Boolean = false, showToRoom: Boolean = true) =
+        aCardItem(index, id, "Task $id", status, archived = archived, showToRoom = showToRoom)
 }

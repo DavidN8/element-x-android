@@ -14,14 +14,16 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.R
-import io.element.android.features.matcha.impl.protocol.CardRevision
 import io.element.android.features.matcha.impl.protocol.KanbanProtocol
 import io.element.android.features.matcha.impl.protocol.TaskStatus
+import io.element.android.features.matcha.impl.store.A_BOARD_ROOT
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.matcha.impl.store.aBoardPointerItem
+import io.element.android.features.matcha.impl.store.aCardItem
 import io.element.android.features.matcha.impl.store.aMatchaEventItem
 import io.element.android.features.matcha.impl.store.aMatchaRoomStore
 import io.element.android.features.matcha.impl.store.aThreadListItem
+import io.element.android.features.matcha.impl.store.settle
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarDispatcher
 import io.element.android.libraries.designsystem.utils.snackbar.SnackbarMessage
 import io.element.android.libraries.featureflag.api.FeatureFlags
@@ -50,15 +52,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 
 class TaskBoardPresenterTest {
-    private val boardRoot = "\$board"
+    private val boardRoot = A_BOARD_ROOT
     private val thread = "\$t1"
     private val threadCardId = KanbanProtocol.threadCardId(thread)
-
-    /** Runs work launched in the room scope, which is the test's background scope. */
-    private fun TestScope.settle() {
-        testScheduler.advanceTimeBy(1_000)
-        testScheduler.runCurrent()
-    }
 
     @Test
     fun `nothing is shown when the feature is off`() = runTest {
@@ -79,7 +75,7 @@ class TaskBoardPresenterTest {
     fun `a board further back than the first pages is found before setup is offered`() = runTest {
         // Ten pages are read up front; the board's pointer and a card are in the twelfth.
         val olderPages = List(11) { emptyList<MatrixTimelineItem>() } +
-            listOf(listOf(aBoardPointerItem(1, boardRoot), card(2, "c-old", "Old task", TaskStatus.Todo)))
+            listOf(listOf(aBoardPointerItem(1, boardRoot), aCardItem(2, "c-old", "Old task", TaskStatus.Todo)))
         aPresenter(aMatchaRoomStore(backgroundScope, olderPages = olderPages)).test {
             val states = consumeItemsUntilPredicate { it.board()?.todo?.isNotEmpty() == true }
             assertThat(states.none { it.content is TaskBoardContent.Setup }).isTrue()
@@ -208,11 +204,11 @@ class TaskBoardPresenterTest {
             boardRoot = boardRoot,
             threads = listOf(aThreadListItem(thread, body = "Plan"), aThreadListItem("\$t2", body = "")),
             items = listOf(
-                card(1, "c-late", "Late", TaskStatus.Todo, dueAt = A_NOW + 2_000),
-                card(2, "c-soon", "Soon", TaskStatus.Todo, dueAt = A_NOW - 1_000),
-                card(3, "c-none", "No deadline", TaskStatus.Todo),
-                card(4, "c-done", "Done", TaskStatus.Done, dueAt = A_NOW - 1_000),
-                card(5, "c-archived", "Archived", TaskStatus.Doing, archived = true),
+                aCardItem(1, "c-late", "Late", TaskStatus.Todo, dueAt = A_NOW + 2_000),
+                aCardItem(2, "c-soon", "Soon", TaskStatus.Todo, dueAt = A_NOW - 1_000),
+                aCardItem(3, "c-none", "No deadline", TaskStatus.Todo),
+                aCardItem(4, "c-done", "Done", TaskStatus.Done, dueAt = A_NOW - 1_000),
+                aCardItem(5, "c-archived", "Archived", TaskStatus.Doing, archived = true),
                 bootstrap(6, thread),
             ),
         )
@@ -375,8 +371,8 @@ class TaskBoardPresenterTest {
         val sent = mutableListOf<String>()
         // The thread started at 100 ms; its card was written at 150 ms, in the eleventh page, older than the ten read up front.
         val olderPages = List(10) { emptyList<MatrixTimelineItem>() } +
-            listOf(listOf(card(150, threadCardId, "Plan", TaskStatus.Doing, threadId = thread, description = "Steps", dueAt = A_NOW + 5_000))) +
-            listOf(listOf(card(50, "c-older", "Older", TaskStatus.Todo)))
+            listOf(listOf(aCardItem(150, threadCardId, "Plan", TaskStatus.Doing, threadId = thread, description = "Steps", dueAt = A_NOW + 5_000))) +
+            listOf(listOf(aCardItem(50, "c-older", "Older", TaskStatus.Todo)))
         val store = aMatchaRoomStore(
             scope = backgroundScope,
             boardRoot = boardRoot,
@@ -407,7 +403,7 @@ class TaskBoardPresenterTest {
             boardRoot = boardRoot,
             threads = listOf(aThreadListItem(thread, body = "Plan", timestamp = 100)),
             // The history read so far already reaches back before the thread started.
-            items = listOf(card(50, "c-older", "Older", TaskStatus.Todo)),
+            items = listOf(aCardItem(50, "c-older", "Older", TaskStatus.Todo)),
             olderPages = List(12) { emptyList() },
             paginateResult = {
                 pagesRead++
@@ -505,7 +501,7 @@ class TaskBoardPresenterTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
             boardRoot = boardRoot,
-            items = listOf(card(1, "c-legacy", "Legacy", TaskStatus.Todo, archived = true)),
+            items = listOf(aCardItem(1, "c-legacy", "Legacy", TaskStatus.Todo, archived = true)),
         )
         aPresenter(store, snackbarDispatcher = snackbarDispatcher).test {
             awaitUntil { it.board()?.archived?.isNotEmpty() == true }.eventSink(TaskBoardEvent.ShowArchived)
@@ -576,7 +572,7 @@ class TaskBoardPresenterTest {
     @Test
     fun `tapping a task opens its thread, and an older card without one opens the editor`() = runTest {
         val opened = mutableListOf<ThreadId>()
-        val store = aLinkedTaskStore(extraItems = listOf(card(9, "c-legacy", "Legacy", TaskStatus.Todo)))
+        val store = aLinkedTaskStore(extraItems = listOf(aCardItem(9, "c-legacy", "Legacy", TaskStatus.Todo)))
         aPresenter(store, openThread = { opened += it }).test {
             val state = awaitUntil { it.board()?.todo?.size == 2 }
             state.eventSink(TaskBoardEvent.OpenTask(threadCardId))
@@ -646,11 +642,11 @@ class TaskBoardPresenterTest {
                 aThreadListItem("\$mine", body = "Mine", senderId = A_SESSION_ID),
             ),
             items = listOf(
-                card(1, KanbanProtocol.threadCardId("\$bobs"), "Bob's", TaskStatus.Todo, threadId = "\$bobs", showToRoom = false),
-                card(2, KanbanProtocol.threadCardId("\$shared"), "Shared", TaskStatus.Todo, threadId = "\$shared"),
-                card(3, KanbanProtocol.threadCardId("\$mine"), "Mine", TaskStatus.Doing, threadId = "\$mine", showToRoom = false),
-                card(4, "c-bobs", "Bob's older card", TaskStatus.Todo, showToRoom = false),
-                card(5, "c-mine", "My older card", TaskStatus.Todo, showToRoom = false, sender = A_SESSION_ID.value),
+                aCardItem(1, KanbanProtocol.threadCardId("\$bobs"), "Bob's", TaskStatus.Todo, threadId = "\$bobs", showToRoom = false),
+                aCardItem(2, KanbanProtocol.threadCardId("\$shared"), "Shared", TaskStatus.Todo, threadId = "\$shared"),
+                aCardItem(3, KanbanProtocol.threadCardId("\$mine"), "Mine", TaskStatus.Doing, threadId = "\$mine", showToRoom = false),
+                aCardItem(4, "c-bobs", "Bob's older card", TaskStatus.Todo, showToRoom = false),
+                aCardItem(5, "c-mine", "My older card", TaskStatus.Todo, showToRoom = false, sender = A_SESSION_ID.value),
             ),
         )
         aPresenter(store).test {
@@ -706,7 +702,7 @@ class TaskBoardPresenterTest {
             scope = backgroundScope,
             boardRoot = boardRoot,
             threads = listOf(aThreadListItem(thread, body = "Plan")),
-            items = listOf(card(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, description = "Steps", showToRoom = false)),
+            items = listOf(aCardItem(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, description = "Steps", showToRoom = false)),
         ) { _, content ->
             sent += content
             Result.success(EventId("\$e${sent.size + 10}"))
@@ -731,7 +727,7 @@ class TaskBoardPresenterTest {
             scope = backgroundScope,
             boardRoot = boardRoot,
             threads = listOf(aThreadListItem(thread, body = "Plan")),
-            items = listOf(card(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, showToRoom = false)),
+            items = listOf(aCardItem(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, showToRoom = false)),
             roomInfo = aRoomInfo(isDirect = true, heroes = listOf(MatrixUser(UserId("@bob:x")))),
         )
         aPresenter(store).test {
@@ -754,39 +750,8 @@ class TaskBoardPresenterTest {
         boardRoot = boardRoot,
         canSendMessage = canSendMessage,
         threads = listOf(aThreadListItem(thread, body = "Plan")),
-        items = listOf(card(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, description = "Steps", dueAt = A_NOW + 5_000)) + extraItems,
+        items = listOf(aCardItem(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, description = "Steps", dueAt = A_NOW + 5_000)) + extraItems,
         sendRawEventResult = sendRawEventResult,
-    )
-
-    private fun card(
-        index: Int,
-        id: String,
-        title: String,
-        status: TaskStatus,
-        threadId: String? = null,
-        description: String = "",
-        dueAt: Long? = null,
-        archived: Boolean = false,
-        showToRoom: Boolean = true,
-        sender: String = "@bob:x",
-    ) = aMatchaEventItem(
-        index,
-        MatchaConfig.EVENT_KANBAN_CARD,
-        KanbanProtocol.cardContent(
-            CardRevision(
-                cardId = id,
-                title = title,
-                description = description,
-                status = status,
-                archived = archived,
-                threadId = threadId,
-                dueAt = dueAt,
-                reminderRequested = null,
-                showToRoom = showToRoom,
-            ),
-            boardRoot,
-        ),
-        sender = sender,
     )
 
     private fun bootstrap(index: Int, threadId: String) = aMatchaEventItem(
