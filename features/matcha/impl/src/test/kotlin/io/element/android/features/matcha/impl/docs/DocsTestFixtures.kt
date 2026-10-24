@@ -99,7 +99,7 @@ class DocsRoomFixture(
     sendStateResult: (String, String, String) -> Result<EventId> = { _, _, _ -> Result.success(EventId("\$state")) },
     enableEncryptionResult: () -> Result<Unit> = { Result.success(Unit) },
     /** The id of the room's `m.room.create` event in the room state, if the SDK has it. */
-    createEventId: String? = ANCHOR,
+    var createEventId: String? = ANCHOR,
     fetchRelatedEventsJsonResult: (EventId, RawRelationType, String?, Int) -> Result<RawEventsPage> = { _, _, _, _ ->
         Result.success(RawEventsPage(emptyList(), null))
     },
@@ -135,7 +135,9 @@ class DocsRoomFixture(
             sendStateResult(type, key, content).onSuccess { sentState += Triple(type, key, content) }
         },
         getStateEventsJsonResult = stateEventsJson,
-        getStateEventIdResult = { type, key -> Result.success(createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId)) },
+        getStateEventIdResult = { type, key ->
+            Result.success(this.createEventId?.takeIf { type == StateEventType.RoomCreate && key.isEmpty() }?.let(::EventId))
+        },
         enableEncryptionResult = enableEncryptionResult,
         fetchRelatedEventsJsonResult = fetchRelatedEventsJsonResult,
     )

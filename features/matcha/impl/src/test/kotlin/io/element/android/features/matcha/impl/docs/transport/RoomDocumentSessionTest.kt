@@ -118,6 +118,24 @@ class RoomDocumentSessionTest {
     }
 
     @Test
+    fun `a document waits for the anchor's relations, even when the store loaded before the room state held the anchor`() = runTest {
+        val frame = frameJson("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single(), isEncrypted = false)
+        val fixture = DocsRoomFixture(
+            listOf(aCreateItem()),
+            createEventId = null,
+            fetchRelatedEventsJsonResult = { eventId, _, _, _ -> Result.success(RawEventsPage(listOfNotNull(frame.takeIf { eventId.value == ANCHOR }), null)) },
+        )
+        val store = fixture.store(backgroundScope)
+        settle()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        fixture.createEventId = ANCHOR
+        val session = fixture.session(backgroundScope, store)
+        settle()
+        assertThat(session.state.value.isReady).isTrue()
+        assertThat(session.state.value.text).isEqualTo("Hello")
+    }
+
+    @Test
     fun `chunks are applied once committed and complete, in index order`() = runTest {
         val big = update(operation("big", text = "x".repeat(MatchaConfig.DOCS_CHUNK_BYTES * 2)))
         val frames = frameItems("\$big", big, "u-big")

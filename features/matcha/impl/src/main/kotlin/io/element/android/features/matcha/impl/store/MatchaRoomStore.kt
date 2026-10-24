@@ -205,7 +205,11 @@ class MatchaRoomStore(
 
     /** The highest reply count each thread had when a read of its replies succeeded, by thread root id; guarded like [repliesRequestedAt]. */
     private val repliesReadAt = HashMap<String, Long>()
-    private val relationsUnavailable = MutableStateFlow(false)
+    private val _relationsUnavailable = MutableStateFlow(false)
+
+    /** The SDK can't fetch related events as JSON, so cards, thread names and document frames can't be read from relations. */
+    val relationsUnavailable: StateFlow<Boolean> = _relationsUnavailable.asStateFlow()
+
     private val requestedAnchors = HashSet<String>()
     private val anchorPermits = Semaphore(MAX_CONCURRENT_ANCHORS)
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
@@ -347,7 +351,7 @@ class MatchaRoomStore(
                 threadsPaginationStatus,
                 historyPagesRead,
                 loadingMore,
-                combine(utdCauses, loadFailed, readFailed, anchorsLoading, relationsUnavailable, ::Health),
+                combine(utdCauses, loadFailed, readFailed, anchorsLoading, _relationsUnavailable, ::Health),
                 ::Status,
             ),
         ) { events, threadData, state, perms, status ->
@@ -367,6 +371,23 @@ class MatchaRoomStore(
     /** The room's `m.room.create` event, which document frames relate to. */
     private suspend fun requestDocumentAnchor() {
         room.getStateEventId(StateEventType.RoomCreate, "").getOrNull()?.let { requestAnchors(listOf(it.value)) }
+    }
+
+    /**
+     * Waits until the events related to the room's `m.room.create` event, which document frames relate to, have been read and the
+     * snapshot holds them, then until the store has loaded or shows why it may be incomplete ([MatchaRoomSnapshot.loadFailed] or a
+     * [MatchaRoomSnapshot.warning]). The anchor is requested here too, in case the room state didn't hold it when the store opened;
+     * a read still running after [ANCHORS_TIMEOUT] isn't waited for.
+     */
+    suspend fun awaitRelations() {
+        requestDocumentAnchor()
+        withTimeoutOrNull(ANCHORS_TIMEOUT) { anchorsLoading.first { it.isEmpty() } }
+        // Snapshots are built a moment after a read, so the latest one may be from before the anchor was requested.
+        val read = relationEvents.value.values.flatten().mapNotNullTo(HashSet()) { it.eventId }
+        _snapshot.first { snapshot ->
+            (snapshot.isLoaded || snapshot.loadFailed || snapshot.warning != null) &&
+                snapshot.events.mapNotNullTo(HashSet()) { it.eventId }.containsAll(read)
+        }
     }
 
     /** The current user and the other members of a direct chat, or empty in any other chat. */
@@ -395,7 +416,7 @@ class MatchaRoomStore(
      */
     private fun requestReplies(threads: List<MatchaThread>) {
         // Without the SDK's related events, every read would fail the same way.
-        if (relationsUnavailable.value) return
+        if (_relationsUnavailable.value) return
         val fresh = synchronized(repliesRequestedAt) {
             threads
                 // A listed thread without replies has none to read; a card's thread that isn't listed yet may have some.
@@ -434,7 +455,7 @@ class MatchaRoomStore(
                 anchorPermits.withPermit { withContext(computation ?: EmptyCoroutineContext) { read() } }
                     .onSuccess(onRead)
                     .onFailure { error ->
-                        if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
+                        if (error is UnsupportedOperationException) _relationsUnavailable.value = true else readFailed.value = true
                         Timber.w(error, "Could not read the events related to a Matcha anchor")
                     }
             } finally {
