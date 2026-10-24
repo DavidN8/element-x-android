@@ -34,15 +34,12 @@ class DefaultMatchaRoomControllerTest {
     @Test
     fun `a thread named when it was created gives a chip bar, through its hidden first reply`() = runTest {
         val bootstrap = ThreadMetadataProtocol.bootstrapReplyContent("\$t1", "Launch plan")
+        val reply = """{"type": "${MatchaConfig.EVENT_THREAD_METADATA}", "event_id": "${'$'}b1", "sender": "@bob:x", """ +
+            """"origin_server_ts": 2, "content": $bootstrap}"""
         val store = aMatchaRoomStore(
             scope = backgroundScope,
             threads = listOf(aThreadListItem("\$t1", body = "Launch plan")),
-            threadReplies = mapOf(
-                "\$t1" to
-                    listOf(
-                        """{"type": "${MatchaConfig.EVENT_THREAD_METADATA}", "event_id": "${'$'}b1", "sender": "@bob:x", "origin_server_ts": 2, "content": $bootstrap}"""
-                    ),
-            ),
+            threadReplies = mapOf("\$t1" to listOf(reply)),
         )
         val controller = DefaultMatchaRoomController(store, backgroundScope)
         store.snapshot.first { it.isLoaded && it.threads.singleOrNull()?.hasHiddenFirstReply == true }
