@@ -295,6 +295,8 @@ No further Black-specific values are needed.
 
 ### 2.8 Icons
 
+> Round 2: Notes uses `document` and Channels uses `room`; see §6.3, item 7.
+
 - **Style.** 24 dp, outlined. The selected state uses the `…Solid` variant.
 - **Material Symbols.** ✅ The two Material Symbols drawables are in `libraries/designsystem/src/main/res/drawable/` (4883fab532, redrawn in ae95163aeb):
   - `ic_matcha_done_all.xml` (`done_all`: the read tick and the "Seen by" action);
@@ -464,6 +466,8 @@ Read ticks in the chat-list preview are skipped, because `H/model/LatestEvent.kt
 
 ### 3.2 Spaces tab (the WhatsApp Communities pattern)
 
+> Round 2: with the Matcha workspaces on, this tab is the **Channels** tab; see §6.3, items 7 and 8.
+
 **WhatsApp reference.** The stable Communities tab (beta 2.24.24.14, Nov 2024; still current in Sep 2026 coverage): rounded-square container avatars, chat rows, no dividers, a FAB.
 
 **Decision: keep the label "Spaces"; do not relabel it "Communities".**
@@ -490,6 +494,8 @@ Read ticks in the chat-list preview are skipped, because `H/model/LatestEvent.kt
 - The `⋮` menu (`:445-510`) gets a **Docs** item in phase vii.
 
 ### 3.3 Chat screen
+
+> Round 2: the top bar actions changed; see §6.3, item 1.
 
 **WhatsApp reference.** The stable conversation screen (2.24–2.26):
 - a flat white top bar with an avatar, a name-and-subtitle block and call actions;
@@ -907,6 +913,8 @@ This table is the contract that the feature track, the integration step and this
 
 ### 4a. In-chat chip bar (`MX/chatbar/`)
 
+> Round 2: the Tasks and All threads chips moved to the top bar, and the visibility rule changed; see §6.3, item 2.
+
 **Reference.** It mirrors the chat-list chips (§3.1): the same chip, the same row metrics and the same single-select behaviour. WhatsApp has nothing like it, so it must look like something WhatsApp already has.
 
 **When the bar is drawn.** Rule 1: one bar, unless the chat uses the feature.
@@ -980,6 +988,8 @@ This table is the contract that the feature track, the integration step and this
 **Later, not in v1:** a green dot on thread chips with unread replies.
 
 ### 4b. Per-chat task board (`MX/tasks/`)
+
+> Round 2: channel tasks and board creation from every chat; see §6.3, items 3 and 4.
 
 **Reference.**
 - Status switching copies the long-standing stable **Media · Docs · Links** tabs: a green label and indicator on the selected tab.
@@ -1096,6 +1106,8 @@ Without `canWriteCards`, only Open thread and Remind me appear.
 
 ### 4c. Tasks bottom tab (`MX/taskstab/`, cross-chat)
 
+> Round 2: only your tasks, People and Chat filters, the table, and the homeserver board lookup; see §6.3, items 5 and 6.
+
 **Reference.** WhatsApp's Calls and Updates tabs: a list of rows that each name their source, and a FAB that starts by choosing a recipient.
 
 - **Top bar:** Home's own bar with the title `common_matcha_tasks`, the account avatar and Home's `⋮` (§3.1). There is no Tasks-specific menu.
@@ -1204,6 +1216,8 @@ In a **DM**, entry points also need the bot to already be joined. Inviting it wo
 - **Later:** a 12 dp `NotificationsSolid` in the time row of messages your reminders point at.
 
 ### 4e. Space Docs (`MX/docs/`, phase vii)
+
+> Round 2: called **Notes** in the UI, with a Notes tab on Home; see §6.3, item 9.
 
 **Reference.**
 - The Docs row copies the stable "Media, links and docs" row of group info.
@@ -1597,6 +1611,8 @@ Each item overrides the named plan or brief text. The same PR that lands this sp
 
 ### 6.2 Open decisions for David
 
+Decisions 2, 4 and 6 were settled by David on 2026-10-24; see §6.3.
+
 | # | Decision | Default in this spec | Blocks |
 |---|---|---|---|
 | 1 | The product name in the Chats title | "Matcha", as a fixed string (`screen_matcha_home_product_name`). It is never "Element X dbg", and never Element's name in the wordmark position. | (ii) ship |
@@ -1607,6 +1623,24 @@ Each item overrides the named plan or brief text. The same PR that lands this sp
 | 6 | "Spaces" or "Communities" | Spaces | none (string-only) |
 | 7 | Black theme | Kept; the aliases derive from fields | none |
 | 8 | The beta borrowings in §7.1 | Accepted | none |
+
+### 6.3 Round 2: what David asked for on 2026-10-24
+
+David reviewed the build on his Fold and asked for the changes below. They override the named sections; each of those sections carries a pointer here.
+
+1. **Chat top bar** (§3.3 Actions, §4.0). With the Matcha workspaces on, the actions are **All threads** (`Threads`), **Tasks** (`CheckCircle`, with the open-task count badge) and **⋮**. Starting a voice or video call moves into ⋮, with the old buttons' rules. While a call is ongoing, its Join button stays in the bar and All threads moves into ⋮, so the chat's name keeps its room on a 360 dp phone. ⋮ offers New thread only to people who can name threads.
+2. **Chip bar** (§4a, supersedes §6.1 item 8). The Tasks and All threads chips are gone; the top bar has them. The bar shows **General**, the named threads and **New thread**, and appears only when the chat has an active named thread: renamed, or named when it was created (its hidden first reply marks it). A board alone no longer shows a bar. The board screen always draws it.
+3. **Boards from the phone** (§4b). The Tasks icon is in every chat, so a chat without a board reaches the existing Setup state ("Create task board", or "Ask an admin…"). Before creating, the app reads the board pointer from the homeserver, so a board made on the web is never replaced.
+4. **Channel tasks** (§4b, §4c, resolves §6.2 decision 4). Ported from the web client's `show_to_room` work. In the web client a group chat is a "channel".
+   - A task involves its thread's root sender and repliers, a standalone card's authors, and every member of a DM.
+   - On a chat's board, a task shows when it involves you or is shared with the channel. The open-task badge counts only those.
+   - The editor has **Show to everyone in channel** with the web client's hint. It is off for new tasks and hidden in DMs.
+   - A shared task carries a quiet `Group` icon with the description "Shown to everyone in the channel".
+5. **Tasks tab** (§4c). It lists only the tasks that involve you, each with "With Bob, Carol" or "Just you", and gains a **People** filter ("Everyone I work with" or one person) and a **Chat** filter. A List / Table switch shows a table of Task · Chat · Status · Due · People, sortable by column. On a phone the Task column stays put while the rest scrolls sideways. In the two-pane layout, Home takes the whole width while the table shows and nothing is open; opening a task brings back the split.
+6. **Every board is found** (§4c). The sync never stores the board pointer, so the app reads it from the homeserver (`fetchStateEventContentJson`, the second method of the Rust SDK patch). The Tasks tab skips chats without a board without reading their history and remembers that answer for ten minutes.
+7. **Bottom bar** (§3.1, §3.2, resolves §6.2 decisions 2 and 6). **Chats · Tasks · Notes · Channels**, with plural labels like WhatsApp's. Notes uses `document`, Channels uses `room` (#); Compound has no solid variants, so the selected state is the pill and the label weight. With the flag off the bar stays Chats · Spaces.
+8. **Channels tab** (§3.2). It replaces Spaces while the flag is on and follows WhatsApp's Communities tab: each joined space as a header row (opens the space, "N channels"), its joined channels under it as compact chat rows, then **Other channels** for group chats outside any space. DMs are not listed. Invites and the Create space FAB stay as on the Spaces tab.
+9. **Notes** (§4e, §5 Docs). The user-facing word "Docs" becomes **Notes** everywhere ("Notes for this space", "Turn on notes", "New note", "Note name"). The main note keeps the name "Space notes", and the wire protocol is unchanged. The **Notes tab** lists every joined space with notes as a section of its notes, offers "Turn on notes" where you can set them up, and has a New note FAB that asks for the space when there are several.
 
 ### (i) Palette and global components
 
