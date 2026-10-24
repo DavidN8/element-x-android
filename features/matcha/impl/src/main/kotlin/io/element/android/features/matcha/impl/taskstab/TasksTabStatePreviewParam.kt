@@ -56,6 +56,7 @@ open class TasksTabStatePreviewParam : PreviewParameterProvider<TasksTabState> {
             aTasksTabState(isTable = true, filter = TasksTabFilter.Archived, content = TasksTabContent.Table(persistentListOf(), TaskTableSort())),
             aTasksTabState(spaceName = "Acme"),
             aTasksTabState(spaceName = "Acme", content = TasksTabContent.Empty),
+            aTasksTabState(spaceName = "", content = TasksTabContent.Loading, checkingCount = 3),
         )
 }
 
