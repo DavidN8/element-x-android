@@ -700,6 +700,32 @@ class TaskBoardPresenterTest {
     }
 
     @Test
+    fun `a task left off the board still opens from its thread, and its edit keeps what the card says`() = runTest {
+        val sent = mutableListOf<String>()
+        val store = aMatchaRoomStore(
+            scope = backgroundScope,
+            boardRoot = boardRoot,
+            threads = listOf(aThreadListItem(thread, body = "Plan")),
+            items = listOf(card(1, threadCardId, "Plan", TaskStatus.Todo, threadId = thread, description = "Steps", showToRoom = false)),
+        ) { _, content ->
+            sent += content
+            Result.success(EventId("\$e${sent.size + 10}"))
+        }
+        aPresenter(store, initialThreadId = ThreadId(thread)).test {
+            val opened = awaitUntil { it.editor != null }
+            assertThat(opened.board()!!.todo).isEmpty()
+            opened.editor!!.eventSink(TaskEditorEvent.SetDescription("More steps"))
+            awaitUntil { it.editor?.description == "More steps" }.editor!!.eventSink(TaskEditorEvent.Save)
+            awaitUntil { it.editor == null }.eventSink(TaskBoardEvent.EditThreadTask(ThreadId(thread)))
+            assertThat(awaitUntil { it.editor != null }.editor!!.title).isEqualTo("Plan")
+            val written = Json.parseToJsonElement(sent.single()).jsonObject
+            assertThat(written["show_to_room"]?.jsonPrimitive?.content).isEqualTo("false")
+            assertThat(written["description"]?.jsonPrimitive?.content).isEqualTo("More steps")
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
     fun `in a direct chat every task is shown and the switch isn't offered`() = runTest {
         val store = aMatchaRoomStore(
             scope = backgroundScope,
