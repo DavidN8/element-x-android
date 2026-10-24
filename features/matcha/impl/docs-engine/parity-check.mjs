@@ -109,6 +109,41 @@ const localEdit = (n) => (call, doc) => {
 const localEntry = (n) => (call, doc) =>
     call("setEntry", { doc, key: "22222222-2222-4222-8222-222222222222", value: { title: `Local ${n}`, createdAt: n } });
 
+/** The client and clock of an update's first struct. */
+function firstStruct(update) {
+    const bytes = Buffer.from(update, "base64");
+    let at = 0;
+    const varUint = () => {
+        let value = 0;
+        for (let shift = 1; ; shift *= 128) {
+            const byte = bytes[at++];
+            value += (byte & 127) * shift;
+            if (byte < 128) return value;
+        }
+    };
+    varUint(); // clients
+    varUint(); // structs of the first one
+    return [varUint(), varUint()];
+}
+
+// A forged update: the client's struct at clock 0 again, but said to follow the client's struct at `clock`. Yjs skips it as a
+// copy when the document checking it holds that clock, and throws otherwise, so it shows what the check runs against.
+function forged([client, clock]) {
+    const varUint = (value) => {
+        const out = [];
+        for (; value > 127; value = Math.floor(value / 128)) out.push((value % 128) | 128);
+        return [...out, value];
+    };
+    // One client with one struct: a string (4) with a left origin (128), "x", and no deletions.
+    return Buffer.from([1, 1, ...varUint(client), 0, 128 | 4, ...varUint(client), ...varUint(clock), 1, 120, 0]).toString("base64");
+}
+
+// A local edit, then a forged update following it: valid only if updates are checked against the local edits too.
+const forgedAfterEdit = (n) => (call, doc) => {
+    const edit = localEdit(n)(call, doc);
+    return [edit, call("apply", { doc, update: forged(firstStruct(edit.update)) })];
+};
+
 /** Runs the steps one at a time, past malformed updates; a step is an update or a local change. */
 function replay(call, doc, steps) {
     call("open", { doc });
@@ -166,10 +201,18 @@ check("shuffled", shuffled);
 // Updates 20 to 59 come last, so the ones built on them wait until then.
 const gap = check("gap", [...updates.slice(0, 20), ...updates.slice(60), ...updates.slice(20, 60)]);
 assert(gap.one.answers.some((answer) => answer.missing) && !gap.one.snapshot.missing);
-const broken = check("malformed", [...updates.slice(0, 150), malformed, ...updates.slice(150, cutAt), cut, ...updates.slice(cutAt)]);
+// After the cut update, a forged one following its first struct, which the cut update integrated before it threw: valid only
+// where that struct was left behind.
+const afterCut = forged(firstStruct(updates[cutAt]));
+const broken = check("malformed", [...updates.slice(0, 150), malformed, ...updates.slice(150, cutAt), cut, afterCut, ...updates.slice(cutAt)]);
 assert.equal(broken.all.applied, 150);
-assert.equal(broken.one.answers.filter((answer) => !answer.valid).length, 2);
-check("local", shuffled.flatMap((update, i) => [update, ...(i % 5 ? [] : [localEdit(i)]), ...(i % 50 ? [] : [localEntry(i)])]));
+assert.equal(broken.one.answers.filter((answer) => !answer.valid).length, 3);
+const local = check("local", shuffled.flatMap((update, i) => [
+    update,
+    ...(i % 5 ? [] : [(i % 50 === 25 ? forgedAfterEdit : localEdit)(i)]),
+    ...(i % 50 ? [] : [localEntry(i)]),
+]));
+assert(local.one.answers.flat().every((answer) => answer.valid !== false));
 check("catalog", [...catalogHistory(call, 300)].sort(() => random(3) - 1));
 const longNoteTrace = check("long note", long);
 assert.equal(longNoteTrace.one.snapshot.text.length, 60000);
