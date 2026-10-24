@@ -34,9 +34,9 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.R
+import io.element.android.features.matcha.impl.chatbar.SheetHeader
 import io.element.android.features.matcha.impl.docs.transport.CatalogException
 import io.element.android.features.matcha.impl.docs.transport.DocumentCatalog
-import io.element.android.features.matcha.impl.ui.SheetHeader
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
 import io.element.android.libraries.designsystem.theme.components.Button
@@ -119,7 +119,7 @@ private fun DocNameSheetContent(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
     Column(modifier = Modifier.semantics { paneTitle = title }) {
-        SheetHeader(title = title, isBack = false, onNavigationClick = onClose)
+        SheetHeader(title = title, onClose = onClose)
         val error = when (state.error) {
             DocNameError.Empty -> stringResource(CommonStrings.common_matcha_error_name_empty)
             DocNameError.TooLong -> stringResource(CommonStrings.common_matcha_error_max_chars, MatchaConfig.DOCUMENT_NAME_MAX_LENGTH)

@@ -62,7 +62,7 @@ import io.element.android.appconfig.MatchaConfig
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.matcha.impl.R
-import io.element.android.features.matcha.impl.ui.SheetHeader
+import io.element.android.features.matcha.impl.chatbar.SheetHeader
 import io.element.android.libraries.designsystem.components.list.ListItemContent
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -145,8 +145,8 @@ private fun RoomReminderContent(
     ) {
         SheetHeader(
             title = title,
+            onClose = { if (isCustomStep) state.eventSink(RoomReminderEvent.CloseCustom) else onClose() },
             isBack = isCustomStep,
-            onNavigationClick = { if (isCustomStep) state.eventSink(RoomReminderEvent.CloseCustom) else onClose() },
         )
         when {
             botState is RoomReminderBotState.CanInvite -> InviteBotStep(
