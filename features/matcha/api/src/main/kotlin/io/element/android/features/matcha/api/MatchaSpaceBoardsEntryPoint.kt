@@ -16,13 +16,10 @@ import io.element.android.libraries.matrix.api.core.ThreadId
 
 /** The boards of a space's channels: the Tasks tab narrowed to the chats the Channels tab lists under the space. Session scoped. */
 interface MatchaSpaceBoardsEntryPoint : FeatureEntryPoint {
+    /** Shows a chat or a task's thread, as the Tasks tab does, or leaves the screen. */
     interface Callback : Plugin {
-        /** Shows a chat, for Open chat and for an older standalone card. */
         fun navigateToRoom(roomId: RoomId)
-
-        /** Shows a thread of a chat, for a task. */
         fun navigateToThread(roomId: RoomId, threadId: ThreadId)
-
         fun close()
     }
 

@@ -410,10 +410,8 @@ class LoggedInFlowNode(
                         backstack.singleTop(NavTarget.SpaceNote(spaceId = spaceId, documentId = documentId))
                     }
 
-                    override fun navigateToSpaceBoards(spaceId: RoomId) {
-                        // Single top, as for the notes.
-                        backstack.singleTop(NavTarget.SpaceBoards(spaceId))
-                    }
+                    // Single top, as for the notes.
+                    override fun navigateToSpaceBoards(spaceId: RoomId) = backstack.singleTop(NavTarget.SpaceBoards(spaceId))
                 }
                 homeEntryPoint.createNode(
                     parentNode = this,

@@ -22,10 +22,5 @@ class DefaultMatchaSpaceBoardsEntryPoint : MatchaSpaceBoardsEntryPoint {
         buildContext: BuildContext,
         spaceId: RoomId,
         callback: MatchaSpaceBoardsEntryPoint.Callback,
-    ): Node {
-        return parentNode.createNode<MatchaSpaceBoardsNode>(
-            buildContext = buildContext,
-            plugins = listOf(MatchaSpaceBoardsNode.Inputs(spaceId), callback),
-        )
-    }
+    ): Node = parentNode.createNode<MatchaSpaceBoardsNode>(buildContext, plugins = listOf(MatchaSpaceBoardsNode.Inputs(spaceId), callback))
 }

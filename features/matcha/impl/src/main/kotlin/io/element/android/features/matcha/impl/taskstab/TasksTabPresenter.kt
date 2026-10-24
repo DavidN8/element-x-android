@@ -45,6 +45,7 @@ import io.element.android.libraries.matrix.api.spaces.topLevelSpaceTrees
 import io.element.android.services.appnavstate.api.AppNavigationStateService
 import io.element.android.services.appnavstate.api.currentRoomId
 import io.element.android.services.appnavstate.api.currentThreadId
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.Flow
@@ -99,8 +100,9 @@ class TasksTabPresenter internal constructor(
         val isEnabled by remember { featureFlagService.isFeatureEnabledFlow(FeatureFlags.MatchaWorkspaces) }.collectAsState(initial = false)
         // Null until the space's filters are known; always null on the Tasks tab.
         val scope by remember(spaceId) { spaceScopeFlow(spaceId) }.collectAsState(initial = null)
+        val isScopeKnown = spaceId == null || scope != null
         // A space's chats are checked first, so its boards wait until they are known; it shows Loading meanwhile anyway.
-        if (isEnabled && (spaceId == null || scope != null)) {
+        if (isEnabled && isScopeKnown) {
             // Leaving the tab cancels this; the rooms the tab opened stay open for a while, in case it comes back.
             LaunchedEffect(Unit) { rooms.run(first = scope?.chatIds.orEmpty()) }
         }
@@ -123,7 +125,9 @@ class TasksTabPresenter internal constructor(
         val me = client.sessionId.value
         fun isInScope(roomId: RoomId) = spaceId == null || scope?.chatIds?.contains(roomId) == true
         // As on the Channels tab, a direct chat of the space is left out.
-        val shown = remember(chats.boards, scope) { if (spaceId == null) chats.boards else chats.boards.filter { isInScope(it.roomId) && !it.isDm } }
+        val shown = remember(chats.boards, scope) {
+            (if (spaceId == null) chats.boards else chats.boards.filter { isInScope(it.roomId) && !it.isDm }).toImmutableList()
+        }
         // The Tasks tab holds the user's own tasks; a space's boards hold what each chat's own board shows.
         val isShown: (ProjectedCard) -> Boolean = if (spaceId == null) { card -> me in card.participants } else { card -> card.isShownOnBoard(me) }
         val names = rememberPeopleNames(shown, me, isShown).toMap()
@@ -141,7 +145,7 @@ class TasksTabPresenter internal constructor(
         // A space's boards only wait for its own chats.
         val loadingCount = chats.checking.count(::isInScope) + shown.count { it.isLoading() }
         val content = when {
-            tasks.isEmpty() && (!chats.isRoomListLoaded || (spaceId != null && scope == null) || loadingCount > 0) -> TasksTabContent.Loading
+            tasks.isEmpty() && (!chats.isRoomListLoaded || !isScopeKnown || loadingCount > 0) -> TasksTabContent.Loading
             tasks.isEmpty() -> TasksTabContent.Empty
             isTable -> tableContent(visibleTasks, filter, tableSort)
             else -> tasksContent(visibleTasks, filter, isDoneExpanded)
@@ -267,7 +271,7 @@ class TasksTabPresenter internal constructor(
             isUnreadable = visibleBoards.any { it.snapshot.unreadable },
             hasMore = visibleBoards.any { it.snapshot.hasMoreHistory },
             isLoadingMore = visibleBoards.any { it.snapshot.isLoadingMore },
-            spaceName = if (spaceId == null) null else scope?.name.orEmpty(),
+            spaceName = spaceId?.let { scope?.name.orEmpty() },
             sheet = sheet,
             editor = editor,
             eventSink = ::handleEvent,
@@ -369,7 +373,7 @@ private fun TaskItem.section(today: LocalDate, zone: ZoneId): TaskSection {
  * ponytail: a name is read once while the tab is shown, so a rename shows the next time it is opened.
  */
 @Composable
-private fun rememberPeopleNames(boards: List<TabChat>, me: String, isShown: (ProjectedCard) -> Boolean): Map<String, String> {
+private fun rememberPeopleNames(boards: ImmutableList<TabChat>, me: String, isShown: (ProjectedCard) -> Boolean): Map<String, String> {
     val names = remember { mutableStateMapOf<String, String>() }
     val requested = remember { HashSet<String>() }
     val scope = rememberCoroutineScope()
