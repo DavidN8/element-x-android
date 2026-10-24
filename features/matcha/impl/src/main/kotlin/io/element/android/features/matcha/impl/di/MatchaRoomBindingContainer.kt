@@ -12,6 +12,7 @@ import dev.zacsweers.metro.ContributesTo
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.SingleIn
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
+import io.element.android.libraries.core.coroutine.CoroutineDispatchers
 import io.element.android.libraries.di.RoomScope
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 
@@ -21,5 +22,6 @@ object MatchaRoomBindingContainer {
     /** One store per open room, shared by the chip bar, the board and the thread screens. */
     @Provides
     @SingleIn(RoomScope::class)
-    fun providesMatchaRoomStore(room: JoinedRoom): MatchaRoomStore = MatchaRoomStore(room, room.roomCoroutineScope)
+    fun providesMatchaRoomStore(room: JoinedRoom, dispatchers: CoroutineDispatchers): MatchaRoomStore =
+        MatchaRoomStore(room, room.roomCoroutineScope, computation = dispatchers.computation)
 }

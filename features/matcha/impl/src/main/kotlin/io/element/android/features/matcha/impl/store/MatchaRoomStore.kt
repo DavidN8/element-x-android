@@ -39,15 +39,18 @@ import io.element.android.libraries.matrix.api.timeline.item.event.EventTimeline
 import io.element.android.libraries.matrix.api.timeline.item.event.MessageContent
 import io.element.android.libraries.matrix.api.timeline.item.event.UnableToDecryptContent
 import io.element.android.libraries.matrix.api.timeline.item.event.UtdCause
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
@@ -58,8 +61,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -175,6 +180,11 @@ class MatchaRoomStore(
     private val extraEventTypes: Set<String> = emptySet(),
     /** The board pointer the homeserver already returned to the caller, so the store starts from it instead of asking again. */
     knownServerPointer: String? = null,
+    /**
+     * Where related events are parsed and snapshots are built, off the scope's (main) thread; null does it all on [coroutineScope]'s
+     * dispatcher.
+     */
+    private val computation: CoroutineDispatcher? = null,
 ) {
     private val parsed = HashMap<UniqueId, Pair<EventTimelineItem, RawEvent?>>()
     private val scanEvents = MutableStateFlow<List<RawEvent>>(emptyList())
@@ -342,6 +352,8 @@ class MatchaRoomStore(
         ) { events, threadData, state, perms, status ->
             buildSnapshot(events, threadData, state, perms, status)
         }
+            // Only the latest snapshot matters, so a burst of changes is built once.
+            .let { snapshots -> computation?.let { snapshots.conflate().flowOn(it) } ?: snapshots }
             .distinctUntilChanged()
             .onEach { snapshot ->
                 _snapshot.value = snapshot
@@ -418,7 +430,7 @@ class MatchaRoomStore(
         if (isFirstRead) anchorsLoading.update { it + key }
         coroutineScope.launch {
             try {
-                anchorPermits.withPermit { read() }
+                anchorPermits.withPermit { withContext(computation ?: EmptyCoroutineContext) { read() } }
                     .onSuccess(onRead)
                     .onFailure { error ->
                         if (error is UnsupportedOperationException) relationsUnavailable.value = true else readFailed.value = true
