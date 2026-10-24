@@ -15,13 +15,18 @@ import io.element.android.features.matcha.api.MatchaNotesTabRenderer
 import io.element.android.libraries.di.SessionScope
 import io.element.android.libraries.matrix.api.core.RoomId
 
-/** Placeholder until the Notes tab is built: renders nothing. */
 @ContributesBinding(SessionScope::class)
-class DefaultMatchaNotesTabRenderer : MatchaNotesTabRenderer {
+class DefaultMatchaNotesTabRenderer(
+    private val presenter: NotesTabPresenter,
+) : MatchaNotesTabRenderer {
     @Composable
     override fun Render(
         contentPadding: PaddingValues,
         onOpenNote: (spaceId: RoomId, documentId: String?) -> Unit,
         modifier: Modifier,
-    ) = Unit
+    ) {
+        val state = presenter.present(onOpenNote = onOpenNote)
+        if (!state.isVisible) return
+        NotesTabView(state = state, contentPadding = contentPadding, modifier = modifier)
+    }
 }

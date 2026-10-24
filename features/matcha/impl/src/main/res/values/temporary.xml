@@ -141,17 +141,17 @@
     <string name="screen_matcha_reminder_bot_no_permission">Ask an admin to add the reminder bot to this chat.</string>
     <string name="screen_matcha_reminder_bot_dm_unavailable">Reminders aren\'t available in this chat. Adding the reminder bot would turn it into a group.</string>
     <string name="screen_matcha_reminder_cannot_send">You can\'t send messages in this chat, so reminders can\'t be posted here.</string>
-    <!-- Track C: space docs -->
+    <!-- Track C: space docs, shown to people as notes -->
     <string name="screen_matcha_docs_main_name">Space notes</string>
-    <string name="screen_matcha_docs_new">New doc</string>
-    <string name="screen_matcha_docs_rename_title">Rename doc</string>
-    <string name="screen_matcha_docs_name_hint">Doc name</string>
+    <string name="screen_matcha_docs_new">New note</string>
+    <string name="screen_matcha_docs_rename_title">Rename note</string>
+    <string name="screen_matcha_docs_name_hint">Note name</string>
     <string name="screen_matcha_docs_edited">Edited %1$s</string>
     <string name="screen_matcha_docs_list_empty">Write notes, plans and guides together.</string>
-    <string name="screen_matcha_docs_list_load_error">Couldn\'t load the docs</string>
-    <string name="screen_matcha_docs_list_decrypt_error">Some doc names can\'t be read on this device yet.</string>
-    <string name="screen_matcha_docs_doc_empty">This doc is empty. Tap the pencil to start writing.</string>
-    <string name="screen_matcha_docs_doc_empty_read_only">This doc is empty.</string>
+    <string name="screen_matcha_docs_list_load_error">Couldn\'t load the notes</string>
+    <string name="screen_matcha_docs_list_decrypt_error">Some note names can\'t be read on this device yet.</string>
+    <string name="screen_matcha_docs_doc_empty">This note is empty. Tap the pencil to start writing.</string>
+    <string name="screen_matcha_docs_doc_empty_read_only">This note is empty.</string>
     <string name="screen_matcha_docs_status_saved">Saved</string>
     <string name="screen_matcha_docs_status_offline">Offline · not saved yet</string>
     <string name="screen_matcha_docs_status_failed">Couldn\'t save · tap to retry</string>
@@ -161,33 +161,37 @@
     <string name="screen_matcha_docs_offline_strip">You\'re offline. Keep this screen open and your edits will send when you reconnect.</string>
     <string name="screen_matcha_docs_decrypt_error">Some edits can\'t be decrypted on this device yet. Editing is off until they can be.</string>
     <string name="screen_matcha_docs_incomplete">Some edits haven\'t arrived yet. Editing is off until they do.</string>
-    <string name="screen_matcha_docs_invalid_update">Some edits couldn\'t be read. Editing is off for this doc.</string>
-    <string name="screen_matcha_docs_permission_error">You can\'t edit this doc anymore, so your latest changes can\'t be saved.</string>
+    <string name="screen_matcha_docs_invalid_update">Some edits couldn\'t be read. Editing is off for this note.</string>
+    <string name="screen_matcha_docs_permission_error">You can\'t edit this note anymore, so your latest changes can\'t be saved.</string>
     <string name="screen_matcha_docs_too_large">This change is too big to save. Share the text to keep it.</string>
-    <string name="screen_matcha_docs_load_error_title">Couldn\'t load this doc</string>
+    <string name="screen_matcha_docs_load_error_title">Couldn\'t load this note</string>
     <string name="screen_matcha_docs_load_error_body">Check your connection and try again.</string>
     <string name="screen_matcha_docs_unsaved_title">Changes not saved</string>
     <string name="screen_matcha_docs_unsaved_body">Some edits haven\'t reached the server. If you leave now, they\'ll be lost.</string>
     <string name="screen_matcha_docs_stay">Stay</string>
     <string name="screen_matcha_docs_tip">Write notes and plans together in this space.</string>
-    <string name="screen_matcha_docs_tip_action">Set up docs</string>
-    <string name="screen_matcha_docs_not_enabled">Docs aren\'t on for this space yet. Ask an admin to turn them on.</string>
-    <string name="screen_matcha_docs_setup_title">Docs for this space</string>
+    <string name="screen_matcha_docs_tip_action">Set up notes</string>
+    <string name="screen_matcha_docs_not_enabled">Notes aren\'t on for this space yet. Ask an admin to turn them on.</string>
+    <string name="screen_matcha_docs_setup_title">Notes for this space</string>
     <string name="screen_matcha_docs_setup_together_title">Write together</string>
-    <string name="screen_matcha_docs_setup_together_body">Everyone in the space can read and edit docs.</string>
+    <string name="screen_matcha_docs_setup_together_body">Everyone in the space can read and edit notes.</string>
     <string name="screen_matcha_docs_setup_encrypted_title">End-to-end encrypted</string>
-    <string name="screen_matcha_docs_setup_encrypted_body">Turning on docs also turns on encryption for this space. You can\'t turn it off later.</string>
+    <string name="screen_matcha_docs_setup_encrypted_body">Turning on notes also turns on encryption for this space. You can\'t turn it off later.</string>
     <string name="screen_matcha_docs_setup_rooms_title">Rooms stay the same</string>
     <string name="screen_matcha_docs_setup_rooms_body">Room settings and encryption don\'t change.</string>
-    <string name="screen_matcha_docs_setup_action">Turn on docs</string>
-    <string name="screen_matcha_docs_setup_progress">Turning on docs…</string>
-    <string name="screen_matcha_docs_setup_error">Couldn\'t turn on docs. Try again.</string>
+    <string name="screen_matcha_docs_setup_action">Turn on notes</string>
+    <string name="screen_matcha_docs_setup_progress">Turning on notes…</string>
+    <string name="screen_matcha_docs_setup_error">Couldn\'t turn on notes. Try again.</string>
     <string name="screen_matcha_docs_encrypt_dialog_title">Turn on encryption?</string>
     <string name="screen_matcha_docs_encrypt_dialog_body">Encryption for this space can\'t be turned off later.</string>
     <string name="screen_matcha_docs_encrypt_dialog_action">Turn on</string>
     <string name="a11y_matcha_format_heading">Heading</string>
     <string name="a11y_matcha_format_checklist">Checklist</string>
-    <string name="a11y_matcha_doc_edit">Edit doc</string>
+    <string name="a11y_matcha_doc_edit">Edit note</string>
     <string name="a11y_matcha_docs_more">More options</string>
     <string name="screen_matcha_docs_heading_glyph" translatable="false">H</string>
+    <!-- The Notes tab on Home: the notes of every space -->
+    <string name="screen_matcha_notes_tab_empty_title">No notes yet</string>
+    <string name="screen_matcha_notes_tab_empty_body">Notes live in spaces. Join or create a space to write notes together.</string>
+    <string name="screen_matcha_notes_tab_none_on_body">None of your spaces has notes turned on yet. Ask a space admin to turn them on.</string>
 </resources>

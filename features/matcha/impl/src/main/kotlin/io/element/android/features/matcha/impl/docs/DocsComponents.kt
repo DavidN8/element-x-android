@@ -47,14 +47,17 @@ import io.element.android.libraries.designsystem.theme.noticePillText
 
 /** The 48 dp rounded-square tile of a doc row. */
 @Composable
-internal fun DocTile(modifier: Modifier = Modifier) {
+internal fun DocTile(
+    modifier: Modifier = Modifier,
+    icon: ImageVector = CompoundIcons.Document(),
+) {
     Box(
         modifier = modifier
             .size(48.dp)
             .background(ElementTheme.colors.bgSubtleSecondary, RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(imageVector = CompoundIcons.Document(), contentDescription = null, tint = ElementTheme.colors.iconSecondary)
+        Icon(imageVector = icon, contentDescription = null, tint = ElementTheme.colors.iconSecondary)
     }
 }
 
@@ -178,7 +181,7 @@ internal fun DocsMessagePage(
     }
 }
 
-/** All the docs components in one preview. */
+/** All the notes components in one preview. */
 @PreviewsDayNight
 @Composable
 internal fun DocRowContentPreview() = ElementPreview {
@@ -188,7 +191,7 @@ internal fun DocRowContentPreview() = ElementPreview {
         DocRowPlaceholder()
         DocsMessagePage(
             icon = CompoundIcons.Warning(),
-            title = "Couldn't load this doc",
+            title = "Couldn't load this note",
             message = "Check your connection and try again.",
             actionText = "Retry",
             modifier = Modifier.height(320.dp),

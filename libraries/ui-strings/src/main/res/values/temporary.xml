@@ -45,13 +45,13 @@
     <string name="action_matcha_unarchive">Unarchive</string>
     <string name="action_matcha_undo">Undo</string>
     <string name="common_matcha_new_thread">New thread</string>
-    <string name="common_matcha_space_docs">Space docs</string>
+    <string name="common_matcha_space_docs">Space notes</string>
     <string name="common_matcha_write_failed">Couldn\'t save. Check your connection and try again.</string>
     <string name="common_matcha_archived">Archived</string>
     <string name="action_matcha_keep_editing">Keep editing</string>
     <string name="common_matcha_active">Active</string>
-    <string name="common_matcha_docs">Docs</string>
-    <string name="common_matcha_docs_row_subtitle">Notes and plans for this space</string>
+    <string name="common_matcha_docs">Notes</string>
+    <string name="common_matcha_docs_row_subtitle">Plans and guides for this space, written together</string>
     <string name="common_matcha_choose_space">Choose a space</string>
     <string name="action_matcha_rename">Rename</string>
 </resources>
