@@ -57,6 +57,7 @@ class FakeYjsDocument : YjsDocument {
     private val pending = mutableListOf<JsonObject>()
     var isClosed = false
     var applyCount = 0
+    var applyAllCount = 0
     var snapshotCount = 0
     private var localCount = 0
 
@@ -77,6 +78,11 @@ class FakeYjsDocument : YjsDocument {
             }
         }
         return true
+    }
+
+    override suspend fun applyAll(updates: List<ByteArray>): Int {
+        applyAllCount++
+        return updates.takeWhile { apply(it) }.size
     }
 
     private fun integrate(operation: JsonObject) {

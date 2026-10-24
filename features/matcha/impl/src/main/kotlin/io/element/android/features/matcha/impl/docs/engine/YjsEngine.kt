@@ -20,6 +20,9 @@ interface YjsDocument {
     /** Applies a remote update after checking it on a copy; false when the update is malformed and was not applied. */
     suspend fun apply(update: ByteArray): Boolean
 
+    /** Applies remote updates in order, each checked like [apply], and stops at the first malformed one; returns how many applied. */
+    suspend fun applyAll(updates: List<ByteArray>): Int
+
     /** The current content, and whether updates are waiting for causal predecessors that have not arrived. */
     suspend fun snapshot(): YjsSnapshot
 

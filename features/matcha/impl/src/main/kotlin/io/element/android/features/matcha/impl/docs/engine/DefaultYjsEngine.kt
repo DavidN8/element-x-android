@@ -37,6 +37,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import timber.log.Timber
@@ -100,6 +101,18 @@ class DefaultYjsEngine(
         override suspend fun apply(update: ByteArray): Boolean {
             val result = call("apply", args { put("update", JsonPrimitive(Base64.encode(update))) })
             return (result["valid"] as? JsonPrimitive)?.booleanOrNull == true
+        }
+
+        override suspend fun applyAll(updates: List<ByteArray>): Int {
+            var applied = 0
+            // A replay crosses the bridge once per batch; batches keep each call well within CALL_TIMEOUT.
+            for (batch in updates.chunked(APPLY_BATCH_SIZE)) {
+                val result = call("applyAll", args { put("updates", JsonArray(batch.map { JsonPrimitive(Base64.encode(it)) })) })
+                val count = (result["applied"] as? JsonPrimitive)?.intOrNull ?: 0
+                applied += count
+                if (count < batch.size) break
+            }
+            return applied
         }
 
         override suspend fun snapshot(): YjsSnapshot {
@@ -249,6 +262,7 @@ class DefaultYjsEngine(
         const val BRIDGE_NAME = "MatchaDocsBridge"
         const val ENGINE_URL = "file:///android_asset/matcha-docs/engine.html"
         const val ENGINE_SCRIPT_URL = "file:///android_asset/matcha-docs/engine.js"
+        const val APPLY_BATCH_SIZE = 100
         val READY_TIMEOUT = 10.seconds
         val CALL_TIMEOUT = 30.seconds
     }

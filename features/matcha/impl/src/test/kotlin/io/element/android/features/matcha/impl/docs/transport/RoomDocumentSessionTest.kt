@@ -58,6 +58,30 @@ class RoomDocumentSessionTest {
         assertThat(state.sync).isEqualTo(DocumentSync.Saved)
         assertThat(state.text).isEqualTo("Hello")
         assertThat(fixture.engine.documents.single().applyCount).isEqualTo(1)
+        // The replay crosses the bridge once.
+        assertThat(fixture.engine.documents.single().applyAllCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `an update the engine refuses stops the replay there, and reading the document again stops there again`() = runTest {
+        val fixture = DocsRoomFixture(
+            listOf(
+                aCreateItem(),
+                aFrameItem("\$f1", DocsProtocol.frames(hello(), ANCHOR, "u1", "main").single()),
+                aFrameItem("\$bad", DocsProtocol.frames("garbage".toByteArray(), ANCHOR, "u2", "main").single()),
+                aFrameItem("\$f3", DocsProtocol.frames(update(operation("c", text = "After", deps = listOf("a"))), ANCHOR, "u3", "main").single()),
+            ),
+        )
+        val session = fixture.session(backgroundScope)
+        settle()
+        val document = fixture.engine.documents.single()
+        assertThat(session.state.value.error).isEqualTo(DocumentError.InvalidUpdate)
+        assertThat(document.snapshot().text).isEqualTo("Hello")
+        session.retry()
+        settle()
+        assertThat(session.state.value.error).isEqualTo(DocumentError.InvalidUpdate)
+        assertThat(document.snapshot().text).isEqualTo("Hello")
+        assertThat(document.applyCount).isEqualTo(1)
     }
 
     @Test

@@ -74,6 +74,12 @@ const operations = {
         Y.applyUpdate(target, bytes, REMOTE);
         return { valid: true, missing: isMissingUpdates(target) };
     },
+    // Applies remote updates in order, each checked like `apply`, and stops at the first malformed one: one bridge call for many.
+    applyAll({ doc, updates }) {
+        let applied = 0;
+        while (applied < updates.length && operations.apply({ doc, update: updates[applied] }).valid) applied++;
+        return { applied };
+    },
     snapshot({ doc }) {
         const target = get(doc);
         return {

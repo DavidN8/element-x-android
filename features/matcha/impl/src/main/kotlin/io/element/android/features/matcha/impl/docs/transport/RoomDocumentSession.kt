@@ -249,7 +249,7 @@ class RoomDocumentSession(
                 val events = store.snapshot.value.events.asReversed()
                 this.anchor = anchor
                 val document = document ?: openDocument()
-                events.forEach { ingest(document, anchor, it) }
+                ingestAll(document, anchor, events)
                 refresh(document)
                 isReady = true
             }
@@ -283,8 +283,7 @@ class RoomDocumentSession(
             }
             try {
                 // Only an applied update changes the text, the entries or what is missing; edits update them locally.
-                val isApplied = events.asReversed().fold(false) { isApplied, event -> ingest(document, anchor, event) || isApplied }
-                if (isApplied) refresh(document)
+                if (ingestAll(document, anchor, events.asReversed())) refresh(document)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -295,25 +294,53 @@ class RoomDocumentSession(
         if (needsReload) retry()
     }
 
-    /** Returns whether [event] completed an update, which was applied. */
-    private suspend fun ingest(document: YjsDocument, anchor: String, event: RawEvent): Boolean {
-        val eventId = event.eventId ?: return false
-        if (eventId in seen) return false
-        // Not marked as seen: once decrypted, the same event comes back as a frame.
-        if (event.isUndecryptedFrame(anchor)) throw DocumentException(DocumentError.DecryptError)
-        val isApplied = when (val result = DocsProtocol.parseFrame(event, anchor, documentId)) {
-            DocFrameResult.Unrelated -> false
-            DocFrameResult.Invalid -> throw DocumentException(DocumentError.InvalidUpdate)
-            is DocFrameResult.Frame -> ingestFrame(document, result)
+    /**
+     * Ingests [events], oldest first, and applies the updates they complete in one engine call. Returns whether an update was
+     * applied. Fails like ingesting the events one at a time would: on the same event, with the same events seen.
+     */
+    private suspend fun ingestAll(document: YjsDocument, anchor: String, events: List<RawEvent>): Boolean {
+        val seenBefore = HashSet(seen)
+        val appliedBefore = HashSet(applied)
+        val incomingBefore = HashMap(incoming)
+        val updates = mutableListOf<ByteArray>()
+        val failure = try {
+            events.forEach { event -> ingest(anchor, event, updates::add) }
+            null
+        } catch (e: Exception) {
+            e
         }
-        seen += eventId
-        return isApplied
+        val count = if (updates.isEmpty()) 0 else document.applyAll(updates)
+        if (count < updates.size) {
+            // An update was malformed: go through the events again as if each update had been applied on its own, which fails on it.
+            seen.retainAll(seenBefore)
+            applied.retainAll(appliedBefore)
+            incoming.clear()
+            incoming.putAll(incomingBefore)
+            var index = 0
+            events.forEach { event -> ingest(anchor, event) { index++ < count } }
+        }
+        failure?.let { throw it }
+        return count > 0
     }
 
-    private suspend fun ingestFrame(document: YjsDocument, result: DocFrameResult.Frame): Boolean {
+    /** Hands the update [event] completes, if any, to [apply], which returns false when the engine refused it. */
+    private fun ingest(anchor: String, event: RawEvent, apply: (ByteArray) -> Boolean) {
+        val eventId = event.eventId ?: return
+        if (eventId in seen) return
+        // Not marked as seen: once decrypted, the same event comes back as a frame.
+        if (event.isUndecryptedFrame(anchor)) throw DocumentException(DocumentError.DecryptError)
+        when (val result = DocsProtocol.parseFrame(event, anchor, documentId)) {
+            DocFrameResult.Unrelated -> Unit
+            DocFrameResult.Invalid -> throw DocumentException(DocumentError.InvalidUpdate)
+            is DocFrameResult.Frame -> ingestFrame(result, apply)
+        }
+        seen += eventId
+    }
+
+    private fun ingestFrame(result: DocFrameResult.Frame, apply: (ByteArray) -> Boolean) {
         val frame = result.frame
         val key = "${result.senderId}:${frame.updateId}"
-        if (key in applied) return false
+        if (key in applied) return
         var packet = incoming[key] ?: IncomingPacket(frame.chunks)
         if (packet.count != frame.chunks) throw DocumentException(DocumentError.InvalidUpdate)
         if (frame.kind != DocFrame.Kind.Chunk) packet = packet.copy(isCommitted = true)
@@ -325,13 +352,12 @@ class RoomDocumentSession(
         }
         if (!packet.isComplete) {
             incoming[key] = packet
-            return false
+            return
         }
         val update = ByteArrayOutputStream().apply { for (index in 0 until packet.count) write(packet.parts.getValue(index)) }.toByteArray()
-        if (!document.apply(update)) throw DocumentException(DocumentError.InvalidUpdate)
+        if (!apply(update)) throw DocumentException(DocumentError.InvalidUpdate)
         applied += key
         incoming -= key
-        return true
     }
 
     private fun RawEvent.isUndecryptedFrame(anchor: String) = type == DocsProtocol.EVENT_ROOM_ENCRYPTED && content.referenceTarget() == anchor
