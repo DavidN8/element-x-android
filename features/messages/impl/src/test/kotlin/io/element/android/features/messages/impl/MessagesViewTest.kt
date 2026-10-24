@@ -812,15 +812,18 @@ class MessagesViewTest : RobolectricTest() {
     }
 
     @Test
-    fun `with the Matcha workspaces, an ongoing call keeps its Join button in the bar`() = runAndroidComposeUiTest {
+    fun `with the Matcha workspaces, an ongoing call keeps its Join button in the bar and moves All threads into the menu`() = runAndroidComposeUiTest {
         ensureCalledOnceWithParam(false) { callback ->
             setMessagesView(
                 state = aMessagesState(roomCallState = anOngoingCallState(), matcha = aMatchaChatState(hasChatBar = true)),
                 onJoinCallClick = callback,
             )
-            // Nothing else is in the menu, so there is none.
-            onNodeWithContentDescription(activity!!.getString(CommonStrings.common_matcha_more)).assertDoesNotExist()
+            val context = activity!!
+            // Join takes All threads' place in the bar, so the chat's name keeps its room on a narrow phone.
+            onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_all_threads)).assertDoesNotExist()
             clickOn(CommonStrings.action_join)
+            onNodeWithContentDescription(context.getString(CommonStrings.common_matcha_more)).performClick()
+            onNodeWithText(context.getString(CommonStrings.common_matcha_all_threads)).assertExists()
         }
     }
 

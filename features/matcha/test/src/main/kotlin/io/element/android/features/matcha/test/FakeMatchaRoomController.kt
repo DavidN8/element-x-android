@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class FakeMatchaRoomController(
     override val hasChatBar: MutableStateFlow<Boolean> = MutableStateFlow(false),
     override val openTaskCount: MutableStateFlow<Int> = MutableStateFlow(0),
+    override val canCreateThread: MutableStateFlow<Boolean> = MutableStateFlow(true),
     override val threads: MutableStateFlow<ImmutableMap<ThreadId, MatchaThreadInfo>> = MutableStateFlow(persistentMapOf()),
     private val openNewThreadLambda: () -> Unit = { lambdaError() },
     private val openNewTaskLambda: () -> Unit = { lambdaError() },

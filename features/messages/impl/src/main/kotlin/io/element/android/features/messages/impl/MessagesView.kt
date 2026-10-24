@@ -612,7 +612,7 @@ private fun MessagesViewTopBars(
                 MatchaMenuActions(
                     openTaskCount = matcha.openTaskCount,
                     roomCallState = state.roomCallState,
-                    canCreateThread = inMenu && state.userEventPermissions.canSendMessage,
+                    canCreateThread = inMenu && matcha.canCreateThread,
                     canRemind = inMenu && matcha.canRemind,
                     canOpenSpaceDocs = inMenu && matchaActions.openSpaceDocs != null,
                     onJoinCallClick = onJoinCallClick,

@@ -25,12 +25,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.features.messages.impl.timeline.components.CallMenuItem
 import io.element.android.features.roomcall.api.RoomCallState
 import io.element.android.features.roomcall.api.aStandByCallState
+import io.element.android.features.roomcall.api.anOngoingCallState
 import io.element.android.libraries.designsystem.atomic.atoms.CounterAtom
 import io.element.android.libraries.designsystem.preview.ElementPreview
 import io.element.android.libraries.designsystem.preview.PreviewsDayNight
@@ -44,7 +47,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
 
 /**
  * The chat's top bar actions with the Matcha workspaces (WHATSAPP_DESIGN.md §3.3): All threads, the task board with its open count, and
- * ⋮. Starting a call moves into ⋮; an ongoing call keeps its Join button in the bar, since it can't wait in a menu.
+ * ⋮. Starting a call moves into ⋮; an ongoing call keeps its Join button in the bar, since it can't wait in a menu, and All threads
+ * moves into ⋮ meanwhile so the chat's name keeps its room on a narrow phone.
  */
 @Composable
 internal fun RowScope.MatchaMenuActions(
@@ -60,11 +64,14 @@ internal fun RowScope.MatchaMenuActions(
     onRemindMeClick: () -> Unit,
     onSpaceDocsClick: () -> Unit,
 ) {
-    IconButton(onClick = onAllThreadsClick) {
-        Icon(
-            imageVector = CompoundIcons.Threads(),
-            contentDescription = stringResource(CommonStrings.common_matcha_all_threads),
-        )
+    val isCallOngoing = roomCallState is RoomCallState.OnGoing
+    if (!isCallOngoing) {
+        IconButton(onClick = onAllThreadsClick) {
+            Icon(
+                imageVector = CompoundIcons.Threads(),
+                contentDescription = stringResource(CommonStrings.common_matcha_all_threads),
+            )
+        }
     }
     val tasksLabel = stringResource(CommonStrings.common_matcha_tasks)
     val tasksDescription = if (openTaskCount > 0) {
@@ -90,11 +97,13 @@ internal fun RowScope.MatchaMenuActions(
             )
         }
     }
-    if (roomCallState is RoomCallState.OnGoing) {
+    if (isCallOngoing) {
         CallMenuItem(roomCallState = roomCallState, onJoinCallClick = onJoinCallClick)
     }
     MatchaOverflowMenu(
         roomCallState = roomCallState,
+        showAllThreads = isCallOngoing,
+        onAllThreadsClick = onAllThreadsClick,
         canCreateThread = canCreateThread,
         canRemind = canRemind,
         canOpenSpaceDocs = canOpenSpaceDocs,
@@ -121,12 +130,15 @@ fun MatchaOverflowMenu(
     onRemindMeClick: () -> Unit,
     onSpaceDocsClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** All threads is in ⋮ instead of the bar, while an ongoing call's Join button takes its place. */
+    showAllThreads: Boolean = false,
+    onAllThreadsClick: () -> Unit = {},
     expandedByDefault: Boolean = false,
 ) {
     // A call can be started only while none is ongoing; an ongoing one has its Join button in the bar.
     val standByCall = roomCallState as? RoomCallState.StandBy
     val hasChatBarEntries = canCreateThread || canRemind || canOpenSpaceDocs
-    if (standByCall == null && !hasChatBarEntries) return
+    if (standByCall == null && !hasChatBarEntries && !showAllThreads) return
     var isExpanded by remember { mutableStateOf(expandedByDefault) }
     Box(modifier = modifier) {
         IconButton(onClick = { isExpanded = true }) {
@@ -153,6 +165,9 @@ fun MatchaOverflowMenu(
                 MatchaMenuItem(CommonStrings.action_video_call, CompoundIcons.VideoCall(), enabled = standByCall.canStartCall) {
                     select { onJoinCallClick(false) }
                 }
+            }
+            if (showAllThreads) {
+                MatchaMenuItem(CommonStrings.common_matcha_all_threads, CompoundIcons.Threads()) { select(onAllThreadsClick) }
             }
             if (canCreateThread) {
                 MatchaMenuItem(CommonStrings.common_matcha_new_thread, CompoundIcons.Plus()) { select(onNewThreadClick) }
@@ -186,11 +201,17 @@ private fun MatchaMenuItem(
     )
 }
 
+/** ⋮ before a call (call items) and during one (All threads, while Join takes its place in the bar). */
+internal class MatchaMenuRoomCallStatePreviewParam : PreviewParameterProvider<RoomCallState> {
+    override val values: Sequence<RoomCallState> = sequenceOf(aStandByCallState(isDM = true), anOngoingCallState())
+}
+
 @PreviewsDayNight
 @Composable
-internal fun MatchaOverflowMenuPreview() = ElementPreview {
+internal fun MatchaOverflowMenuPreview(@PreviewParameter(MatchaMenuRoomCallStatePreviewParam::class) roomCallState: RoomCallState) = ElementPreview {
     MatchaOverflowMenu(
-        roomCallState = aStandByCallState(isDM = true),
+        roomCallState = roomCallState,
+        showAllThreads = roomCallState is RoomCallState.OnGoing,
         canCreateThread = true,
         canRemind = true,
         canOpenSpaceDocs = true,

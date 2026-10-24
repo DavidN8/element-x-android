@@ -27,6 +27,8 @@ data class MatchaChatState(
     val reminderTarget: MatchaReminderTarget?,
     /** "Remind me" is offered: the user can post here and, in a DM, the reminder bot has already joined. */
     val canRemind: Boolean,
+    /** The user can name a new thread here. */
+    val canCreateThread: Boolean,
 )
 
 fun aMatchaChatState(
@@ -35,10 +37,12 @@ fun aMatchaChatState(
     threads: ImmutableMap<ThreadId, MatchaThreadInfo> = persistentMapOf(),
     reminderTarget: MatchaReminderTarget? = null,
     canRemind: Boolean = true,
+    canCreateThread: Boolean = true,
 ) = MatchaChatState(
     hasChatBar = hasChatBar,
     openTaskCount = openTaskCount,
     threads = threads,
     reminderTarget = reminderTarget,
     canRemind = canRemind,
+    canCreateThread = canCreateThread,
 )

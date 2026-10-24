@@ -394,6 +394,7 @@ class MessagesPresenter(
         val controller = remember { matchaRoomController.value }
         val hasChatBar by controller.hasChatBar.collectAsState()
         val openTaskCount by controller.openTaskCount.collectAsState()
+        val canCreateThread by controller.canCreateThread.collectAsState()
         val threads by controller.threads.collectAsState()
         // The reminder bot posts the reminders; in a DM it must already be there, since inviting it would turn the DM into a group.
         val isReminderBotJoined by produceState(initialValue = false, isDm) {
@@ -405,6 +406,7 @@ class MessagesPresenter(
             threads = threads,
             reminderTarget = matchaReminderTarget,
             canRemind = canSendMessages && (!isDm || isReminderBotJoined),
+            canCreateThread = canCreateThread,
         )
     }
 

@@ -20,6 +20,9 @@ interface MatchaRoomController {
     /** To do and In progress tasks on the room's board; 0 without a board and until the board has loaded. */
     val openTaskCount: StateFlow<Int>
 
+    /** The user can name a new thread: they can post and change thread names. */
+    val canCreateThread: StateFlow<Boolean>
+
     /** Matcha names and archive flags of the room's threads. */
     val threads: StateFlow<ImmutableMap<ThreadId, MatchaThreadInfo>>
 
