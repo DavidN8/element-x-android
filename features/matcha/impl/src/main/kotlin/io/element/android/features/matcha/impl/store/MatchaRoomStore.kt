@@ -376,8 +376,8 @@ class MatchaRoomStore(
     /**
      * Waits until the events related to the room's `m.room.create` event, which document frames relate to, have been read and the
      * snapshot holds them, then until the store has loaded or shows why it may be incomplete ([MatchaRoomSnapshot.loadFailed] or a
-     * [MatchaRoomSnapshot.warning]). The anchor is requested here too, in case the room state didn't hold it when the store opened;
-     * a read still running after [ANCHORS_TIMEOUT] isn't waited for.
+     * [MatchaRoomSnapshot.warning]). The anchor is requested here too, in case the room state didn't hold it when the store opened.
+     * A read that never ends keeps the store from loading, so callers bound the wait.
      */
     suspend fun awaitRelations() {
         requestDocumentAnchor()

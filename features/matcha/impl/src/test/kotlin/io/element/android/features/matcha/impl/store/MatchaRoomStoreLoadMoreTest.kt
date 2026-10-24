@@ -8,7 +8,9 @@
 package io.element.android.features.matcha.impl.store
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.appconfig.MatchaConfig
 import io.element.android.features.matcha.impl.docs.ANCHOR
+import io.element.android.features.matcha.impl.docs.BOB
 import io.element.android.features.matcha.impl.docs.DocsRoomFixture
 import io.element.android.features.matcha.impl.docs.aCreateItem
 import io.element.android.libraries.matrix.api.room.RawEventsPage
@@ -37,6 +39,24 @@ class MatchaRoomStoreLoadMoreTest {
             assertThat(anchors).isEqualTo(if (readsDocumentAnchor) listOf(ANCHOR) else emptyList())
             assertThat(store.snapshot.value.events.single().type).isEqualTo("m.room.create")
         }
+    }
+
+    @Test
+    fun `awaiting the relations returns once the snapshot holds those of an anchor the room state gained after the store loaded`() = runTest {
+        val frame = """{"type": "${MatchaConfig.EVENT_DOCS_UPDATE}", "event_id": "${'$'}f1", "sender": "$BOB", "origin_server_ts": 2, """ +
+            """"content": {"m.relates_to": {"rel_type": "m.reference", "event_id": "$ANCHOR"}}}"""
+        val fixture = DocsRoomFixture(
+            listOf(aCreateItem()),
+            createEventId = null,
+            fetchRelatedEventsJsonResult = { eventId, _, _, _ -> Result.success(RawEventsPage(listOfNotNull(frame.takeIf { eventId.value == ANCHOR }), null)) },
+        )
+        val store = fixture.store(backgroundScope)
+        settle()
+        assertThat(store.snapshot.value.isLoaded).isTrue()
+        fixture.createEventId = ANCHOR
+        // The read ends before the snapshot is built again, so the loaded snapshot from before it is still the latest one for a moment.
+        store.awaitRelations()
+        assertThat(store.snapshot.value.events.mapNotNull { it.eventId }).contains("\$f1")
     }
 
     @Test
