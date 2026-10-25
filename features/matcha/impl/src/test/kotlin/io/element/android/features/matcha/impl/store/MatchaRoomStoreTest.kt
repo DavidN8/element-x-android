@@ -135,27 +135,33 @@ class MatchaRoomStoreTest {
     }
 
     @Test
-    fun `a reply the thread list counts again when the room is read again is left out, and the latest reply kept`() = runTest {
-        // The SDK's thread list counts every event of the thread its room receives as one more reply, those read back from history
-        // and those decrypted again included, and takes each for the latest reply.
+    fun `a thread's reply count and latest reply are those of its replies read, not the thread list's, which counts some again`() = runTest {
         val threads = MutableStateFlow(listOf(aThreadListItem(thread, numberOfReplies = 2, latestTimestamp = 10)))
-        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), threadItems = threads)
+        val replies = mutableMapOf(thread to listOf(reply(13, "@carol:x"), reply(12, "@bob:x")))
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), threadItems = threads, threadReplies = replies)
         settle()
         assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(13)
 
-        for ((count, latest) in listOf(3L to 5L, 4L to 10L)) {
-            threads.value = listOf(aThreadListItem(thread, numberOfReplies = count, latestTimestamp = latest))
-            settle()
-            assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
-            assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(10)
-        }
+        // The SDK's thread list counts both replies again when the scan reads them back from history, and takes the older one for
+        // the latest reply.
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 4, latestTimestamp = 12))
+        settle()
+        assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(13)
 
         // A new reply counts once.
-        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 5, latestTimestamp = 20))
+        replies[thread] = listOf(reply(15, "@dan:x")) + replies.getValue(thread)
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 5, latestTimestamp = 15))
         settle()
         assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(3)
-        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(20)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(15)
+        assertThat(store.snapshot.value.threads.single().participants).contains("@dan:x")
     }
+
+    private fun reply(index: Int, sender: String) =
+        """{"type": "m.room.message", "event_id": "${'$'}r$index", "sender": "$sender", "origin_server_ts": $index, "content": """ +
+            """{"msgtype": "m.text", "body": "Hi", "m.relates_to": {"rel_type": "m.thread", "event_id": "$thread"}}}"""
 
     @Test
     fun `with a computation dispatcher, related events are read and snapshots built there, with the same result`() = runTest {
@@ -209,6 +215,7 @@ class MatchaRoomStoreTest {
             ),
             threadReplies = mapOf(
                 thread to listOf(
+                    reply(5, "@bob:x"),
                     rawJson(4, "m.room.message", """{"msgtype": "m.text", "body": "Hi", "m.relates_to": {"rel_type": "m.thread", "event_id": "$thread"}}"""),
                     rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.bootstrapReplyContent(thread, "Plan")),
                 ),
