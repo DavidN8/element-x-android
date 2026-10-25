@@ -314,6 +314,20 @@ class MatchaRoomStoreTest {
     }
 
     @Test
+    fun `a card first read undecryptable through the board's relations shows once the scan holds it decrypted`() = runTest {
+        val encrypted = """{"type": "m.room.encrypted", "event_id": "${'$'}e2", "sender": "@bob:x", "origin_server_ts": 2, "content": """ +
+            """{"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "x", "m.relates_to": {"rel_type": "m.reference", "event_id": "$boardRoot"}}}"""
+        val (store, timelineItems) = aStore(scope = backgroundScope, items = emptyList(), references = mapOf(boardRoot to listOf(encrypted)))
+        settle()
+        assertThat(store.snapshot.value.unreadable).isTrue()
+
+        timelineItems.value = listOf(aCardItem(2, "c-1", "Card"))
+        settle()
+        assertThat(store.snapshot.value.board?.cards?.map { it.title }).containsExactly("Card")
+        assertThat(store.snapshot.value.unreadable).isFalse()
+    }
+
+    @Test
     fun `a thread root from before joining warns that it can't be read`() = runTest {
         val content = UnableToDecryptContent(UnableToDecryptContent.Data.MegolmV1AesSha2("session", UtdCause.SentBeforeWeJoined), threadInfo = null)
         val (store, _) = aStore(scope = backgroundScope, items = emptyList(), threads = listOf(threadItem(thread, "", content = content)))

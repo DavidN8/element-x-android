@@ -353,7 +353,7 @@ class MatchaRoomStore(
         }
         combine(
             combine(scanEvents, liveEvents, relationEvents, optimisticEvents) { scan, live, related, optimistic ->
-                merge((live + related.values.flatten() + scan).distinctBy { it.eventId ?: it }, optimistic)
+                merge((live + related.values.flatten() + scan).distinctReadable(), optimistic)
             },
             combine(threadItems, threadRepliers, directMembersFlow(), ::ThreadData),
             storedState,
@@ -893,6 +893,20 @@ internal fun projectThreadsAndBoard(
         MatchaBoard(rootId = root, cards = cards)
     }
     return ThreadsAndBoard(threads, board)
+}
+
+/**
+ * The events without a repeated event id, the first of each kept, unless it can't be decrypted and a later copy can: a card read
+ * through relations before its key arrived gives way to the scan's decrypted copy.
+ */
+private fun List<RawEvent>.distinctReadable(): List<RawEvent> {
+    val byId = LinkedHashMap<Any, RawEvent>()
+    for (event in this) {
+        val key = event.eventId ?: event
+        val kept = byId[key]
+        if (kept == null || kept.type == DocsProtocol.EVENT_ROOM_ENCRYPTED) byId[key] = event
+    }
+    return byId.values.toList()
 }
 
 /** Matrix only tells why an event can't be decrypted for Megolm events; anything else is plainly undecryptable. */
