@@ -60,6 +60,7 @@ class MatchaRoomStoreTest {
     private fun aStore(
         items: List<MatrixTimelineItem>,
         threads: List<ThreadListItem> = emptyList(),
+        threadItems: MutableStateFlow<List<ThreadListItem>> = MutableStateFlow(threads),
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
         createTimelineResult: (() -> Result<Timeline>)? = null,
         boardPointerResult: () -> Result<Map<String, String>> = { Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}""")) },
@@ -78,7 +79,7 @@ class MatchaRoomStoreTest {
         val room = FakeJoinedRoom(
             baseRoom = FakeBaseRoom(roomPermissions = FakeRoomPermissions(canSendMessage = { true }, canSendState = { true }, canInvite = true)),
             threadsListService = FakeThreadsListService(
-                items = MutableStateFlow(threads),
+                items = threadItems,
                 paginationStatus = MutableStateFlow(ThreadListPaginationStatus.Idle(hasMoreToLoad = false)),
             ),
             createTimelineResult = { params ->
@@ -131,6 +132,29 @@ class MatchaRoomStoreTest {
         live.emit(rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.patchContent(thread, archived = true)))
         settle()
         assertThat(store.snapshot.value.threads.single().metadata.archived).isTrue()
+    }
+
+    @Test
+    fun `a reply the thread list counts again when the room is read again is left out, and the latest reply kept`() = runTest {
+        // The SDK's thread list counts every event of the thread its room receives as one more reply, those read back from history
+        // and those decrypted again included, and takes each for the latest reply.
+        val threads = MutableStateFlow(listOf(aThreadListItem(thread, numberOfReplies = 2, latestTimestamp = 10)))
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), threadItems = threads)
+        settle()
+        assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
+
+        for ((count, latest) in listOf(3L to 5L, 4L to 10L)) {
+            threads.value = listOf(aThreadListItem(thread, numberOfReplies = count, latestTimestamp = latest))
+            settle()
+            assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
+            assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(10)
+        }
+
+        // A new reply counts once.
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 5, latestTimestamp = 20))
+        settle()
+        assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(3)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(20)
     }
 
     @Test

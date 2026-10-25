@@ -223,6 +223,9 @@ class MatchaRoomStore(
     private val anchorPermits = Semaphore(MAX_CONCURRENT_ANCHORS)
     private val optimisticEvents = MutableStateFlow<List<RawEvent>>(emptyList())
     private val threadItems = MutableStateFlow<List<ThreadListItem>>(emptyList())
+
+    /** Each listed thread as last taken by [takeThreadList], with the reply count the SDK gave it, by thread root id. */
+    private val takenThreads = HashMap<String, Pair<ThreadListItem, Long>>()
     private val threadsPaginationStatus = MutableStateFlow<ThreadListPaginationStatus>(ThreadListPaginationStatus.Idle(hasMoreToLoad = true))
     private val storedState = MutableStateFlow(
         StoredState(
@@ -323,7 +326,7 @@ class MatchaRoomStore(
             .launchIn(coroutineScope)
         if (readsDocumentAnchor) coroutineScope.launch { requestDocumentAnchor() }
         room.threadsListService.subscribeToItemUpdates()
-            .onEach { threadItems.value = it }
+            .onEach { threadItems.value = takeThreadList(it) }
             .launchIn(coroutineScope)
         room.threadsListService.subscribeToPaginationUpdates()
             .onEach { threadsPaginationStatus.value = it }
@@ -375,6 +378,32 @@ class MatchaRoomStore(
                 requestReplies(snapshot.threads)
             }
             .launchIn(coroutineScope)
+    }
+
+    /**
+     * The thread list without the replies the SDK counts again. A change whose latest reply isn't newer than the one taken keeps the
+     * reply count and latest reply taken; any other change adds the replies the SDK added since.
+     *
+     * ponytail: the SDK's thread list (matrix-sdk-ui `thread_list_service.rs`, `event_cache_listener_loop`) counts every event of a
+     * listed thread that the room's event cache receives as one more reply and takes it for the latest one, events read back from
+     * history or decrypted again included, so reading the room's history counts again replies the homeserver's count holds. Two
+     * events published together, one newer and one counted before, both count. Counting only newer events in the SDK ends this.
+     */
+    private fun takeThreadList(items: List<ThreadListItem>): List<ThreadListItem> {
+        val taken = items.map { item ->
+            val (previous, previousCount) = takenThreads[item.threadId.value] ?: return@map item to item.numberOfReplies
+            val latest = item.latestEvent?.timestamp
+            val previousLatest = previous.latestEvent?.timestamp
+            val kept = if (latest != null && previousLatest != null && latest <= previousLatest) {
+                item.copy(latestEvent = previous.latestEvent, numberOfReplies = previous.numberOfReplies)
+            } else {
+                item.copy(numberOfReplies = previous.numberOfReplies + item.numberOfReplies - previousCount)
+            }
+            kept to item.numberOfReplies
+        }
+        takenThreads.clear()
+        taken.associateTo(takenThreads) { it.first.threadId.value to it }
+        return taken.map { it.first }
     }
 
     /** The room's `m.room.create` event, which document frames relate to. */
