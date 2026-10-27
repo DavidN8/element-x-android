@@ -60,6 +60,7 @@ class MatchaRoomStoreTest {
     private fun aStore(
         items: List<MatrixTimelineItem>,
         threads: List<ThreadListItem> = emptyList(),
+        threadItems: MutableStateFlow<List<ThreadListItem>> = MutableStateFlow(threads),
         sendRawEventResult: (String, String) -> Result<EventId> = { _, _ -> Result.success(EventId("\$sent")) },
         createTimelineResult: (() -> Result<Timeline>)? = null,
         boardPointerResult: () -> Result<Map<String, String>> = { Result.success(mapOf("" to """{"version": 1, "event_id": "$boardRoot"}""")) },
@@ -78,7 +79,7 @@ class MatchaRoomStoreTest {
         val room = FakeJoinedRoom(
             baseRoom = FakeBaseRoom(roomPermissions = FakeRoomPermissions(canSendMessage = { true }, canSendState = { true }, canInvite = true)),
             threadsListService = FakeThreadsListService(
-                items = MutableStateFlow(threads),
+                items = threadItems,
                 paginationStatus = MutableStateFlow(ThreadListPaginationStatus.Idle(hasMoreToLoad = false)),
             ),
             createTimelineResult = { params ->
@@ -134,6 +135,35 @@ class MatchaRoomStoreTest {
     }
 
     @Test
+    fun `a thread's reply count and latest reply are those of its replies read, not the thread list's, which counts some again`() = runTest {
+        val threads = MutableStateFlow(listOf(aThreadListItem(thread, numberOfReplies = 2, latestTimestamp = 10)))
+        val replies = mutableMapOf(thread to listOf(reply(13, "@carol:x"), reply(12, "@bob:x")))
+        val (store, _) = aStore(scope = backgroundScope, items = emptyList(), threadItems = threads, threadReplies = replies)
+        settle()
+        assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(13)
+
+        // The SDK's thread list counts both replies again when the scan reads them back from history, and takes the older one for
+        // the latest reply.
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 4, latestTimestamp = 12))
+        settle()
+        assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(2)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(13)
+
+        // A new reply counts once.
+        replies[thread] = listOf(reply(15, "@dan:x")) + replies.getValue(thread)
+        threads.value = listOf(aThreadListItem(thread, numberOfReplies = 5, latestTimestamp = 15))
+        settle()
+        assertThat(store.snapshot.value.threads.single().visibleReplies()).isEqualTo(3)
+        assertThat(store.snapshot.value.threads.single().lastActivityTimestamp).isEqualTo(15)
+        assertThat(store.snapshot.value.threads.single().participants).contains("@dan:x")
+    }
+
+    private fun reply(index: Int, sender: String) =
+        """{"type": "m.room.message", "event_id": "${'$'}r$index", "sender": "$sender", "origin_server_ts": $index, "content": """ +
+            """{"msgtype": "m.text", "body": "Hi", "m.relates_to": {"rel_type": "m.thread", "event_id": "$thread"}}}"""
+
+    @Test
     fun `with a computation dispatcher, related events are read and snapshots built there, with the same result`() = runTest {
         var dispatches = 0
         val inner = StandardTestDispatcher(testScheduler)
@@ -185,6 +215,7 @@ class MatchaRoomStoreTest {
             ),
             threadReplies = mapOf(
                 thread to listOf(
+                    reply(5, "@bob:x"),
                     rawJson(4, "m.room.message", """{"msgtype": "m.text", "body": "Hi", "m.relates_to": {"rel_type": "m.thread", "event_id": "$thread"}}"""),
                     rawJson(3, MatchaConfig.EVENT_THREAD_METADATA, ThreadMetadataProtocol.bootstrapReplyContent(thread, "Plan")),
                 ),
@@ -287,6 +318,20 @@ class MatchaRoomStoreTest {
         timelineItems.value = listOf(unrelated, historical, utd(3, target = thread, cause = UtdCause.UnknownDevice))
         settle()
         assertThat(store.snapshot.value.warning).isEqualTo(MatchaWarning.Undecryptable)
+    }
+
+    @Test
+    fun `a card first read undecryptable through the board's relations shows once the scan holds it decrypted`() = runTest {
+        val encrypted = """{"type": "m.room.encrypted", "event_id": "${'$'}e2", "sender": "@bob:x", "origin_server_ts": 2, "content": """ +
+            """{"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "x", "m.relates_to": {"rel_type": "m.reference", "event_id": "$boardRoot"}}}"""
+        val (store, timelineItems) = aStore(scope = backgroundScope, items = emptyList(), references = mapOf(boardRoot to listOf(encrypted)))
+        settle()
+        assertThat(store.snapshot.value.unreadable).isTrue()
+
+        timelineItems.value = listOf(aCardItem(2, "c-1", "Card"))
+        settle()
+        assertThat(store.snapshot.value.board?.cards?.map { it.title }).containsExactly("Card")
+        assertThat(store.snapshot.value.unreadable).isFalse()
     }
 
     @Test
