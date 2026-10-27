@@ -108,6 +108,10 @@ object ThreadMetadataProtocol {
         }.toString()
     }
 
+    /** The thread root of a hidden bootstrap reply (see [bootstrapReplyContent]), or null for any other event. */
+    fun bootstrapRootId(event: RawEvent): String? =
+        event.content.takeIf { event.type == MatchaConfig.EVENT_THREAD_METADATA }?.relationTarget(REL_TYPE_THREAD)
+
     /**
      * Content of the hidden first reply that makes the homeserver treat a new root as a thread before anyone replies.
      * It is a thread reply, not a metadata patch: readers only consider `m.reference` relations.

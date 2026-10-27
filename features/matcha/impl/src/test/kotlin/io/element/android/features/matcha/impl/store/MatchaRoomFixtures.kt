@@ -254,6 +254,7 @@ internal fun aThreadListItem(
     content: EventContent? = aMessageContent(body = body),
     senderId: UserId = UserId("@bob:x"),
     numberOfReplies: Long = 1,
+    latestTimestamp: Long? = null,
 ) = ThreadListItem(
     rootEvent = ThreadListItemEvent(
         eventId = EventId(id),
@@ -263,6 +264,15 @@ internal fun aThreadListItem(
         content = content,
         timestamp = timestamp,
     ),
-    latestEvent = null,
+    latestEvent = latestTimestamp?.let {
+        ThreadListItemEvent(
+            eventId = EventId("\$reply-$it"),
+            senderId = UserId("@alice:x"),
+            senderProfile = ProfileDetails.Unavailable,
+            isOwn = false,
+            content = aMessageContent(body = "Reply"),
+            timestamp = it,
+        )
+    },
     numberOfReplies = numberOfReplies,
 )

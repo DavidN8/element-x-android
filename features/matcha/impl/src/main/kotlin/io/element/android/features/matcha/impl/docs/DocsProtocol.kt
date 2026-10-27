@@ -18,6 +18,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
+import java.io.ByteArrayOutputStream
 import kotlin.io.encoding.Base64
 
 /** One part of a document update as sent in a `com.matchahoneylatte.docs.update` event. */
@@ -49,6 +50,30 @@ sealed interface DocFrameResult {
     data class Frame(val senderId: String, val frame: DocFrame) : DocFrameResult
 }
 
+/** The parts of one update received so far, from one sender (see [DocsProtocol.packetKey]). */
+data class DocPacket(
+    val count: Int,
+    val parts: Map<Int, ByteArray> = emptyMap(),
+    val isCommitted: Boolean = false,
+) {
+    val isComplete get() = isCommitted && parts.size == count
+
+    /** This packet with [frame] added, or null when the frame contradicts it: another part count, or a part sent again differently. */
+    fun plus(frame: DocFrame): DocPacket? {
+        if (frame.chunks != count) return null
+        var packet = if (frame.kind == DocFrame.Kind.Chunk) this else copy(isCommitted = true)
+        if (frame.data != null && frame.chunk != null) {
+            val previous = parts[frame.chunk]
+            if (previous != null && !previous.contentEquals(frame.data)) return null
+            packet = packet.copy(parts = parts + (frame.chunk to frame.data))
+        }
+        return packet
+    }
+
+    /** The parts joined in order; only for a complete packet. */
+    fun update(): ByteArray = ByteArrayOutputStream().apply { for (index in 0 until count) write(parts.getValue(index)) }.toByteArray()
+}
+
 /** The update is larger than [MatchaConfig.DOCS_MAX_CHUNKS] frames. */
 class DocTooLargeException : Exception("Document update too large")
 
@@ -74,6 +99,12 @@ object DocsProtocol {
 
     /** Surrounding whitespace is not part of a name. */
     fun isValidName(value: String) = value.trim().length in 1..MatchaConfig.DOCUMENT_NAME_MAX_LENGTH
+
+    /** Updates are told apart by sender and update id, so a frame or an update sent twice is applied once. */
+    fun packetKey(senderId: String, updateId: String) = "$senderId:$updateId"
+
+    /** A frame this device can't decrypt (yet): its relation to [anchor] stays readable. */
+    fun isUndecryptedFrame(event: RawEvent, anchor: String) = event.type == EVENT_ROOM_ENCRYPTED && event.content.referenceTarget() == anchor
 
     /** Splits an update into frames; several frames end with a commit that is sent only after every part. */
     fun frames(update: ByteArray, anchor: String, updateId: String, documentId: String): List<String> {

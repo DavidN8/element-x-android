@@ -8,8 +8,8 @@
 package io.element.android.features.matcha.impl.docs.transport
 
 import io.element.android.appconfig.MatchaConfig
-import io.element.android.features.matcha.impl.docs.DocFrame
 import io.element.android.features.matcha.impl.docs.DocFrameResult
+import io.element.android.features.matcha.impl.docs.DocPacket
 import io.element.android.features.matcha.impl.docs.DocTooLargeException
 import io.element.android.features.matcha.impl.docs.DocsProtocol
 import io.element.android.features.matcha.impl.docs.engine.TextDiff
@@ -17,7 +17,6 @@ import io.element.android.features.matcha.impl.docs.engine.YjsDocument
 import io.element.android.features.matcha.impl.docs.engine.YjsEngine
 import io.element.android.features.matcha.impl.docs.engine.YjsEngineException
 import io.element.android.features.matcha.impl.protocol.RawEvent
-import io.element.android.features.matcha.impl.protocol.referenceTarget
 import io.element.android.features.matcha.impl.store.MatchaRoomStore
 import io.element.android.features.networkmonitor.api.NetworkMonitor
 import io.element.android.features.networkmonitor.api.NetworkStatus
@@ -50,7 +49,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import timber.log.Timber
-import java.io.ByteArrayOutputStream
 import java.util.UUID
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -119,7 +117,7 @@ class RoomDocumentSession(
     private var isMissingInEngine = false
     private val buffered = mutableListOf<ByteArray>()
     private val packets = ArrayDeque<OutgoingPacket>()
-    private val incoming = HashMap<String, IncomingPacket>()
+    private val incoming = HashMap<String, DocPacket>()
     private val applied = HashSet<String>()
     private val seen = HashSet<String>()
     private var loadJob: Job? = null
@@ -129,15 +127,6 @@ class RoomDocumentSession(
     /** An update being sent; [unsent] shrinks as the server accepts each frame. */
     private class OutgoingPacket(val key: String, val update: ByteArray, frames: List<String>) {
         val unsent = ArrayDeque(frames)
-    }
-
-    /** The parts of an update received so far. */
-    private data class IncomingPacket(
-        val count: Int,
-        val parts: Map<Int, ByteArray> = emptyMap(),
-        val isCommitted: Boolean = false,
-    ) {
-        val isComplete get() = isCommitted && parts.size == count
     }
 
     /** Joined, allowed to send document frames, and to send encrypted events in an encrypted room. */
@@ -285,7 +274,7 @@ class RoomDocumentSession(
             when (error) {
                 DocumentError.DecryptError -> {
                     // The keys arrived: read everything again.
-                    needsReload = events.none { it.isUndecryptedFrame(anchor) }
+                    needsReload = events.none { DocsProtocol.isUndecryptedFrame(it, anchor) }
                     return@withLock
                 }
                 DocumentError.LoadError, DocumentError.InvalidUpdate, DocumentError.AnchorError -> return@withLock
@@ -338,7 +327,7 @@ class RoomDocumentSession(
         val eventId = event.eventId ?: return
         if (eventId in seen) return
         // Not marked as seen: once decrypted, the same event comes back as a frame.
-        if (event.isUndecryptedFrame(anchor)) throw DocumentException(DocumentError.DecryptError)
+        if (DocsProtocol.isUndecryptedFrame(event, anchor)) throw DocumentException(DocumentError.DecryptError)
         when (val result = DocsProtocol.parseFrame(event, anchor, documentId)) {
             DocFrameResult.Unrelated -> Unit
             DocFrameResult.Invalid -> throw DocumentException(DocumentError.InvalidUpdate)
@@ -349,28 +338,17 @@ class RoomDocumentSession(
 
     private fun ingestFrame(result: DocFrameResult.Frame, apply: (ByteArray) -> Boolean) {
         val frame = result.frame
-        val key = "${result.senderId}:${frame.updateId}"
+        val key = DocsProtocol.packetKey(result.senderId, frame.updateId)
         if (key in applied) return
-        var packet = incoming[key] ?: IncomingPacket(frame.chunks)
-        if (packet.count != frame.chunks) throw DocumentException(DocumentError.InvalidUpdate)
-        if (frame.kind != DocFrame.Kind.Chunk) packet = packet.copy(isCommitted = true)
-        if (frame.data != null && frame.chunk != null) {
-            val previous = packet.parts[frame.chunk]
-            // A part sent again must be identical.
-            if (previous != null && !previous.contentEquals(frame.data)) throw DocumentException(DocumentError.InvalidUpdate)
-            packet = packet.copy(parts = packet.parts + (frame.chunk to frame.data))
-        }
+        val packet = (incoming[key] ?: DocPacket(frame.chunks)).plus(frame) ?: throw DocumentException(DocumentError.InvalidUpdate)
         if (!packet.isComplete) {
             incoming[key] = packet
             return
         }
-        val update = ByteArrayOutputStream().apply { for (index in 0 until packet.count) write(packet.parts.getValue(index)) }.toByteArray()
-        if (!apply(update)) throw DocumentException(DocumentError.InvalidUpdate)
+        if (!apply(packet.update())) throw DocumentException(DocumentError.InvalidUpdate)
         applied += key
         incoming -= key
     }
-
-    private fun RawEvent.isUndecryptedFrame(anchor: String) = type == DocsProtocol.EVENT_ROOM_ENCRYPTED && content.referenceTarget() == anchor
 
     /**
      * The room's `m.room.create` event, from the room state like the web client, or the one a room id of room version 12 is
@@ -467,7 +445,7 @@ class RoomDocumentSession(
             throw DocumentException(DocumentError.TooLargeError, e)
         }
         // Already in the local document: our own echo is skipped.
-        val packet = OutgoingPacket("${room.sessionId.value}:$updateId", update, frames)
+        val packet = OutgoingPacket(DocsProtocol.packetKey(room.sessionId.value, updateId), update, frames)
         packets += packet
         applied += packet.key
         buffered.clear()
